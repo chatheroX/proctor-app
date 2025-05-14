@@ -1,6 +1,6 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { createSupabaseMiddlewareClient } from '@/lib/supabase/middleware';
+import { createSupabaseClientForNextMiddleware } from '@/lib/supabase/middleware'; // Updated import name
 
 const PROTECTED_ROUTES_STUDENT = ['/student/dashboard'];
 const PROTECTED_ROUTES_TEACHER = ['/teacher/dashboard'];
@@ -9,15 +9,17 @@ const PUBLIC_ROUTES = ['/', '/privacy', '/terms']; // Add any other public route
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
-  const supabase = await createSupabaseMiddlewareClient(req, res);
+  // Client creation is synchronous, no await here
+  const supabase = createSupabaseClientForNextMiddleware(req, res);
 
+  // Async operations like getSession should be awaited
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
   const { pathname } = req.nextUrl;
 
-  // Allow public routes
+  // Allow public routes and Next.js specific paths
   if (PUBLIC_ROUTES.includes(pathname) || pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.endsWith('.png') || pathname.endsWith('.ico')) {
     return res;
   }
@@ -45,7 +47,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL(AUTH_ROUTE, req.url)); // Or an unauthorized page
     }
     
-    // User is logged in and has correct role or is on a non-auth public-like page (e.g. /)
+    // User is logged in and has correct role or is on a non-auth public-like page
     return res;
   }
 
@@ -63,11 +65,7 @@ export async function middleware(req: NextRequest) {
     return res;
   }
   
-  // For any other route not explicitly public or auth, and user is not logged in,
-  // decide on a default behavior (e.g. redirect to home or auth)
-  // This rule implies that if it's not public, not auth, and not protected (and user not logged in), it's likely a general page they shouldn't see.
-  // However, our current setup mostly has /, /auth, and /dashboards. So this might not be hit often.
-  // If it's a route like /some-other-page that's not in PUBLIC_ROUTES and not /auth, redirect to login.
+  // For any other route not explicitly public or auth, and user is not logged in, redirect to login.
   if (!PUBLIC_ROUTES.includes(pathname) && pathname !== AUTH_ROUTE) {
      return NextResponse.redirect(new URL(AUTH_ROUTE, req.url));
   }
