@@ -10,9 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarDays, Clock, CheckCircle } from 'lucide-react';
+import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarDays, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { cn } from "@/lib/utils"; // Added this import
 
 interface QuestionOption {
   id: string;
@@ -21,81 +22,84 @@ interface QuestionOption {
 interface Question {
   id: string;
   text: string;
-  options: QuestionOption[]; // Changed to objects with IDs for radio group stability
-  correctOptionId: string; 
+  options: QuestionOption[];
+  correctOptionId: string;
 }
 
 interface ExamData {
-  id?: string;
+  id?: string; // This would be the exam's unique ID if editing
+  user_id?: string; // Teacher's user_id who created the exam
   title: string;
   description: string;
   duration: number; // in minutes
   allowBacktracking: boolean;
   questions: Question[];
+  exam_code?: string; // Will be auto-generated on actual save
+  status?: 'Draft' | 'Published' | 'Ongoing' | 'Completed'; // Default to Draft
+  created_at?: string;
 }
 
 interface ExamFormProps {
   initialData?: ExamData;
-  onSave: (data: ExamData) => Promise<void>;
+  onSave: (data: ExamData) => Promise<{success: boolean, error?: string, examId?: string}>; // Updated to reflect potential return
   isEditing?: boolean;
 }
 
 export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  
+
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [duration, setDuration] = useState(initialData?.duration || 60);
   const [allowBacktracking, setAllowBacktracking] = useState(initialData?.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
-  
-  // Adapt initial questions data if necessary (from simple string options to QuestionOption objects)
-  const initializeQuestions = (initialQs?: ExamData['questions']): Question[] => {
+
+  const initializeQuestions = (initialQs?: Question[]): Question[] => {
     if (!initialQs) return [];
-    return initialQs.map(q => {
-      // If options are already in the new format, use them, else convert
-      const newOptions = q.options.map((opt, index) => 
-        typeof opt === 'string' ? { id: `opt-${index}-${Date.now()}`, text: opt } : opt
-      );
-      // If correctOptionId is missing, try to find it from old correctAnswer string format
-      let correctId = q.correctOptionId;
-      if (!correctId && (q as any).correctAnswer) {
-          const foundOpt = newOptions.find(no => no.text === (q as any).correctAnswer);
-          if (foundOpt) correctId = foundOpt.id;
-      }
-      return { ...q, options: newOptions, correctOptionId: correctId || '' };
-    });
+    return initialQs.map(q => ({
+      ...q,
+      options: q.options.map(opt => ({ ...opt })), // Ensure options have unique IDs if needed
+    }));
   };
   const [questions, setQuestions] = useState<Question[]>(initializeQuestions(initialData?.questions));
-  
+
   const [currentQuestionText, setCurrentQuestionText] = useState('');
   const [currentOptions, setCurrentOptions] = useState<QuestionOption[]>([
-    { id: 'opt-0', text: '' }, { id: 'opt-1', text: '' }, { id: 'opt-2', text: '' }, { id: 'opt-3', text: '' }
+    { id: `opt-0-${Date.now()}`, text: '' }, { id: `opt-1-${Date.now() + 1}`, text: '' }, { id: `opt-2-${Date.now() + 2}`, text: '' }, { id: `opt-3-${Date.now() + 3}`, text: '' }
   ]);
   const [currentCorrectOptionId, setCurrentCorrectOptionId] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const resetOptionIds = () => {
-    return [{ id: `opt-0-${Date.now()}`, text: '' }, { id: `opt-1-${Date.now()}`, text: '' }, { id: `opt-2-${Date.now()}`, text: '' }, { id: `opt-3-${Date.now()}`, text: '' }];
-  }
+  const resetOptionIdsAndText = () => {
+    return [
+      { id: `opt-0-${Date.now()}`, text: '' }, 
+      { id: `opt-1-${Date.now() + 1}`, text: '' }, 
+      { id: `opt-2-${Date.now() + 2}`, text: '' }, 
+      { id: `opt-3-${Date.now() + 3}`, text: '' }
+    ];
+  };
 
   const handleAddQuestion = () => {
-    if (!currentQuestionText.trim() || !currentCorrectOptionId.trim() || currentOptions.some(opt => !opt.text.trim())) {
-      toast({ title: "Incomplete Question", description: "Please fill all fields for the question and select a correct answer.", variant: "destructive" });
+    if (!currentQuestionText.trim() || currentOptions.some(opt => !opt.text.trim())) {
+      toast({ title: "Incomplete Question", description: "Please fill in the question text and all option fields.", variant: "destructive" });
       return;
     }
+    if (!currentCorrectOptionId) {
+        toast({ title: "No Correct Answer", description: "Please select a correct answer for the question.", variant: "destructive" });
+        return;
+    }
     const newQuestion: Question = {
-      id: `q-${Date.now()}`, 
+      id: `q-${Date.now()}`,
       text: currentQuestionText,
-      options: currentOptions.map(opt => ({...opt})), // Deep copy options
+      options: currentOptions.map(opt => ({ ...opt, id: `opt-${Math.random().toString(36).substring(2, 9)}-${Date.now()}` })), // Ensure fresh IDs for options
       correctOptionId: currentCorrectOptionId,
     };
     setQuestions([...questions, newQuestion]);
     setCurrentQuestionText('');
-    setCurrentOptions(resetOptionIds());
+    setCurrentOptions(resetOptionIdsAndText());
     setCurrentCorrectOptionId('');
-    toast({ description: "Question added." });
+    toast({ description: "Question added to list below." });
   };
 
   const handleRemoveQuestion = (id: string) => {
@@ -111,6 +115,14 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!title.trim()) {
+        toast({title: "Missing Title", description: "Exam title is required.", variant: "destructive"});
+        return;
+    }
+    if (questions.length === 0) {
+        toast({title: "No Questions", description: "Please add at least one question to the exam.", variant: "destructive"});
+        return;
+    }
     setIsLoading(true);
     const examData: ExamData = {
       id: initialData?.id,
@@ -119,16 +131,31 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
       duration,
       allowBacktracking,
       questions,
+      // user_id, status, exam_code, created_at would be set by backend/onSave typically
     };
-    try {
-      await onSave(examData);
-      toast({ title: "Success!", description: `Exam ${isEditing ? 'updated' : 'created'} successfully.` });
-      router.push('/teacher/dashboard/exams'); 
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to save exam. Please try again.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
+    
+    // SIMULATED SAVE - Replace with actual save logic
+    console.log("Attempting to save exam (UI only):", examData);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+    // const result = await onSave(examData); // Real save function call
+    const result = {success: true, examId: initialData?.id || `temp-id-${Date.now()}`}; // Mock result for UI flow
+
+    if (result.success) {
+      toast({ title: "Success!", description: `Exam ${isEditing ? 'updated' : 'prepared'} (UI only). Backend saving not implemented.` });
+      // router.push(isEditing && result.examId ? `/teacher/dashboard/exams/${result.examId}/details` : '/teacher/dashboard/exams');
+      if (isEditing && result.examId) {
+        router.push(`/teacher/dashboard/exams/${result.examId}/details`);
+      } else if (!isEditing) {
+        // For new exams, maybe go to list or a temporary success page
+        router.push('/teacher/dashboard/exams'); 
+        // Or if an ID is returned from a real save: router.push(`/teacher/dashboard/exams/${result.examId}/details`);
+      } else {
+        router.push('/teacher/dashboard/exams');
+      }
+    } else {
+      toast({ title: "Error", description: result.error || "Failed to save exam. Please try again.", variant: "destructive" });
     }
+    setIsLoading(false);
   };
 
   return (
@@ -137,7 +164,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
         <CardHeader>
           <CardTitle className="text-2xl">{isEditing ? 'Edit Exam' : 'Create New Exam'}</CardTitle>
           <CardDescription>
-            {isEditing ? 'Modify the details of your existing exam.' : 'Fill in the details to create a new exam.'}
+            {isEditing ? 'Modify the details of your existing exam.' : 'Fill in the details to create a new exam. Note: Exam saving to database is not yet implemented.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -165,7 +192,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
                     <Label htmlFor="allowBacktracking">Allow Backtracking</Label>
                 </div>
             </div>
-             <div className="space-y-2"> 
+             <div className="space-y-2">
                 <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4"/> Scheduling (Coming Soon)</Label>
                 <p className="text-sm text-muted-foreground">Set start and end dates/times for the exam.</p>
                 <Input type="datetime-local" disabled className="w-full md:w-1/2" />
@@ -174,13 +201,13 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
 
           <section className="space-y-4 p-4 border rounded-lg">
             <h3 className="text-lg font-medium">Manage Questions ({questions.length} added)</h3>
-            
+
             <div className="flex flex-wrap gap-2 my-4">
               <Button type="button" variant="outline" disabled>
                 <Upload className="mr-2 h-4 w-4" /> Upload CSV (Soon)
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/teacher/dashboard/ai-assistant" target="_blank"> 
+                <Link href="/teacher/dashboard/ai-assistant" target="_blank">
                   <Brain className="mr-2 h-4 w-4" /> Use AI Assistant
                 </Link>
               </Button>
@@ -202,10 +229,10 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
                       <div key={opt.id} className="flex items-center gap-2 p-2 border rounded-md bg-background hover:bg-accent/50 has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary">
                         <RadioGroupItem value={opt.id} id={opt.id} />
                         <Label htmlFor={opt.id} className="sr-only">Select Option {index + 1} as correct</Label>
-                        <Input 
-                          value={opt.text} 
-                          onChange={(e) => handleOptionChange(index, e.target.value)} 
-                          placeholder={`Option ${index + 1}`} 
+                        <Input
+                          value={opt.text}
+                          onChange={(e) => handleOptionChange(index, e.target.value)}
+                          placeholder={`Option ${index + 1}`}
                           className="flex-grow"
                         />
                       </div>
@@ -231,7 +258,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
                         <ul className="list-none text-sm text-muted-foreground pl-4 space-y-1">
                           {q.options.map((opt) => (
                             <li key={opt.id} className={cn("flex items-center gap-2", opt.id === q.correctOptionId ? 'text-green-600 font-semibold' : '')}>
-                              {opt.id === q.correctOptionId && <CheckCircle className="h-4 w-4 text-green-600" />} 
+                              {opt.id === q.correctOptionId && <CheckCircle className="h-4 w-4 text-green-600" />}
                               <span>{opt.text}</span>
                             </li>
                           ))}
@@ -250,8 +277,8 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
         <CardFooter className="flex justify-end gap-2">
            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
           <Button type="submit" disabled={isLoading}>
-            {isLoading ? (isEditing ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Loader2 className="animate-spin mr-2 h-4 w-4" />) : <Save className="mr-2 h-4 w-4" />}
-            {isLoading ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Exam')}
+            {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+            {isLoading ? (isEditing ? 'Saving...' : 'Preparing...') : (isEditing ? 'Save Changes' : 'Prepare Exam (UI Only)')}
           </Button>
         </CardFooter>
       </Card>
