@@ -13,10 +13,10 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
 type AuthAction = 'login' | 'register';
-const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; // Consistent redirect target
+const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; 
 
 export function AuthForm() {
-  const pathname = usePathname(); // Initialize pathname first
+  const pathname = usePathname(); 
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -37,9 +37,8 @@ export function AuthForm() {
     setAction(initialAction);
   }, [initialAction]);
 
-  // This effect handles redirecting away from /auth if user is already logged in.
-  // AuthContext's own useEffect also handles this, but this can provide quicker feedback if AuthForm is mounted.
   useEffect(() => {
+    // This effect handles redirecting away from /auth if user is already logged in and auth is not loading.
     if (!authLoading && user && pathname === '/auth') {
       router.replace(DEFAULT_DASHBOARD_ROUTE); 
     }
@@ -81,7 +80,9 @@ export function AuthForm() {
       const { success, error } = await signUp(trimmedEmail, password, trimmedFullName);
       if (success) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        router.push(DEFAULT_DASHBOARD_ROUTE); 
+        // router.push will trigger AuthContext re-evaluation which handles redirect if necessary
+        // Or the useEffect above will catch it.
+         router.push(DEFAULT_DASHBOARD_ROUTE); 
       } else {
         toast({ title: "Registration Error", description: error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -98,17 +99,21 @@ export function AuthForm() {
   };
   
 
-  if (authLoading && !user && pathname === '/auth') { // Show loader specifically for auth page if loading initial session
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
+  if (authLoading && pathname === '/auth') { 
+    // Show loader specifically for auth page if initial session is loading
+    // but don't block form display if user is already known to be null.
+    // This prevents flashing the loader if user is known to be unauthenticated.
+    if (user === undefined || (user === null && Cookies.get('proctorprep-user-session') === undefined)) {
+       return (
+        <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      );
+    }
   }
   
-  // If user is resolved and present, and we're on /auth, AuthContext or the effect above should redirect.
-  // This state is primarily for when the component mounts before redirection happens.
   if (user && !authLoading && pathname === '/auth') { 
+      // This state is if the component renders before the useEffect redirect fires.
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
             <p>Already logged in. Redirecting...</p>

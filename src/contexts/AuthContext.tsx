@@ -5,11 +5,11 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
-import type { CustomUser } from '@/types/supabase';
+import type { CustomUser, Database } from '@/types/supabase'; // Ensure Database is imported if needed by createSupabaseBrowserClient
 
 const SESSION_COOKIE_NAME = 'proctorprep-user-session';
 const AUTH_ROUTE = '/auth';
-const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; // Centralized default
+const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; 
 const PROTECTED_ROUTES_PATTERNS = ['/student/dashboard', '/teacher/dashboard'];
 
 
@@ -34,26 +34,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUserFromCookie = useCallback(async () => {
     const userEmailFromCookie = Cookies.get(SESSION_COOKIE_NAME);
 
-    // If user context is already set and matches cookie, and not currently forced loading, skip DB.
-    // This helps prevent re-fetch immediately after login/signup if state is already good.
     if (user && user.email === userEmailFromCookie && !isLoading) {
-      // setUser(user); // Ensure state is consistent if needed, though should be already.
-      // setIsLoading(false); // Already false if this condition is met.
-      return;
+      // User context is already set and matches cookie, and not forced loading, skip DB.
+      // This helps prevent re-fetch immediately after login/signup if state is already good.
+      // If isLoading was true, it means we *want* to reload or are in an initial state.
+      return; 
     }
     
-    // If we are here, either user is null, or cookie doesn't match, or forced loading.
-    // Always set loading true before async operation.
     setIsLoading(true);
 
     if (userEmailFromCookie) {
       console.time('Supabase LoadUserFromCookie Query');
       try {
+        // Fetch only necessary fields, id (email) and name
         const { data, error } = await supabase
           .from('proctorX')
-          .select('id, name')
+          .select('id, name') 
           .eq('id', userEmailFromCookie)
-          .single();
+          .single(); // Use single() as email (id) should be unique
         console.timeEnd('Supabase LoadUserFromCookie Query');
 
         if (data && !error) {
@@ -62,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
           setUser(null);
-          if (error && error.code !== 'PGRST116') {
+          if (error && error.code !== 'PGRST116') { // PGRST116: "Searched for a single row, but found no rows" - expected if cookie is stale
             console.error('Error re-validating user from DB:', error.message);
           }
         }
@@ -76,12 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.email]); // Depend on user.email to re-run if it changes from outside
+  }, [supabase, user?.email]); // Removed user from dep array to avoid loop, user?.email covers change
 
   useEffect(() => {
     loadUserFromCookie();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]); // Re-validate on path changes
+  }, [pathname]); 
 
   useEffect(() => {
     if (!isLoading) {
@@ -102,16 +100,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.time('Supabase SignIn Query');
     const { data, error } = await supabase
       .from('proctorX')
-      .select('id, pass, name')
-      .eq('id', email)
-      .single();
+      .select('id, pass, name') // Select specific columns
+      .eq('id', email) // Filter by email
+      .single(); // Expect a single row
     console.timeEnd('Supabase SignIn Query');
 
-    if (error || !data) {
+    if (error) { // Handles query errors or if no row is found (as .single() errors on no row)
       setIsLoading(false);
-      return { success: false, error: error?.message || 'User not found or database error.' };
+      if (error.code === 'PGRST116') { // "Searched for a single row, but found no rows"
+        return { success: false, error: 'User not found.' };
+      }
+      return { success: false, error: error.message };
     }
 
+    // No need to check !data here, as .single() would have errored if no data.
+    
     if (data.pass === pass) {
       const userData: CustomUser = { email: data.id, name: data.name ?? null };
       Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
@@ -126,13 +129,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, pass: string, name: string): Promise<{ success: boolean; error?: string; user?: CustomUser }> => {
     setIsLoading(true);
+    // Check if user already exists
     const { data: existingUser, error: selectError } = await supabase
       .from('proctorX')
       .select('id')
       .eq('id', email)
-      .single();
+      .maybeSingle(); // Use maybeSingle to not error if user doesn't exist
 
-    if (selectError && selectError.code !== 'PGRST116') {
+    if (selectError && selectError.code !== 'PGRST116') { // PGRST116 means no user found, which is good for signup
       setIsLoading(false);
       return { success: false, error: 'Error checking existing user: ' + selectError.message };
     }
@@ -141,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: 'User with this email already exists.' };
     }
 
+    // Insert new user
     const { error: insertError } = await supabase
       .from('proctorX')
       .insert([{ id: email, pass: pass, name: name }]);
@@ -158,15 +163,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    setIsLoading(true); // Set loading true before async op
+    setIsLoading(true); 
     Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
     setUser(null);
-    // router.push will trigger path change, which re-runs loadUserFromCookie & protection useEffect.
-    // loadUserFromCookie will set isLoading false after it's done.
     router.push(AUTH_ROUTE); 
-    // No need to setIsLoading(false) here if router.push causes context re-evaluation that handles it.
-    // However, for safety if component doesn't unmount/re-eval immediately:
-    // setIsLoading(false); 
+    // setIsLoading(false); // loadUserFromCookie will set it after path change
   };
 
   const value = {
