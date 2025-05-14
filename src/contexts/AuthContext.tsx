@@ -6,9 +6,10 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
 import type { CustomUser } from '@/types/supabase';
+import type { Database } from '@/types/supabase';
 
-const SESSION_COOKIE_NAME = 'proctorprep-user-email'; // Store email in cookie
-const ROLE_COOKIE_NAME = 'proctorprep-user-role'; // Store role in cookie
+const SESSION_COOKIE_NAME = 'proctorprep-user-email';
+const ROLE_COOKIE_NAME = 'proctorprep-user-role';
 
 const AUTH_ROUTE = '/auth';
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
@@ -26,6 +27,13 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper to generate a pseudo-random 6-character alphanumeric ID
+// IMPORTANT: This is NOT collision-proof for a production system.
+// A robust solution would check for uniqueness in the DB or use a sequence.
+const generateShortId = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseBrowserClient();
   const router = useRouter();
@@ -36,15 +44,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getRedirectPathForRole = (role: 'student' | 'teacher' | null) => {
     if (role === 'teacher') return TEACHER_DASHBOARD_ROUTE;
-    return STUDENT_DASHBOARD_ROUTE; // Default to student dashboard
+    return STUDENT_DASHBOARD_ROUTE;
   };
   
   const loadUserFromCookie = useCallback(async () => {
     const userEmailFromCookie = Cookies.get(SESSION_COOKIE_NAME);
-    const userRoleFromCookie = Cookies.get(ROLE_COOKIE_NAME) as 'student' | 'teacher' | undefined;
+    const userRoleFromCookie = Cookies.get(ROLE_COOKIE_NAME) as CustomUser['role'];
 
+    // If user context is already populated and matches cookie, skip DB query
     if (user && user.email === userEmailFromCookie && user.role === userRoleFromCookie && !isLoading) {
-      return; 
+      console.log('AuthContext: User already in context and matches cookie, skipping fetch.');
+      return;
     }
     
     setIsLoading(true);
@@ -54,15 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error } = await supabase
           .from('proctorX')
-          .select('uuid, id, name, role') // id is email column
-          .eq('id', userEmailFromCookie) // Query by email
+          .select('user_id, email, name, role')
+          .eq('email', userEmailFromCookie)
           .single();
         console.timeEnd('Supabase LoadUserFromCookie Query');
 
         if (data && !error) {
-          const loadedUser: CustomUser = { uuid: data.uuid, email: data.id, name: data.name ?? null, role: data.role as CustomUser['role'] };
+          const loadedUser: CustomUser = { user_id: data.user_id, email: data.email, name: data.name ?? null, role: data.role as CustomUser['role'] };
           setUser(loadedUser);
-          // Ensure role cookie is also consistent if it wasn't already
           if (data.role && Cookies.get(ROLE_COOKIE_NAME) !== data.role) {
             Cookies.set(ROLE_COOKIE_NAME, data.role, { expires: 7, path: '/' });
           }
@@ -82,24 +91,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       setUser(null);
-      Cookies.remove(ROLE_COOKIE_NAME, { path: '/' }); // Also clear role cookie if email cookie is gone
+      Cookies.remove(ROLE_COOKIE_NAME, { path: '/' });
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.email, user?.role]);
+  }, [supabase, user?.email, user?.role]); // Added user?.role dependency
 
   useEffect(() => {
     loadUserFromCookie();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname]); // Re-check on path change
 
   useEffect(() => {
     if (!isLoading) {
       const isAuthRoute = pathname === AUTH_ROUTE;
       const isProtectedRoute = PROTECTED_ROUTES_PATTERNS.some(p => pathname?.startsWith(p));
+      const defaultDashboardRedirect = getRedirectPathForRole(user?.role);
 
       if (user && isAuthRoute) {
-        router.replace(getRedirectPathForRole(user.role));
+        router.replace(defaultDashboardRedirect);
       } else if (!user && isProtectedRoute) {
         router.replace(AUTH_ROUTE);
       }
@@ -111,21 +121,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.time('Supabase SignIn Query');
     const { data, error } = await supabase
       .from('proctorX')
-      .select('uuid, id, pass, name, role') // id is the email column
-      .eq('id', email) // Filter by email
-      .single(); // Expect a single row
+      .select('user_id, email, pass, name, role')
+      .eq('email', email)
+      .single(); // Use single to expect one row or error
     console.timeEnd('Supabase SignIn Query');
 
     if (error) {
       setIsLoading(false);
-      if (error.code === 'PGRST116') {
+      if (error.code === 'PGRST116') { // PostgREST error for "exactly one row expected"
         return { success: false, error: 'User not found.' };
       }
       return { success: false, error: 'Login failed: ' + error.message };
     }
     
-    if (data.pass === pass) { // Plaintext password check - UNSAFE FOR PRODUCTION
-      const userData: CustomUser = { uuid: data.uuid, email: data.id, name: data.name ?? null, role: data.role as CustomUser['role'] };
+    if (data.pass === pass) {
+      const userData: CustomUser = { user_id: data.user_id, email: data.email, name: data.name ?? null, role: data.role as CustomUser['role'] };
       Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
       if (userData.role) {
         Cookies.set(ROLE_COOKIE_NAME, userData.role, { expires: 7, path: '/' });
@@ -143,8 +153,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     const { data: existingUser, error: selectError } = await supabase
       .from('proctorX')
-      .select('id') // id is email column
-      .eq('id', email)
+      .select('email')
+      .eq('email', email)
       .maybeSingle();
 
     if (selectError && selectError.code !== 'PGRST116') {
@@ -156,10 +166,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: 'User with this email already exists.' };
     }
 
+    const newUserId = generateShortId(); // Generate 6-character ID
+    
     const { data: insertedData, error: insertError } = await supabase
       .from('proctorX')
-      .insert([{ id: email, pass: pass, name: name, role: role }]) // pass is plaintext - UNSAFE FOR PRODUCTION
-      .select('uuid, id, name, role') // id is email column
+      .insert([{ user_id: newUserId, email: email, pass: pass, name: name, role: role }])
+      .select('user_id, email, name, role')
       .single();
 
     if (insertError || !insertedData) {
@@ -167,10 +179,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: 'Registration failed: ' + (insertError?.message || "Could not retrieve user after insert.") };
     }
     
-    const userData: CustomUser = { uuid: insertedData.uuid, email: insertedData.id, name: insertedData.name ?? null, role: insertedData.role as CustomUser['role'] };
+    const userData: CustomUser = { 
+        user_id: insertedData.user_id, 
+        email: insertedData.email, 
+        name: insertedData.name ?? null, 
+        role: insertedData.role as CustomUser['role'] 
+    };
     Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
     if (userData.role) {
-      Cookies.set(ROLE_COOKIE_NAME, userData.role, { expires: 7, path: '/' });
+        Cookies.set(ROLE_COOKIE_NAME, userData.role, { expires: 7, path: '/' });
     }
     setUser(userData);
     setIsLoading(false);
@@ -182,33 +199,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
     Cookies.remove(ROLE_COOKIE_NAME, { path: '/' });
     setUser(null);
-    setIsLoading(false); // Set loading to false before push to avoid race condition with useEffect
+    setIsLoading(false);
     router.push(AUTH_ROUTE); 
   };
   
   const updateUserProfile = async (profileData: { name: string; currentEmail: string; password?: string }): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: "User not authenticated."};
     setIsLoading(true);
-    const updates: { name: string; pass?: string } = { name: profileData.name };
+    const updates: Partial<Database['public']['Tables']['proctorX']['Row']> = { name: profileData.name };
     if (profileData.password) {
-      updates.pass = profileData.password; // Plaintext password update - UNSAFE
+      updates.pass = profileData.password;
     }
 
     const { error } = await supabase
       .from('proctorX')
       .update(updates)
-      .eq('id', profileData.currentEmail); // id is email column
+      .eq('email', profileData.currentEmail); 
 
     if (error) {
       setIsLoading(false);
       return { success: false, error: error.message };
     }
 
-    // Re-fetch user data to update context
+    // Re-fetch user data to update context state for name/pass change
     await loadUserFromCookie(); 
+    // setUser(prevUser => prevUser ? ({...prevUser, name: profileData.name }) : null); // Optimistic update
     setIsLoading(false);
     return { success: true };
   };
-
 
   const value = {
     user,

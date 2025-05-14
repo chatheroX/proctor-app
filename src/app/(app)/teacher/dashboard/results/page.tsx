@@ -1,12 +1,12 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Added useEffect
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Eye, Users, Percent } from 'lucide-react';
+import { BarChart3, Eye, Users, Percent, Loader2 } from 'lucide-react'; // Added Loader2
 
 interface ExamResultSummary {
   id: string;
@@ -16,16 +16,35 @@ interface ExamResultSummary {
   averageScore: number | null; // in percentage
 }
 
-// Mock data for exam result summaries
-const examResults: ExamResultSummary[] = [
-  { id: 'exam001', title: 'Calculus Midterm S1', dateCompleted: '2024-07-05', participants: 35, averageScore: 78 },
-  { id: 'exam003', title: 'Intro to Programming Quiz', dateCompleted: '2024-05-22', participants: 52, averageScore: 85 },
-  // { id: 'exam002', title: 'History 101 Final', dateCompleted: 'N/A (Ongoing)', participants: 40, averageScore: null },
-];
+// No more mock data
+// const examResults: ExamResultSummary[] = [ ... ];
 
 export default function StudentResultsPage() {
-  // In a real app, you'd fetch these results.
-  // Clicking an exam would navigate to a detailed results page: /teacher/dashboard/results/[examId]
+  const [results, setResults] = useState<ExamResultSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchResultsSummary = async () => {
+      setIsLoading(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // const summary = await yourApi.getResultsSummary();
+      // setResults(summary);
+      // For now, setting to empty
+      setResults([]);
+      setIsLoading(false);
+    };
+    fetchResultsSummary();
+  }, []);
+  
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Loading student results...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -37,7 +56,7 @@ export default function StudentResultsPage() {
           <CardDescription>Review student performance across completed exams.</CardDescription>
         </CardHeader>
         <CardContent>
-          {examResults.length > 0 ? (
+          {results.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -49,7 +68,7 @@ export default function StudentResultsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {examResults.map((result) => (
+                {results.map((result) => (
                   <TableRow key={result.id}>
                     <TableCell className="font-medium">{result.title}</TableCell>
                     <TableCell className="text-center">{result.participants}</TableCell>
@@ -80,8 +99,3 @@ export default function StudentResultsPage() {
     </div>
   );
 }
-
-// Removed metadata export as this is a Client Component
-// export const metadata = {
-//   title: 'Student Results | Teacher Dashboard | ProctorPrep',
-// };

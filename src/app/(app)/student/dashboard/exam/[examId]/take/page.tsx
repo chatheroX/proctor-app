@@ -6,27 +6,25 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Keep Label import
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag } from 'lucide-react';
 import { ExamTimerWarning } from '@/components/student/exam-timer-warning';
 import { useActivityMonitor, FlaggedEvent } from '@/hooks/use-activity-monitor';
 import { useToast } from '@/hooks/use-toast';
 
-// Mock data structure - replace with actual data fetching
+
 interface Question {
   id: string;
   text: string;
-  options: string[];
+  options: string[]; // Assuming simple string options for now.
 }
-const mockQuestions: Question[] = [
-  { id: 'q1', text: 'What is the capital of France?', options: ['Berlin', 'Madrid', 'Paris', 'Rome'] },
-  { id: 'q2', text: 'Which planet is known as the Red Planet?', options: ['Earth', 'Mars', 'Jupiter', 'Saturn'] },
-  { id: 'q3', text: 'What is the largest ocean on Earth?', options: ['Atlantic', 'Indian', 'Arctic', 'Pacific'] },
-];
 
-const MOCK_EXAM_TITLE = "Sample Proficiency Test";
-const MOCK_EXAM_DURATION_SECONDS = 10 * 60; // 10 minutes for demo
+// Mock data structure for questions - this should come from your backend
+const MOCK_EXAM_QUESTIONS: Question[] = []; // No more mock data
+
+const MOCK_EXAM_TITLE = "Sample Proficiency Test"; // This should also come from backend
+const MOCK_EXAM_DURATION_SECONDS = 10 * 60; // Example: 10 minutes
 
 export default function TakeExamPage() {
   const params = useParams();
@@ -35,23 +33,26 @@ export default function TakeExamPage() {
   const { toast } = useToast();
 
   const examId = params.examId as string;
-  const studentId = searchParams.get('studentId') || 'unknown_student'; // Get studentId from query params
+  const studentId = searchParams.get('studentId') || 'unknown_student'; 
 
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [examStarted, setExamStarted] = useState(false);
   const [examFinished, setExamFinished] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
+  const [examTitle, setExamTitle] = useState('');
+  const [examDuration, setExamDuration] = useState(0);
 
-  // Activity Monitor Hook
+
   useActivityMonitor({
     studentId,
     examId,
     enabled: examStarted && !examFinished,
     onFlagEvent: (event) => {
       setFlaggedEvents(prev => [...prev, event]);
-      console.warn('Activity Flagged:', event); // In real app, send to server
+      console.warn('Activity Flagged:', event); 
       toast({
         title: "Activity Alert",
         description: `Event: ${event.type}. This may be reported.`,
@@ -62,46 +63,57 @@ export default function TakeExamPage() {
   });
 
   useEffect(() => {
-    // Simulate loading exam data
-    setTimeout(() => {
+    setIsLoading(true);
+    // Simulate fetching exam data (title, duration, questions)
+    // In a real app, replace this with an API call to fetch exam details by examId
+    const fetchExamData = async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      // Example: const examData = await yourApi.getExam(examId);
+      // setQuestions(examData.questions || []);
+      // setExamTitle(examData.title || MOCK_EXAM_TITLE);
+      // setExamDuration(examData.durationSeconds || MOCK_EXAM_DURATION_SECONDS);
+      setQuestions(MOCK_EXAM_QUESTIONS); // Use empty array if no actual fetch
+      setExamTitle(MOCK_EXAM_TITLE);
+      setExamDuration(MOCK_EXAM_DURATION_SECONDS);
       setIsLoading(false);
-    }, 1000);
+    };
+
+    if (examId) {
+      fetchExamData();
+    } else {
+      setIsLoading(false);
+      // Handle case where examId is not present (e.g., show error, redirect)
+      toast({title: "Error", description: "Exam ID is missing.", variant: "destructive"});
+      router.push('/student/dashboard/join-exam');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
   const handleStartExam = () => {
-    // Here, you might check SEB specific headers or configurations if needed
-    // For now, just start the exam
     setExamStarted(true);
-    // Request fullscreen if not already (optional, SEB might enforce it)
-    // document.documentElement.requestFullscreen().catch(console.error);
   };
 
   const handleAnswerChange = (questionId: string, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
-    // Auto-save logic would go here (e.g., to localStorage)
     console.log(`Answer for ${questionId} saved locally: ${value}`);
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < mockQuestions.length - 1) {
+    if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     }
   };
 
   const handlePreviousQuestion = () => {
-    // Check if backtracking is allowed based on exam config (from `searchParams.get('config')`)
-    // For demo, assume it is allowed.
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
+      setCurrentQuestionIndex(prev => prev + 1);
     }
   };
 
   const handleSubmitExam = () => {
     setIsLoading(true);
-    // Simulate submitting answers
     console.log('Submitting answers:', answers);
     console.log('Flagged Events:', flaggedEvents);
-    // In a real app, send answers and flaggedEvents to the server
     setTimeout(() => {
       setIsLoading(false);
       setExamFinished(true);
@@ -128,10 +140,10 @@ export default function TakeExamPage() {
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-lg shadow-xl">
           <CardHeader>
-            <CardTitle className="text-2xl">Ready to Start Exam: {MOCK_EXAM_TITLE}</CardTitle>
+            <CardTitle className="text-2xl">Ready to Start Exam: {examTitle}</CardTitle>
             <CardDescription>
               Exam ID: {examId} <br />
-              Duration: {MOCK_EXAM_DURATION_SECONDS / 60} minutes <br />
+              Duration: {examDuration / 60} minutes <br />
               Ensure you are in a quiet environment and your Safe Exam Browser is configured.
             </CardDescription>
           </CardHeader>
@@ -146,7 +158,8 @@ export default function TakeExamPage() {
             </Alert>
           </CardContent>
           <CardFooter>
-            <Button onClick={handleStartExam} className="w-full" size="lg">
+            <Button onClick={handleStartExam} className="w-full" size="lg" disabled={isLoading || questions.length === 0}>
+              {isLoading ? <Loader2 className="animate-spin mr-2"/> : null}
               Start Exam
             </Button>
           </CardFooter>
@@ -162,10 +175,10 @@ export default function TakeExamPage() {
           <CardHeader>
             <ShieldCheck className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <CardTitle className="text-2xl">Exam Submitted Successfully!</CardTitle>
-            <CardDescription>Your responses for "{MOCK_EXAM_TITLE}" have been recorded. You may now close this window if SEB does not do so automatically.</CardDescription>
+            <CardDescription>Your responses for "{examTitle}" have been recorded. You may now close this window if SEB does not do so automatically.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Number of questions answered: {Object.keys(answers).length} / {mockQuestions.length}</p>
+            <p className="text-sm text-muted-foreground">Number of questions answered: {Object.keys(answers).length} / {questions.length}</p>
              {flaggedEvents.length > 0 && (
                 <Alert variant="destructive" className="mt-4 text-left">
                     <Flag className="h-4 w-4" />
@@ -185,22 +198,36 @@ export default function TakeExamPage() {
       </div>
     );
   }
+  
+  if (questions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
+        <ShieldCheck className="h-12 w-12 text-destructive mb-4" />
+        <p className="text-lg text-muted-foreground">No questions found for this exam.</p>
+        <p className="text-sm text-muted-foreground">Please contact your instructor.</p>
+         <Button onClick={() => router.push('/student/dashboard')} className="mt-4">
+            Back to Dashboard
+        </Button>
+      </div>
+    );
+  }
 
-  const currentQuestion = mockQuestions[currentQuestionIndex];
+
+  const currentQuestion = questions[currentQuestionIndex];
 
   return (
     <div className="flex flex-col min-h-screen bg-muted">
       <ExamTimerWarning
-        totalDurationSeconds={MOCK_EXAM_DURATION_SECONDS}
+        totalDurationSeconds={examDuration}
         onTimeUp={handleTimeUp}
-        examTitle={MOCK_EXAM_TITLE}
+        examTitle={examTitle}
       />
-      <main className="flex-grow flex items-center justify-center p-4 pt-20"> {/* pt-20 for timer banner */}
+      <main className="flex-grow flex items-center justify-center p-4 pt-20"> 
         <Card className="w-full max-w-2xl shadow-xl">
           <CardHeader>
             <div className="flex justify-between items-center">
-                <CardTitle className="text-xl md:text-2xl">{MOCK_EXAM_TITLE}</CardTitle>
-                <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {mockQuestions.length}</span>
+                <CardTitle className="text-xl md:text-2xl">{examTitle}</CardTitle>
+                <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {questions.length}</span>
             </div>
             <CardDescription className="pt-2 text-lg">{currentQuestion.text}</CardDescription>
           </CardHeader>
@@ -226,7 +253,7 @@ export default function TakeExamPage() {
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Previous
             </Button>
-            {currentQuestionIndex < mockQuestions.length - 1 ? (
+            {currentQuestionIndex < questions.length - 1 ? (
               <Button onClick={handleNextQuestion}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -242,8 +269,3 @@ export default function TakeExamPage() {
     </div>
   );
 }
-
-// Removed metadata export as this is a Client Component
-// export const metadata = {
-//   title: 'Take Exam | ProctorPrep',
-// };

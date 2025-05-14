@@ -12,24 +12,24 @@ export interface Database {
     Tables: {
       proctorX: {
         Row: {
-          uuid: string; // Primary Key
-          id: string; // TEXT, stores email (should be unique)
-          pass: string; // TEXT, stores plaintext password
-          name: string | null; // TEXT, stores full name, can be null
-          role: 'student' | 'teacher' | null; // TEXT, stores user role
-          created_at?: string; // timestamptz
+          user_id: string; // Primary Key (6-character ID)
+          email: string; // User's email (for login, unique)
+          pass: string; // Plaintext password
+          name: string;
+          role: 'student' | 'teacher';
+          created_at?: string;
         };
         Insert: {
-          uuid?: string; // Optional on insert if DB generates it
-          id: string; // Email
+          user_id: string; // Must be provided on insert
+          email: string;
           pass: string;
           name: string;
           role: 'student' | 'teacher';
           created_at?: string;
         };
         Update: {
-          uuid?: string;
-          id?: string;
+          user_id?: string;
+          email?: string;
           pass?: string;
           name?: string;
           role?: 'student' | 'teacher';
@@ -55,8 +55,8 @@ export interface Database {
 
 // User object for custom context
 export interface CustomUser {
-  uuid: string;
-  email: string; // This was 'id' in proctorX, mapping to email conceptually
+  user_id: string; // 6-character ID
+  email: string;
   name: string | null;
   role: 'student' | 'teacher' | null;
 }

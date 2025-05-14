@@ -1,17 +1,48 @@
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react"; // Added Loader2
+import { useState, useEffect } from "react"; // Added hooks
 
-// Mock data for exam history
-const examHistory = [
-  { id: 'EXAM001', name: 'Introduction to Algebra Midterm', date: '2024-05-15', score: 85, status: 'Completed' },
-  { id: 'EXAM002', name: 'Physics 101 Final', date: '2024-06-01', score: 92, status: 'Completed' },
-  { id: 'EXAM003', name: 'History of Ancient Civilizations Quiz', date: '2024-06-10', score: 78, status: 'Completed' },
-  { id: 'EXAM004', name: 'Calculus I Assessment', date: '2024-06-20', score: null, status: 'In Progress' },
-];
+interface ExamHistoryItem {
+  id: string;
+  name: string;
+  date: string;
+  score: number | null;
+  status: 'Completed' | 'In Progress' | 'Not Started';
+}
+
+// No more mock data
+// const examHistory: ExamHistoryItem[] = [ ... ];
 
 export default function ExamHistoryPage() {
+  const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setIsLoading(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // const history = await yourApi.getStudentExamHistory();
+      // setExamHistory(history);
+      // For now, setting to empty
+      setExamHistory([]);
+      setIsLoading(false);
+    };
+    fetchHistory();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Loading exam history...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Exam History</h1>
@@ -40,8 +71,15 @@ export default function ExamHistoryPage() {
                     <TableCell>{exam.date}</TableCell>
                     <TableCell>{exam.score !== null ? `${exam.score}%` : 'N/A'}</TableCell>
                     <TableCell>
-                      <Badge variant={exam.status === 'Completed' ? 'default' : 'secondary'}
-                        className={exam.status === 'Completed' ? 'bg-green-500/80 text-white' : 'bg-yellow-500/80 text-white'}
+                      <Badge variant={
+                          exam.status === 'Completed' ? 'default' : 
+                          exam.status === 'In Progress' ? 'secondary' : 
+                          'outline' // Not Started or other
+                        }
+                        className={
+                          exam.status === 'Completed' ? 'bg-green-500/80 text-white' : 
+                          exam.status === 'In Progress' ? 'bg-yellow-500/80 text-white' : ''
+                        }
                       >
                         {exam.status}
                       </Badge>

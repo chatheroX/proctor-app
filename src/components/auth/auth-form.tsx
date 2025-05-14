@@ -15,6 +15,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { CustomUser } from '@/types/supabase';
 
 type AuthAction = 'login' | 'register';
+const DEFAULT_DASHBOARD_ROUTE_STUDENT = '/student/dashboard/overview';
+const DEFAULT_DASHBOARD_ROUTE_TEACHER = '/teacher/dashboard/overview';
+
 
 export function AuthForm() {
   const pathname = usePathname(); 
@@ -24,27 +27,31 @@ export function AuthForm() {
   const { user, isLoading: authLoading, signIn, signUp } = useAuth();
 
   const initialAction = (searchParams.get('action') as AuthAction) || 'login';
+  const initialRole = (searchParams.get('role') as CustomUser['role']) || ''; // For pre-filling role if passed in query
+  
   const [action, setAction] = useState<AuthAction>(initialAction);
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'student' | 'teacher' | ''>('');
+  const [role, setRole] = useState<CustomUser['role']>(initialRole);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const getRedirectPathForRole = (currentRole: 'student' | 'teacher' | null) => {
-    if (currentRole === 'teacher') return '/teacher/dashboard/overview';
-    return '/student/dashboard/overview'; // Default to student dashboard
+  const getRedirectPathForRole = (currentRole: CustomUser['role']) => {
+    if (currentRole === 'teacher') return DEFAULT_DASHBOARD_ROUTE_TEACHER;
+    return DEFAULT_DASHBOARD_ROUTE_STUDENT; 
   };
 
   useEffect(() => {
     setAction(initialAction);
-  }, [initialAction]);
+    setRole(initialRole);
+  }, [initialAction, initialRole]);
 
   useEffect(() => {
+    // This effect handles redirection for already logged-in users trying to access /auth
     if (!authLoading && user && pathname === '/auth') {
       router.replace(getRedirectPathForRole(user.role));
     }
@@ -109,6 +116,9 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
+  // Show loader if AuthContext is still determining user state AND we are on /auth page
+  // but don't block form display if user is already known to be null.
+  // This prevents flashing the loader if user is known to be unauthenticated.
   if (authLoading && user === undefined && pathname === '/auth') { 
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
@@ -117,6 +127,8 @@ export function AuthForm() {
     );
   }
   
+  // If user is determined and exists, and we are on /auth, AuthContext's useEffect will redirect.
+  // This return is a fallback or for cases where redirect hasn't happened yet.
   if (user && !authLoading && pathname === '/auth') { 
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
@@ -131,8 +143,7 @@ export function AuthForm() {
       <Card className="w-full max-w-md shadow-xl">
         <Tabs value={action} onValueChange={(value) => {
           setAction(value as AuthAction);
-          // Reset fields when switching tabs for cleaner UX
-          setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
+          setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRole); // keep initialRole from query
         }} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>
@@ -170,7 +181,7 @@ export function AuthForm() {
                 </Button>
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   Don&apos;t have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');}}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRole);}}>
                     Register here
                   </button>
                 </p>
@@ -220,7 +231,7 @@ export function AuthForm() {
                   <Label htmlFor="register-role">Register as</Label>
                   <div className="relative">
                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Select value={role} onValueChange={(value) => setRole(value as 'student' | 'teacher' | '')}>
+                    <Select value={role || ''} onValueChange={(value) => setRole(value as CustomUser['role'])}>
                       <SelectTrigger id="register-role" className="pl-10">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
@@ -239,7 +250,7 @@ export function AuthForm() {
                 </Button>
                  <p className="mt-4 text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');}}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRole);}}>
                     Login here
                   </button>
                 </p>

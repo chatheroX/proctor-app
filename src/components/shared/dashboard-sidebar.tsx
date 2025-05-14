@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from '@/components/ui/sidebar'; 
-import { ShieldCheck, LogOut, Settings, Loader2, UserCircle2, Fingerprint } from 'lucide-react';
+import { ShieldCheck, LogOut, Settings, Loader2, UserCircle2, Fingerprint, Hash } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
 
@@ -26,7 +26,7 @@ export interface NavItem {
 
 interface SidebarElementsProps {
   navItems: NavItem[];
-  userRoleDashboard: 'student' | 'teacher'; // To construct settings link
+  userRoleDashboard: 'student' | 'teacher';
   user: CustomUser | null; 
   signOut: () => Promise<void>; 
   authLoading: boolean; 
@@ -60,9 +60,9 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                 </p>
               </div>
             </div>
-            <div className="mt-2 flex items-center gap-1 text-xs text-sidebar-foreground/50" title={user.uuid}>
-                <Fingerprint className="h-3 w-3"/> 
-                <span className="truncate">ID: {user.uuid}</span>
+            <div className="mt-2 flex items-center gap-1 text-xs text-sidebar-foreground/50" title={user.user_id}>
+                <Hash className="h-3 w-3"/> 
+                <span className="truncate">User ID: {user.user_id}</span>
             </div>
           </div>
         )}

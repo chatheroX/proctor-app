@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Mail, Lock, Camera, Save, Loader2, Fingerprint, Briefcase } from 'lucide-react';
+import { User, Mail, Lock, Camera, Save, Loader2, Hash, Briefcase } from 'lucide-react'; // Changed Fingerprint to Hash
 import { useToast } from '@/hooks/use-toast';
 import type { CustomUser } from '@/types/supabase';
 
@@ -18,10 +18,9 @@ interface UserProfileFormProps {
 
 export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
   const [name, setName] = useState(user.name || '');
-  const [email, setEmail] = useState(user.email); // Email from CustomUser is user.email
+  const [email, setEmail] = useState(user.email); 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  // Avatar functionality remains disabled as proctorX doesn't support it directly
   const [avatarPreview, setAvatarPreview] = useState<string | undefined>(undefined); 
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -30,13 +29,15 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     setName(user.name || '');
     setEmail(user.email);
     const initial = (user.name || user.email || 'U').substring(0, 2).toUpperCase();
-    setAvatarPreview(`https://placehold.co/100x100.png?text=${initial}`);
+    // Use user_id for placeholder if name/email are short or missing
+    const placeholderText = user.name?.substring(0,2) || user.email.substring(0,2) || user.user_id.substring(0,2) || 'U';
+    setAvatarPreview(`https://placehold.co/100x100.png?text=${placeholderText.toUpperCase()}`);
   }, [user]);
 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email !== user.email) { // Email is conceptually the 'id' from proctorX in CustomUser
+    if (email !== user.email) {
         toast({title: "Info", description: "Email (your login ID) cannot be changed.", variant: "default"});
         setEmail(user.email); 
         return;
@@ -54,9 +55,8 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     try {
       await onSave({ 
         name: name, 
-        currentEmail: user.email, // Pass current email for query
+        currentEmail: user.email, 
         password: password || undefined, 
-        // avatarFile - not used
       });
       setPassword(''); 
       setConfirmPassword('');
@@ -72,13 +72,13 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
       <form onSubmit={handleSubmit}>
         <CardHeader>
           <CardTitle className="text-2xl">Edit Profile</CardTitle>
-          <CardDescription>Update your personal information. Email and UUID are your unique identifiers.</CardDescription>
+          <CardDescription>Update your personal information. User ID and Email are your unique identifiers.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
             <Avatar className="h-24 w-24">
               <AvatarImage src={avatarPreview} alt={name || 'User'} data-ai-hint="person portrait" />
-              <AvatarFallback>{(name || user.email || 'U').substring(0, 2).toUpperCase()}</AvatarFallback>
+              <AvatarFallback>{(user.name || user.email || 'U').substring(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="relative">
               <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('avatarUpload')?.click()} disabled>
@@ -97,14 +97,14 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="uuid">User UUID (Read-only)</Label>
+              <Label htmlFor="user_id">User ID (Roll Number)</Label>
               <div className="relative">
-                <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input id="uuid" value={user.uuid} readOnly className="pl-10 bg-muted/50 cursor-not-allowed" />
+                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input id="user_id" value={user.user_id} readOnly className="pl-10 bg-muted/50 cursor-not-allowed" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address (Login ID)</Label>
+              <Label htmlFor="email">Email Address (Login)</Label>
                <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input id="email" type="email" value={email} readOnly className="pl-10 bg-muted/50 cursor-not-allowed" />
@@ -118,7 +118,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="role">Role (Read-only)</Label>
+              <Label htmlFor="role">Role</Label>
               <div className="relative">
                 <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input id="role" value={user.role || 'N/A'} readOnly className="pl-10 capitalize bg-muted/50 cursor-not-allowed" />

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
@@ -5,14 +6,15 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy } from 'lucide-react';
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2 } from 'lucide-react'; // Added Loader2
 import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label'; // Added Label import
 
 interface Question {
   id: string;
   text: string;
-  options: string[];
-  correctAnswer: string;
+  options: string[]; // Assuming simple string options for now
+  correctAnswer: string; // For display, if the Exam interface has this
 }
 interface Exam {
   id: string;
@@ -26,25 +28,8 @@ interface Exam {
   allowBacktracking: boolean;
 }
 
-// Mock data (can be expanded or fetched from a shared source with edit/list pages)
-const mockFullExams: Exam[] = [
-  { 
-    id: 'exam001', 
-    title: 'Calculus Midterm S1', 
-    description: 'Covers chapters 1-5 of the Calculus textbook. Focus on differentiation and basic integration. Ensure SEB is used.',
-    status: 'Published', 
-    questions: [
-      {id: 'q1', text: 'What is the derivative of x^2 with respect to x?', options: ['2x', 'x', 'x/2', '2'], correctAnswer: '2x'},
-      {id: 'q2', text: 'What is the integral of 1/x dx?', options: ['ln|x| + C', 'x^2 + C', '-1/x^2 + C', '1 + C'], correctAnswer: 'ln|x| + C'},
-      {id: 'q3', text: 'Solve lim (x->0) sin(x)/x.', options: ['1', '0', 'undefined', 'infinity'], correctAnswer: '1'},
-    ], 
-    duration: 90, 
-    createdAt: '2024-07-01', 
-    examCode: 'CALC1MID',
-    allowBacktracking: true,
-  },
-  // ... other mock exams
-];
+// No more mock data
+// const mockFullExams: Exam[] = [ ... ];
 
 
 export default function ExamDetailsPage() {
@@ -52,28 +37,61 @@ export default function ExamDetailsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const examId = params.id as string;
-  const [exam, setExam] = useState<Exam | null | undefined>(undefined);
+  const [exam, setExam] = useState<Exam | null | undefined>(undefined); // undefined for loading
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const foundExam = mockFullExams.find(e => e.id === examId);
-    setExam(foundExam || null);
+    const fetchExamDetails = async () => {
+      if (!examId) {
+        setIsLoading(false);
+        notFound(); // Or redirect, or show error
+        return;
+      }
+      setIsLoading(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // const fetchedExam = await yourApi.getExamById(examId);
+      // setExam(fetchedExam || null);
+      // For now, setting to null as mock data is removed
+      setExam(null); 
+      setIsLoading(false);
+    };
+    fetchExamDetails();
   }, [examId]);
 
-  if (exam === undefined) {
-    return <div className="flex justify-center items-center h-full"><p>Loading exam details...</p></div>;
+  const copyExamCode = () => {
+    if (exam?.examCode) {
+      navigator.clipboard.writeText(exam.examCode).then(() => {
+        toast({description: `Exam code "${exam.examCode}" copied to clipboard!`});
+      }).catch(err => {
+        toast({description: "Failed to copy code.", variant: "destructive"});
+      });
+    }
+  };
+  
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Loading exam details...</p>
+      </div>
+    );
   }
 
+
   if (!exam) {
-    notFound();
+    // If not loading and exam is still null, it means not found or error during fetch
+    return (
+       <div className="space-y-6 text-center py-10">
+         <h1 className="text-2xl font-semibold">Exam Not Found</h1>
+         <p className="text-muted-foreground">The exam details could not be loaded. It might have been deleted or the ID is incorrect.</p>
+         <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')}>
+           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
+         </Button>
+       </div>
+    );
   }
   
-  const copyExamCode = () => {
-    navigator.clipboard.writeText(exam.examCode).then(() => {
-      toast({description: `Exam code "${exam.examCode}" copied to clipboard!`});
-    }).catch(err => {
-      toast({description: "Failed to copy code.", variant: "destructive"});
-    });
-  };
 
   return (
     <div className="space-y-6">
@@ -165,8 +183,9 @@ export default function ExamDetailsPage() {
 
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
-  const exam = mockFullExams.find(e => e.id === params.id);
-  const examTitle = exam ? exam.title : "Exam Details";
+  // In a real app, fetch exam title here for dynamic metadata
+  // const exam = await yourApi.getExamTitleById(params.id); 
+  const examTitle = "Exam Details"; // Placeholder since mock data is removed
   return {
     title: `${examTitle} | ProctorPrep`,
   };

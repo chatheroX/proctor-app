@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -8,15 +9,20 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarDays, Clock } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarDays, Clock, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
+interface QuestionOption {
+  id: string;
+  text: string;
+}
 interface Question {
   id: string;
   text: string;
-  options: string[];
-  correctAnswer: string; // Could be index or value
+  options: QuestionOption[]; // Changed to objects with IDs for radio group stability
+  correctOptionId: string; 
 }
 
 interface ExamData {
@@ -26,7 +32,6 @@ interface ExamData {
   duration: number; // in minutes
   allowBacktracking: boolean;
   questions: Question[];
-  // Add section-wise settings if needed
 }
 
 interface ExamFormProps {
@@ -43,30 +48,53 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
   const [description, setDescription] = useState(initialData?.description || '');
   const [duration, setDuration] = useState(initialData?.duration || 60);
   const [allowBacktracking, setAllowBacktracking] = useState(initialData?.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
-  const [questions, setQuestions] = useState<Question[]>(initialData?.questions || []);
+  
+  // Adapt initial questions data if necessary (from simple string options to QuestionOption objects)
+  const initializeQuestions = (initialQs?: ExamData['questions']): Question[] => {
+    if (!initialQs) return [];
+    return initialQs.map(q => {
+      // If options are already in the new format, use them, else convert
+      const newOptions = q.options.map((opt, index) => 
+        typeof opt === 'string' ? { id: `opt-${index}-${Date.now()}`, text: opt } : opt
+      );
+      // If correctOptionId is missing, try to find it from old correctAnswer string format
+      let correctId = q.correctOptionId;
+      if (!correctId && (q as any).correctAnswer) {
+          const foundOpt = newOptions.find(no => no.text === (q as any).correctAnswer);
+          if (foundOpt) correctId = foundOpt.id;
+      }
+      return { ...q, options: newOptions, correctOptionId: correctId || '' };
+    });
+  };
+  const [questions, setQuestions] = useState<Question[]>(initializeQuestions(initialData?.questions));
   
   const [currentQuestionText, setCurrentQuestionText] = useState('');
-  const [currentOptions, setCurrentOptions] = useState(['', '', '', '']);
-  const [currentCorrectAnswer, setCurrentCorrectAnswer] = useState('');
+  const [currentOptions, setCurrentOptions] = useState<QuestionOption[]>([
+    { id: 'opt-0', text: '' }, { id: 'opt-1', text: '' }, { id: 'opt-2', text: '' }, { id: 'opt-3', text: '' }
+  ]);
+  const [currentCorrectOptionId, setCurrentCorrectOptionId] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState(false);
 
+  const resetOptionIds = () => {
+    return [{ id: `opt-0-${Date.now()}`, text: '' }, { id: `opt-1-${Date.now()}`, text: '' }, { id: `opt-2-${Date.now()}`, text: '' }, { id: `opt-3-${Date.now()}`, text: '' }];
+  }
+
   const handleAddQuestion = () => {
-    if (!currentQuestionText.trim() || !currentCorrectAnswer.trim() || currentOptions.some(opt => !opt.trim())) {
-      toast({ title: "Incomplete Question", description: "Please fill all fields for the question.", variant: "destructive" });
+    if (!currentQuestionText.trim() || !currentCorrectOptionId.trim() || currentOptions.some(opt => !opt.text.trim())) {
+      toast({ title: "Incomplete Question", description: "Please fill all fields for the question and select a correct answer.", variant: "destructive" });
       return;
     }
     const newQuestion: Question = {
-      id: `q-${Date.now()}`, // Simple unique ID
+      id: `q-${Date.now()}`, 
       text: currentQuestionText,
-      options: [...currentOptions],
-      correctAnswer: currentCorrectAnswer,
+      options: currentOptions.map(opt => ({...opt})), // Deep copy options
+      correctOptionId: currentCorrectOptionId,
     };
     setQuestions([...questions, newQuestion]);
-    // Reset fields
     setCurrentQuestionText('');
-    setCurrentOptions(['', '', '', '']);
-    setCurrentCorrectAnswer('');
+    setCurrentOptions(resetOptionIds());
+    setCurrentCorrectOptionId('');
     toast({ description: "Question added." });
   };
 
@@ -77,7 +105,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
 
   const handleOptionChange = (index: number, value: string) => {
     const newOptions = [...currentOptions];
-    newOptions[index] = value;
+    newOptions[index] = { ...newOptions[index], text: value };
     setCurrentOptions(newOptions);
   };
 
@@ -95,7 +123,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
     try {
       await onSave(examData);
       toast({ title: "Success!", description: `Exam ${isEditing ? 'updated' : 'created'} successfully.` });
-      router.push('/teacher/dashboard/exams'); // Redirect after save
+      router.push('/teacher/dashboard/exams'); 
     } catch (error) {
       toast({ title: "Error", description: "Failed to save exam. Please try again.", variant: "destructive" });
     } finally {
@@ -113,7 +141,6 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
-          {/* Basic Info Section */}
           <section className="space-y-4 p-4 border rounded-lg">
             <h3 className="text-lg font-medium flex items-center gap-2"><FileText className="h-5 w-5 text-primary"/> Basic Information</h3>
             <div className="space-y-2">
@@ -126,7 +153,6 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
             </div>
           </section>
 
-          {/* Settings Section */}
           <section className="space-y-4 p-4 border rounded-lg">
              <h3 className="text-lg font-medium flex items-center gap-2"><Settings2 className="h-5 w-5 text-primary"/> Exam Settings</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -139,48 +165,52 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
                     <Label htmlFor="allowBacktracking">Allow Backtracking</Label>
                 </div>
             </div>
-             <div className="space-y-2"> {/* Placeholder for timing/scheduling */}
+             <div className="space-y-2"> 
                 <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4"/> Scheduling (Coming Soon)</Label>
                 <p className="text-sm text-muted-foreground">Set start and end dates/times for the exam.</p>
                 <Input type="datetime-local" disabled className="w-full md:w-1/2" />
             </div>
           </section>
 
-          {/* Questions Section */}
           <section className="space-y-4 p-4 border rounded-lg">
             <h3 className="text-lg font-medium">Manage Questions ({questions.length} added)</h3>
             
-            {/* Question Upload Options */}
             <div className="flex flex-wrap gap-2 my-4">
               <Button type="button" variant="outline" disabled>
                 <Upload className="mr-2 h-4 w-4" /> Upload CSV (Soon)
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link href="/teacher/dashboard/ai-assistant" target="_blank"> {/* Open in new tab to not lose form state */}
+                <Link href="/teacher/dashboard/ai-assistant" target="_blank"> 
                   <Brain className="mr-2 h-4 w-4" /> Use AI Assistant
                 </Link>
               </Button>
             </div>
 
-            {/* Manual Question Input */}
             <Card className="bg-muted/30">
               <CardHeader>
                 <CardTitle className="text-md">Add New Question Manually</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <div className="space-y-1">
                   <Label htmlFor="questionText">Question Text</Label>
                   <Textarea id="questionText" value={currentQuestionText} onChange={(e) => setCurrentQuestionText(e.target.value)} placeholder="Enter the question" />
                 </div>
-                {currentOptions.map((opt, index) => (
-                  <div className="space-y-1" key={index}>
-                    <Label htmlFor={`option${index + 1}`}>Option {index + 1}</Label>
-                    <Input id={`option${index + 1}`} value={opt} onChange={(e) => handleOptionChange(index, e.target.value)} placeholder={`Option ${index + 1}`} />
-                  </div>
-                ))}
-                <div className="space-y-1">
-                  <Label htmlFor="correctAnswer">Correct Answer (Enter exact text of one option)</Label>
-                  <Input id="correctAnswer" value={currentCorrectAnswer} onChange={(e) => setCurrentCorrectAnswer(e.target.value)} placeholder="e.g., Option 1 text" />
+                <div>
+                  <Label>Options & Correct Answer</Label>
+                  <RadioGroup value={currentCorrectOptionId} onValueChange={setCurrentCorrectOptionId} className="mt-2 space-y-2">
+                    {currentOptions.map((opt, index) => (
+                      <div key={opt.id} className="flex items-center gap-2 p-2 border rounded-md bg-background hover:bg-accent/50 has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary">
+                        <RadioGroupItem value={opt.id} id={opt.id} />
+                        <Label htmlFor={opt.id} className="sr-only">Select Option {index + 1} as correct</Label>
+                        <Input 
+                          value={opt.text} 
+                          onChange={(e) => handleOptionChange(index, e.target.value)} 
+                          placeholder={`Option ${index + 1}`} 
+                          className="flex-grow"
+                        />
+                      </div>
+                    ))}
+                  </RadioGroup>
                 </div>
               </CardContent>
               <CardFooter>
@@ -190,7 +220,6 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
               </CardFooter>
             </Card>
 
-            {/* Display Added Questions */}
             {questions.length > 0 && (
               <div className="mt-6 space-y-3">
                 <h4 className="font-semibold">Added Questions:</h4>
@@ -199,9 +228,12 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
                     <li key={q.id} className="p-3 border rounded-md bg-background flex justify-between items-start">
                       <div>
                         <p className="font-medium">{index + 1}. {q.text}</p>
-                        <ul className="list-disc list-inside text-sm text-muted-foreground pl-4">
-                          {q.options.map((opt, i) => (
-                            <li key={i} className={opt === q.correctAnswer ? 'text-green-600 font-semibold' : ''}>{opt}</li>
+                        <ul className="list-none text-sm text-muted-foreground pl-4 space-y-1">
+                          {q.options.map((opt) => (
+                            <li key={opt.id} className={cn("flex items-center gap-2", opt.id === q.correctOptionId ? 'text-green-600 font-semibold' : '')}>
+                              {opt.id === q.correctOptionId && <CheckCircle className="h-4 w-4 text-green-600" />} 
+                              <span>{opt.text}</span>
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -218,7 +250,8 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
         <CardFooter className="flex justify-end gap-2">
            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
           <Button type="submit" disabled={isLoading}>
-            {isLoading ? (isEditing ? 'Saving...' : 'Creating...') : <><Save className="mr-2 h-4 w-4" /> {isEditing ? 'Save Changes' : 'Create Exam'}</>}
+            {isLoading ? (isEditing ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Loader2 className="animate-spin mr-2 h-4 w-4" />) : <Save className="mr-2 h-4 w-4" />}
+            {isLoading ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Exam')}
           </Button>
         </CardFooter>
       </Card>

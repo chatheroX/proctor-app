@@ -49,7 +49,6 @@ export default function StudentProfilePage() {
     );
   }
   
-  // User is guaranteed to be CustomUser here due to checks above
   const profileData: CustomUser = user;
 
   return (

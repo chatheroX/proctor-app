@@ -1,14 +1,22 @@
+
 'use client';
 
 import { ExamForm } from '@/components/teacher/exam-form';
-import { notFound, useParams } from 'next/navigation'; // Using useParams
+import { notFound, useParams, useRouter } from 'next/navigation'; // Using useParams and useRouter
 import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react'; // Added Loader2
+import { Button } from '@/components/ui/button'; // Added Button
+import { ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 
+interface QuestionOption { // Updated to match ExamForm
+  id: string;
+  text: string;
+}
 interface Question {
   id: string;
   text: string;
-  options: string[];
-  correctAnswer: string;
+  options: QuestionOption[];
+  correctOptionId: string;
 }
 interface ExamData {
   id: string;
@@ -19,69 +27,78 @@ interface ExamData {
   questions: Question[];
 }
 
-// Mock exam data - in a real app, fetch this based on ID
-const mockExams: ExamData[] = [
-  { 
-    id: 'exam001', 
-    title: 'Calculus Midterm S1', 
-    description: 'Covers chapters 1-5 of the Calculus textbook. Focus on differentiation and basic integration.',
-    duration: 90, 
-    allowBacktracking: true, 
-    questions: [
-      {id: 'q1', text: 'What is the derivative of x^2?', options: ['2x', 'x', 'x/2', '2'], correctAnswer: '2x'},
-      {id: 'q2', text: 'What is the integral of 1/x dx?', options: ['ln|x| + C', 'x^2 + C', '-1/x^2 + C', '1 + C'], correctAnswer: 'ln|x| + C'},
-    ] 
-  },
-  // ... other mock exams if needed
-];
+// No more mock exam data
+// const mockExams: ExamData[] = [ ... ];
 
-// Mock save function
+// Mock save function - replace with actual API call
 const handleUpdateExam = async (data: ExamData) => {
   console.log('Updating exam:', data);
   // In a real app, you would update this in a database.
   await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+  // Example: await yourApi.updateExam(data.id, data);
 };
 
 export default function EditExamPage() {
   const params = useParams();
-  const examId = params.id as string; // Type assertion
-  const [examData, setExamData] = useState<ExamData | null | undefined>(undefined); // undefined for loading state
+  const router = useRouter(); // Added router
+  const examId = params.id as string; 
+  const [examData, setExamData] = useState<ExamData | null | undefined>(undefined); 
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate fetching exam data
-    const foundExam = mockExams.find(exam => exam.id === examId);
-    setExamData(foundExam || null); // null if not found, triggering notFound()
+    const fetchExamToEdit = async () => {
+      if (!examId) {
+          setIsLoading(false);
+          notFound();
+          return;
+      }
+      setIsLoading(true);
+      // Simulate fetching exam data
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // const foundExam = await yourApi.getExamById(examId);
+      // setExamData(foundExam || null); 
+      // For now, setting to null as mock data is removed
+      setExamData(null);
+      setIsLoading(false);
+    };
+    fetchExamToEdit();
   }, [examId]);
 
-  if (examData === undefined) {
-    return <div className="flex justify-center items-center h-full"><p>Loading exam data...</p></div>; // Or a skeleton loader
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Loading exam data for editing...</p>
+      </div>
+    );
   }
 
   if (!examData) {
-    notFound(); // If examData is null after "fetch"
+    return (
+       <div className="space-y-6 text-center py-10">
+         <h1 className="text-2xl font-semibold">Exam Not Found</h1>
+         <p className="text-muted-foreground">The exam data could not be loaded for editing. It might have been deleted or the ID is incorrect.</p>
+         <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')}>
+           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
+         </Button>
+       </div>
+    );
   }
 
   return (
     <div className="space-y-6">
+      <Button variant="outline" onClick={() => router.back()} className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back
+      </Button>
       <ExamForm initialData={examData} onSave={handleUpdateExam} isEditing={true} />
     </div>
   );
 }
 
-// metadata can't be dynamic in client components directly in this way for page.tsx
-// export const metadata = {
-//   title: `Edit Exam | Teacher Dashboard | ProctorPrep`,
-// };
-// For dynamic metadata with client components, you'd typically use a server component wrapper or generateMetadata function if this were a server component.
-// Since this is a client component due to hooks, we'll skip dynamic metadata for now, or set a generic one.
-// Or, in Next.js 13+ app router, you can export generateMetadata for dynamic titles.
-// However, to keep it simple for now, I'll set a generic title or rely on a higher-level layout.
-// The example below for generateMetadata would work if this was a server component or if logic was hoisted.
-
 export async function generateMetadata({ params }: { params: { id: string } }) {
-  // Mock fetch or lookup
-  const exam = mockExams.find(e => e.id === params.id);
-  const examTitle = exam ? exam.title : "Exam";
+  // In a real app, fetch exam title here for dynamic metadata
+  // const exam = await yourApi.getExamTitleById(params.id); 
+  const examTitle = "Exam"; // Placeholder
   return {
     title: `Edit ${examTitle} | ProctorPrep`,
   };

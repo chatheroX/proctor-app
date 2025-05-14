@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Added useEffect
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2 } from 'lucide-react'; // Added Loader2
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -22,30 +22,43 @@ import {
 } from "@/components/ui/alert-dialog"
 
 interface Exam {
-  id: string;
+  id: string; // This will be the actual exam ID from your DB
   title: string;
-  status: 'Draft' | 'Published' | 'Ongoing' | 'Completed';
-  questions: number;
+  status: 'Draft' | 'Published' | 'Ongoing' | 'Completed'; // Assuming these statuses
+  questions: number; // Count of questions
   duration: number; // in minutes
-  createdAt: string;
-  examCode: string;
+  createdAt: string; // ISO date string
+  examCode: string; // Auto-generated or teacher-defined
 }
 
-const initialExams: Exam[] = [
-  { id: 'exam001', title: 'Calculus Midterm S1', status: 'Published', questions: 25, duration: 90, createdAt: '2024-07-01', examCode: 'CALC1MID' },
-  { id: 'exam002', title: 'History 101 Final', status: 'Ongoing', questions: 50, duration: 120, createdAt: '2024-06-15', examCode: 'HIST1FNL' },
-  { id: 'exam003', title: 'Intro to Programming Quiz', status: 'Completed', questions: 10, duration: 30, createdAt: '2024-05-20', examCode: 'CODEQUIZ1' },
-  { id: 'exam004', title: 'Advanced Physics Concepts', status: 'Draft', questions: 0, duration: 60, createdAt: '2024-07-10', examCode: 'PHYADV004' },
-];
+// No more initialExams, will fetch or be empty
+// const initialExams: Exam[] = [ ... ];
 
 export default function ManageExamsPage() {
-  const [exams, setExams] = useState<Exam[]>(initialExams);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [isLoading, setIsLoading] = useState(true); // Added loading state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
   const { toast } = useToast();
 
+  // Placeholder for fetching exams - replace with your actual data fetching logic
+  useEffect(() => {
+    const fetchExams = async () => {
+      setIsLoading(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Example: setExams(await yourApi.fetchExams()); 
+      // For now, setting to empty to reflect removal of mock data
+      setExams([]); 
+      setIsLoading(false);
+    };
+    fetchExams();
+  }, []);
+
   const handleDeleteExam = () => {
     if (examToDelete) {
+      // Here you would call your API to delete the exam
+      // For demo, just filtering state
       setExams(exams.filter(exam => exam.id !== examToDelete.id));
       toast({ title: "Exam Deleted", description: `Exam "${examToDelete.title}" has been deleted.` });
       setExamToDelete(null);
@@ -65,6 +78,16 @@ export default function ManageExamsPage() {
       toast({description: "Failed to copy code.", variant: "destructive"});
     });
   };
+  
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Loading exams...</p>
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-6">
@@ -102,7 +125,7 @@ export default function ManageExamsPage() {
                     <TableCell>
                       <Badge variant={
                         exam.status === 'Published' ? 'default' :
-                        exam.status === 'Ongoing' ? 'destructive' : // Using destructive for ongoing for visibility
+                        exam.status === 'Ongoing' ? 'destructive' : 
                         exam.status === 'Completed' ? 'outline' :
                         'secondary' // Draft
                       }
@@ -181,8 +204,3 @@ export default function ManageExamsPage() {
     </div>
   );
 }
-
-// Removed metadata export as this is a Client Component
-// export const metadata = {
-//   title: 'Manage Exams | Teacher Dashboard | ProctorPrep',
-// };
