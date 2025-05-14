@@ -1,6 +1,10 @@
+
 'use client';
-import { DashboardSidebar, NavItem } from '@/components/shared/dashboard-sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar'; // Renamed import
+import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, UserCircle, BookOpenCheck, ListChecks, Brain, Settings, BarChart3 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const teacherNavItems: NavItem[] = [
   { href: '/teacher/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
@@ -16,12 +20,30 @@ export default function TeacherDashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { user, signOut, isLoading: authLoading } = useAuth();
+
+  if (authLoading && !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen w-full bg-muted/40 overflow-x-hidden">
-      <DashboardSidebar navItems={teacherNavItems} userRole="teacher" />
-      <main className="flex-1 flex flex-col overflow-auto p-6 bg-background min-w-0">
-        {children}
-      </main>
-    </div>
+    <SidebarProvider defaultOpen>
+      <div className="flex h-screen w-full bg-muted/40"> {/* This div is now a child of SidebarProvider's wrapper */}
+        <SidebarElements 
+          navItems={teacherNavItems} 
+          userRole="teacher"
+          user={user}
+          signOut={signOut}
+          authLoading={authLoading}
+        />
+        <main className="flex-1 flex flex-col overflow-auto p-6 bg-background min-w-0">
+          {children}
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
