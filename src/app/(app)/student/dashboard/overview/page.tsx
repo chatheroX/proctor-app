@@ -5,7 +5,7 @@ import { Edit3, History, UserCircle, ArrowRight } from "lucide-react";
 
 export default function StudentOverviewPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       <h1 className="text-3xl font-bold">Welcome, Student!</h1>
       <p className="text-muted-foreground">
         Manage your exams, view your history, and keep your profile up to date.

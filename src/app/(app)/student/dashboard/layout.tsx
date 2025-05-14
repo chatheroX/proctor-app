@@ -15,7 +15,7 @@ export default function StudentDashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen w-full bg-muted/40">
+    <div className="flex h-screen w-full bg-muted/40 overflow-x-hidden">
       <DashboardSidebar navItems={studentNavItems} userRole="student" />
       <main className="flex-1 flex flex-col overflow-auto p-6 bg-background min-w-0">
         {children}
