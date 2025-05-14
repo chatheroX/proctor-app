@@ -1,15 +1,15 @@
 
 'use client';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar'; 
+import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, UserCircle, BookOpenCheck, ListChecks, Brain, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, UserCircle, BookOpenCheck, Brain, BarChart3 } from 'lucide-react'; // Removed ListChecks
 import { Loader2 } from 'lucide-react';
 
 const teacherNavItems: NavItem[] = [
   { href: '/teacher/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
   { href: '/teacher/dashboard/exams', label: 'Manage Exams', icon: BookOpenCheck },
-  { href: '/teacher/dashboard/questions', label: 'Question Bank', icon: ListChecks, disabled: true }, 
+  // { href: '/teacher/dashboard/questions', label: 'Question Bank', icon: ListChecks, disabled: true }, // Removed
   { href: '/teacher/dashboard/ai-assistant', label: 'AI Assistant', icon: Brain },
   { href: '/teacher/dashboard/results', label: 'Student Results', icon: BarChart3 },
   { href: '/teacher/dashboard/profile', label: 'My Profile', icon: UserCircle },
@@ -33,8 +33,8 @@ export default function TeacherDashboardLayout({
   return (
     <SidebarProvider defaultOpen>
       <div className="flex h-screen w-full bg-muted/40 overflow-x-hidden">
-        <SidebarElements 
-          navItems={teacherNavItems} 
+        <SidebarElements
+          navItems={teacherNavItems}
           userRoleDashboard="teacher"
           user={user}
           signOut={signOut}

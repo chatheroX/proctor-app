@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2 } from 'lucide-react'; // Added Loader2
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -20,45 +20,53 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import type { Database } from '@/types/supabase'; // Assuming proctorX is defined in Database types
 
-interface Exam {
+// Define the Exam type based on proctorX structure or a new exams table structure
+// For now, let's assume a structure for an "exams" table if you create one.
+// If you are managing exams based on 'proctorX' users (teachers), adjust accordingly.
+export interface Exam {
   id: string; // This will be the actual exam ID from your DB
   title: string;
-  status: 'Draft' | 'Published' | 'Ongoing' | 'Completed'; // Assuming these statuses
-  questions: number; // Count of questions
+  status: 'Draft' | 'Published' | 'Ongoing' | 'Completed';
+  questions_count: number; // Assuming a count of questions
   duration: number; // in minutes
-  createdAt: string; // ISO date string
-  examCode: string; // Auto-generated or teacher-defined
+  created_at: string; // ISO date string
+  exam_code: string; // Auto-generated or teacher-defined
+  // teacher_id?: string; // Foreign key to proctorX user_id if exams are linked to teachers
 }
 
-// No more initialExams, will fetch or be empty
-// const initialExams: Exam[] = [ ... ];
 
 export default function ManageExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Added loading state
+  const [isLoading, setIsLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
   const { toast } = useToast();
 
-  // Placeholder for fetching exams - replace with your actual data fetching logic
   useEffect(() => {
     const fetchExams = async () => {
       setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // Example: setExams(await yourApi.fetchExams()); 
-      // For now, setting to empty to reflect removal of mock data
-      setExams([]); 
+      // TODO: Replace with actual API call to fetch exams from your database
+      // Example:
+      // const { data, error } = await supabase.from('exams').select('*').eq('teacher_id', currentUser.user_id);
+      // if (error) {
+      //   toast({ title: "Error", description: "Failed to fetch exams.", variant: "destructive" });
+      //   setExams([]);
+      // } else {
+      //   setExams(data as Exam[]);
+      // }
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      setExams([]); // Initialize with empty array
       setIsLoading(false);
     };
     fetchExams();
-  }, []);
+  }, [toast]);
 
   const handleDeleteExam = () => {
     if (examToDelete) {
-      // Here you would call your API to delete the exam
-      // For demo, just filtering state
+      // TODO: Implement actual API call to delete the exam
+      // Example: await supabase.from('exams').delete().eq('id', examToDelete.id);
       setExams(exams.filter(exam => exam.id !== examToDelete.id));
       toast({ title: "Exam Deleted", description: `Exam "${examToDelete.title}" has been deleted.` });
       setExamToDelete(null);
@@ -70,7 +78,7 @@ export default function ManageExamsPage() {
     setExamToDelete(exam);
     setShowDeleteDialog(true);
   };
-  
+
   const copyExamCode = (code: string) => {
     navigator.clipboard.writeText(code).then(() => {
       toast({description: `Exam code "${code}" copied to clipboard!`});
@@ -78,7 +86,7 @@ export default function ManageExamsPage() {
       toast({description: "Failed to copy code.", variant: "destructive"});
     });
   };
-  
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-full py-10">
@@ -125,7 +133,7 @@ export default function ManageExamsPage() {
                     <TableCell>
                       <Badge variant={
                         exam.status === 'Published' ? 'default' :
-                        exam.status === 'Ongoing' ? 'destructive' : 
+                        exam.status === 'Ongoing' ? 'destructive' :
                         exam.status === 'Completed' ? 'outline' :
                         'secondary' // Draft
                       }
@@ -137,11 +145,11 @@ export default function ManageExamsPage() {
                         {exam.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>{exam.questions}</TableCell>
+                    <TableCell>{exam.questions_count}</TableCell>
                     <TableCell>{exam.duration} min</TableCell>
                     <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => copyExamCode(exam.examCode)} className="p-1 h-auto">
-                            {exam.examCode} <Copy className="ml-2 h-3 w-3" />
+                        <Button variant="ghost" size="sm" onClick={() => copyExamCode(exam.exam_code)} className="p-1 h-auto">
+                            {exam.exam_code} <Copy className="ml-2 h-3 w-3" />
                         </Button>
                     </TableCell>
                     <TableCell className="text-right">
@@ -160,7 +168,7 @@ export default function ManageExamsPage() {
                           <DropdownMenuItem asChild>
                             <Link href={`/teacher/dashboard/exams/${exam.id}/details`}><Eye className="mr-2 h-4 w-4" /> View Details</Link>
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => copyExamCode(exam.examCode)}>
+                          <DropdownMenuItem onClick={() => copyExamCode(exam.exam_code)}>
                             <Share2 className="mr-2 h-4 w-4" /> Share Code
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />

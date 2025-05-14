@@ -1,38 +1,63 @@
 
+'use client'; // This page now uses hooks, so it must be a client component
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Loader2 } from "lucide-react"; // Added Loader2
-import { useState, useEffect } from "react"; // Added hooks
+import { FileText, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext"; // Assuming you want to fetch history for the current user
+import { useToast } from "@/hooks/use-toast";
 
 interface ExamHistoryItem {
-  id: string;
-  name: string;
-  date: string;
+  id: string; // exam_submission_id or similar
+  exam_name: string;
+  submission_date: string;
   score: number | null;
-  status: 'Completed' | 'In Progress' | 'Not Started';
+  status: 'Completed' | 'In Progress' | 'Not Started'; // Status of the student's attempt
+  // exam_id?: string; // Original exam_id
 }
-
-// No more mock data
-// const examHistory: ExamHistoryItem[] = [ ... ];
 
 export default function ExamHistoryPage() {
   const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchHistory = async () => {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // const history = await yourApi.getStudentExamHistory();
-      // setExamHistory(history);
-      // For now, setting to empty
-      setExamHistory([]);
+      // TODO: Replace with actual API call to fetch student's exam history
+      // Example:
+      // const { data, error } = await supabase
+      //   .from('exam_submissions') // Assuming a table like this
+      //   .select(`
+      //     id,
+      //     status,
+      //     score,
+      //     submission_date:submitted_at,
+      //     exams ( exam_name:title )
+      //   `)
+      //   .eq('student_id', user.user_id)
+      //   .order('submitted_at', { ascending: false });
+      // if (error) {
+      //   toast({ title: "Error", description: "Failed to fetch exam history.", variant: "destructive" });
+      //   setExamHistory([]);
+      // } else {
+      //   // Transform data if needed
+      //   const formattedHistory = data.map(item => ({...item, exam_name: item.exams.exam_name, submission_date: item.submission_date ? new Date(item.submission_date).toLocaleDateString() : 'N/A' }));
+      //   setExamHistory(formattedHistory as ExamHistoryItem[]);
+      // }
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      setExamHistory([]); // Initialize with empty array
       setIsLoading(false);
     };
     fetchHistory();
-  }, []);
+  }, [user, toast]);
 
   if (isLoading) {
     return (
@@ -56,9 +81,8 @@ export default function ExamHistoryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Exam ID</TableHead>
                   <TableHead>Exam Name</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Date Submitted</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -66,18 +90,17 @@ export default function ExamHistoryPage() {
               <TableBody>
                 {examHistory.map((exam) => (
                   <TableRow key={exam.id}>
-                    <TableCell className="font-medium">{exam.id}</TableCell>
-                    <TableCell>{exam.name}</TableCell>
-                    <TableCell>{exam.date}</TableCell>
+                    <TableCell className="font-medium">{exam.exam_name}</TableCell>
+                    <TableCell>{exam.submission_date}</TableCell>
                     <TableCell>{exam.score !== null ? `${exam.score}%` : 'N/A'}</TableCell>
                     <TableCell>
                       <Badge variant={
-                          exam.status === 'Completed' ? 'default' : 
-                          exam.status === 'In Progress' ? 'secondary' : 
+                          exam.status === 'Completed' ? 'default' :
+                          exam.status === 'In Progress' ? 'secondary' :
                           'outline' // Not Started or other
                         }
                         className={
-                          exam.status === 'Completed' ? 'bg-green-500/80 text-white' : 
+                          exam.status === 'Completed' ? 'bg-green-500/80 text-white' :
                           exam.status === 'In Progress' ? 'bg-yellow-500/80 text-white' : ''
                         }
                       >
@@ -101,6 +124,7 @@ export default function ExamHistoryPage() {
   );
 }
 
-export const metadata = {
-  title: 'Exam History | Student Dashboard | ProctorPrep',
-};
+// Removed metadata export as this is a Client Component
+// export const metadata = {
+//   title: 'Exam History | Student Dashboard | ProctorPrep',
+// };
