@@ -8,11 +8,15 @@ import Cookies from 'js-cookie';
 import type { CustomUser, Database } from '@/types/supabase';
 
 const SESSION_COOKIE_NAME = 'proctorprep-user-session'; // Using email as session identifier
+const AUTH_ROUTE = '/auth';
+const PROTECTED_ROUTES_STUDENT = ['/student/dashboard'];
+const PROTECTED_ROUTES_TEACHER = ['/teacher/dashboard'];
+
 
 type AuthContextType = {
   user: CustomUser | null;
   isLoading: boolean;
-  signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string; userName?: string | null }>;
   signUp: (email: string, pass: string, name: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
 };
@@ -28,60 +32,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const loadUserFromCookie = useCallback(async () => {
-    setIsLoading(true);
     const userEmailFromCookie = Cookies.get(SESSION_COOKIE_NAME);
+
+    // Optimization: If user context already exists and matches the cookie,
+    // and we are not doing an initial forced load, we might skip the DB query.
+    // However, for robustness on navigations/reloads, re-validating is safer.
+    // Let's ensure isLoading is true before any async op.
+    
+    if (user && user.email === userEmailFromCookie) {
+      // If user is already in context and matches cookie, assume valid for this render cycle.
+      // This prevents a flicker if context persists across quick navigations.
+      // On a full page load/reload, 'user' will be null initially, so this won't apply.
+      setIsLoading(false); 
+      return;
+    }
+
+    setIsLoading(true);
+
+
     if (userEmailFromCookie) {
+      console.time('Supabase LoadUserFromCookie Query');
       try {
-        // Re-fetch user details from DB using the email from cookie to ensure data is fresh
-        // IMPORTANT: Ensure the 'id' column in your proctorX table is indexed for performance.
         const { data, error } = await supabase
           .from('proctorX')
-          .select('id, name') // Select email (id) and name
+          .select('id, name') 
           .eq('id', userEmailFromCookie)
           .single();
+        console.timeEnd('Supabase LoadUserFromCookie Query');
 
         if (data && !error) {
           setUser({ email: data.id, name: data.name ?? null });
         } else {
-          Cookies.remove(SESSION_COOKIE_NAME);
+          Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
           setUser(null);
-          if (error) console.error('Error re-validating user from DB:', error.message);
+          if (error && error.code !== 'PGRST116') { // PGRST116: Row to retrieve was not found
+             console.error('Error re-validating user from DB:', error.message);
+          }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Error processing user session:', e);
-        Cookies.remove(SESSION_COOKIE_NAME);
+        Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
         setUser(null);
       }
     } else {
       setUser(null);
     }
     setIsLoading(false);
-  }, [supabase]);
+  }, [supabase, user]); // Added user to dependency array
 
   useEffect(() => {
     loadUserFromCookie();
-  }, [loadUserFromCookie]);
+  }, [loadUserFromCookie, pathname]); // Rerun on pathname change to re-validate session potentially
 
   useEffect(() => {
     if (!isLoading) {
-      const isDashboardRoute = pathname?.startsWith('/student/dashboard') || pathname?.startsWith('/teacher/dashboard');
-      if (!user && isDashboardRoute) {
-        router.replace('/auth');
+      const isAuthRoute = pathname === AUTH_ROUTE;
+      const isProtectedRoute = PROTECTED_ROUTES_STUDENT.some(r => pathname?.startsWith(r)) ||
+                               PROTECTED_ROUTES_TEACHER.some(r => pathname?.startsWith(r));
+
+      if (user && isAuthRoute) {
+        router.replace('/student/dashboard/overview');
+      } else if (!user && isProtectedRoute) {
+        router.replace(AUTH_ROUTE);
       }
     }
   }, [user, isLoading, pathname, router]);
 
-  useEffect(() => {
-    if (!isLoading && user && pathname === '/auth') {
-      router.replace('/student/dashboard/overview');
-    }
-  }, [user, isLoading, pathname, router]);
 
-
-  const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string; userName?: string | null }> => {
     setIsLoading(true);
-    // IMPORTANT: Ensure the 'id' column in your proctorX table (used for email lookup) 
-    // is indexed in your Supabase database for optimal performance, especially as the table grows.
     console.time('Supabase SignIn Query');
     const { data, error } = await supabase
       .from('proctorX')
@@ -92,15 +111,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error || !data) {
       setIsLoading(false);
-      return { success: false, error: 'User not found or database error.' };
+      return { success: false, error: error?.message || 'User not found or database error.' };
     }
 
     if (data.pass === pass) { // PLAIN TEXT PASSWORD COMPARISON - INSECURE
-      const userData: CustomUser = { email: data.id, name: data.name ?? null };
+      const userName = data.name ?? null;
+      const userData: CustomUser = { email: data.id, name: userName };
       Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
       setUser(userData);
       setIsLoading(false);
-      return { success: true };
+      return { success: true, userName };
     } else {
       setIsLoading(false);
       return { success: false, error: 'Incorrect password.' };
@@ -115,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', email)
       .single();
 
-    if (selectError && selectError.code !== 'PGRST116') { // PGRST116: "Row to retrieve was not found"
+    if (selectError && selectError.code !== 'PGRST116') { 
       setIsLoading(false);
       return { success: false, error: 'Error checking existing user: ' + selectError.message };
     }
@@ -126,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { error: insertError } = await supabase
       .from('proctorX')
-      .insert([{ id: email, pass: pass, name: name }]); // Storing plaintext password - INSECURE
+      .insert([{ id: email, pass: pass, name: name }]); 
 
     if (insertError) {
       setIsLoading(false);
@@ -144,8 +164,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
     setUser(null);
-    router.push('/auth');
-    setIsLoading(false);
+    // No need to setIsLoading(false) immediately before router.push,
+    // as the AuthContext will re-evaluate on the new page and set loading state.
+    router.push(AUTH_ROUTE);
+    // It's good practice to set isLoading to false if the component might not unmount immediately
+    // or if other effects depend on it. However, for a sign-out redirect, this is usually fine.
+    // For consistency, we can set it:
+    setIsLoading(false); 
   };
 
   const value = {
