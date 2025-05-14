@@ -62,14 +62,17 @@ export function AuthForm() {
     e.preventDefault();
     setIsLoading(true);
 
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    const trimmedFullName = fullName.trim();
+
+    if (!trimmedEmail || !password) {
       toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
       setIsLoading(false);
       return;
     }
 
     if (action === 'register') {
-      if (!fullName) {
+      if (!trimmedFullName) {
         toast({ title: "Error", description: "Full name is required for registration.", variant: "destructive" });
         setIsLoading(false);
         return;
@@ -80,14 +83,14 @@ export function AuthForm() {
         return;
       }
 
-      console.log('Attempting to register with email:', email); // Added for debugging
+      console.log('Attempting to register with email:', trimmedEmail); // Log the trimmed email
 
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: trimmedEmail,
         password,
         options: {
           data: {
-            full_name: fullName,
+            full_name: trimmedFullName,
             role: role,
           },
         },
@@ -110,7 +113,7 @@ export function AuthForm() {
       }
     } else { // Login
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: trimmedEmail,
         password,
       });
 
