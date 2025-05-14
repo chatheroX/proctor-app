@@ -19,7 +19,7 @@ export default function TeacherDashboardLayout({
   return (
     <div className="flex h-screen w-full bg-muted/40">
       <DashboardSidebar navItems={teacherNavItems} userRole="teacher" />
-      <main className="flex-1 flex flex-col overflow-auto p-6 bg-background">
+      <main className="flex-1 flex flex-col overflow-auto p-6 bg-background min-w-0">
         {children}
       </main>
     </div>
