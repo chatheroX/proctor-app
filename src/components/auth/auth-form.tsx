@@ -35,14 +35,14 @@ export function AuthForm() {
     setAction(initialAction);
   }, [initialAction]);
 
+  // This effect handles redirecting away from /auth if user is already logged in.
+  // The AuthContext's own useEffect handles the primary redirection logic.
   useEffect(() => {
-    if (!authLoading && user) {
-      // User is logged in, redirect from auth page
-      // Role is not in proctorX, so redirect to a general authenticated area.
-      // Middleware will handle specific dashboard access if paths are hit directly.
-      router.replace('/'); 
+    if (!authLoading && user && pathname === '/auth') {
+      router.replace('/student/dashboard/overview'); // Default redirect for logged-in users trying to access /auth
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, pathname]);
+
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +56,8 @@ export function AuthForm() {
       setIsSubmitting(false);
       return;
     }
+    // Added console log for debugging
+    console.log('Attempting to register with email:', trimmedEmail);
 
     if (action === 'register') {
       if (!trimmedFullName) {
@@ -76,22 +78,24 @@ export function AuthForm() {
 
       const { success, error } = await signUp(trimmedEmail, password, trimmedFullName);
       if (success) {
-        toast({ title: "Registration Successful!", description: "Redirecting..." });
-        router.push('/'); // Redirect to home, middleware might redirect further
+        toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
+        router.push('/student/dashboard/overview'); // Redirect to student dashboard
       } else {
         toast({ title: "Registration Error", description: error || "An unknown error occurred.", variant: "destructive" });
       }
     } else { // Login
       const { success, error } = await signIn(trimmedEmail, password);
       if (success) {
-        toast({ title: "Login Successful!", description: "Redirecting..." });
-        router.push('/'); // Redirect to home, middleware might redirect further
+        toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
+        router.push('/student/dashboard/overview'); // Redirect to student dashboard
       } else {
         toast({ title: "Login Error", description: error || "Invalid credentials or server error.", variant: "destructive" });
       }
     }
     setIsSubmitting(false);
   };
+  
+  const pathname = usePathname(); // Define pathname here
 
   if (authLoading) {
     return (
@@ -100,14 +104,17 @@ export function AuthForm() {
       </div>
     );
   }
-  if (user && !authLoading) { 
+  // If user is already logged in and tries to access /auth, they should be redirected
+  // This is now primarily handled by AuthContext's useEffect, but kept as a fallback visual.
+  if (user && !authLoading && pathname === '/auth') { 
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
-            <p>Already logged in. Redirecting...</p>
+            <p>Already logged in. Redirecting to dashboard...</p>
             <Loader2 className="ml-2 h-5 w-5 animate-spin text-primary" />
         </div>
     );
   }
+
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">

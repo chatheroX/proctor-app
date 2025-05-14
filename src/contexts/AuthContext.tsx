@@ -33,12 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userCookie) {
       try {
         const parsedUser: CustomUser = JSON.parse(userCookie);
-        // Optionally re-validate with DB, but for simplicity, trust cookie for now
         // For this custom auth, the cookie IS the session.
-        // If re-validation is needed:
-        // const { data, error } = await supabase.from('proctorX').select('id, name').eq('id', parsedUser.email).single();
-        // if (data) setUser({ email: data.id, name: data.name }); else Cookies.remove(SESSION_COOKIE_NAME);
-        setUser(parsedUser);
+        // Re-validating name from DB in case it changed, email is the key.
+        const { data, error } = await supabase.from('proctorX').select('name').eq('id', parsedUser.email).single();
+        if (data) {
+          setUser({ email: parsedUser.email, name: data.name ?? null });
+        } else {
+          // If user not found in DB, invalidate cookie
+          Cookies.remove(SESSION_COOKIE_NAME);
+          setUser(null);
+          if (error) console.error('Error re-validating user from DB:', error.message);
+        }
       } catch (e) {
         console.error('Failed to parse user cookie:', e);
         Cookies.remove(SESSION_COOKIE_NAME);
@@ -48,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
     }
     setIsLoading(false);
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     loadUserFromCookie();
@@ -57,13 +62,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Handle redirects based on custom auth state and path
   useEffect(() => {
     if (!isLoading) {
-      if (!user && (pathname?.startsWith('/student/dashboard') || pathname?.startsWith('/teacher/dashboard'))) {
+      const isDashboardRoute = pathname?.startsWith('/student/dashboard') || pathname?.startsWith('/teacher/dashboard');
+      
+      if (!user && isDashboardRoute) {
         router.replace('/auth');
       }
+      
       if (user && pathname === '/auth') {
-        // Role is not stored in proctorX, so cannot redirect to role-specific dashboard directly from here.
-        // Redirect to a generic authenticated route, let middleware or further navigation handle specifics.
-        router.replace('/'); 
+        // If logged in and on auth page, redirect to student dashboard (default)
+        router.replace('/student/dashboard/overview');
       }
     }
   }, [user, isLoading, pathname, router]);
@@ -84,8 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // PLAIN TEXT PASSWORD COMPARISON - HIGHLY INSECURE
     if (data.pass === pass) {
-      const userData: CustomUser = { email: data.id, name: data.name };
-      Cookies.set(SESSION_COOKIE_NAME, JSON.stringify(userData), { expires: 7, path: '/' }); // Expires in 7 days
+      const userData: CustomUser = { email: data.id, name: data.name ?? null };
+      Cookies.set(SESSION_COOKIE_NAME, JSON.stringify(userData), { expires: 7, path: '/' });
       setUser(userData);
       setIsLoading(false);
       return { success: true };

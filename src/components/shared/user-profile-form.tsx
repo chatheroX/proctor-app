@@ -9,30 +9,29 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Mail, Lock, Camera, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import type { CustomUser } from '@/types/supabase'; // Ensure CustomUser is imported
 
 interface UserProfileFormProps {
-  user: { // Reflects CustomUser from AuthContext or similar structure
-    name: string;
-    email: string;
-    avatarUrl?: string; // Kept for UI, but not directly from proctorX
-  };
+  user: CustomUser; // Reflects CustomUser from AuthContext or similar structure
   onSave: (data: { name: string; email: string; password?: string; avatarFile?: File }) => Promise<void>;
 }
 
 export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
-  const [name, setName] = useState(user.name);
+  const [name, setName] = useState(user.name || ''); // Handle potentially null name
   const [email, setEmail] = useState(user.email);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | undefined>(undefined);
-  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(user.avatarUrl);
+  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(undefined); // Placeholder, not used by proctorX
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    setName(user.name);
+    setName(user.name || '');
     setEmail(user.email);
-    setAvatarPreview(user.avatarUrl);
+    // For avatar, using placeholder text if name is available
+    const initial = (user.name || user.email || 'U').substring(0, 2).toUpperCase();
+    setAvatarPreview(`https://placehold.co/100x100.png?text=${initial}`);
   }, [user]);
 
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,14 +48,10 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Email is the primary key in 'proctorX' and should ideally not be changed easily.
-    // If changed, onSave logic would need to handle potential PK update or re-registration flow.
-    // For this demo, we'll assume email change is complex and focus on name/password.
     if (email !== user.email) {
-        toast({title: "Info", description: "Email change is a complex operation with the current custom setup. Please contact support if needed.", variant: "default"});
-        // Potentially disallow email editing or make it read-only if it's the PK
-        // setEmail(user.email); // Revert if not allowed
-        // return;
+        toast({title: "Info", description: "Email (your ID) cannot be changed with this setup.", variant: "default"});
+        setEmail(user.email); // Revert if not allowed
+        return;
     }
 
     if (password && password.length < 6) {
@@ -70,8 +65,8 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     setIsLoading(true);
     try {
       await onSave({ 
-        name, 
-        email, // Send current email, onSave should know it's the identifier
+        name: name, // Send current name from state 
+        email, 
         password: password || undefined, 
         avatarFile 
       });
@@ -94,8 +89,8 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
             <Avatar className="h-24 w-24">
-              <AvatarImage src={avatarPreview || `https://placehold.co/100x100.png`} alt={name} data-ai-hint="person portrait" />
-              <AvatarFallback>{name?.substring(0, 2)?.toUpperCase() || 'U'}</AvatarFallback>
+              <AvatarImage src={avatarPreview} alt={name || 'User'} data-ai-hint="person portrait" />
+              <AvatarFallback>{(name || user.email || 'U').substring(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="relative">
               <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('avatarUpload')?.click()} disabled>

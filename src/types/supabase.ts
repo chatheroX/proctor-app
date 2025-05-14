@@ -14,7 +14,7 @@ export interface Database {
         Row: {
           id: string; // TEXT, stores email
           pass: string; // TEXT, stores plaintext password
-          name: string; // TEXT, stores full name
+          name: string | null; // TEXT, stores full name, can be null
           created_at?: string; // timestamptz
         };
         Insert: {
@@ -50,7 +50,7 @@ export interface Database {
 // Simplified User object for custom context
 export interface CustomUser {
   email: string;
-  name: string;
+  name: string | null; // Name can be null
 }
 
 // UserMetadata for Supabase Auth (kept for reference, but not primary for custom auth)
