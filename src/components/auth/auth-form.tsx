@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 type AuthAction = 'login' | 'register';
 
 export function AuthForm() {
+  const pathname = usePathname(); // Initialize pathname first
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -36,7 +37,6 @@ export function AuthForm() {
   }, [initialAction]);
 
   // This effect handles redirecting away from /auth if user is already logged in.
-  // The AuthContext's own useEffect handles the primary redirection logic.
   useEffect(() => {
     if (!authLoading && user && pathname === '/auth') {
       router.replace('/student/dashboard/overview'); // Default redirect for logged-in users trying to access /auth
@@ -50,14 +50,15 @@ export function AuthForm() {
 
     const trimmedEmail = email.trim();
     const trimmedFullName = fullName.trim();
+    
+    console.log('Attempting auth with email (trimmed):', trimmedEmail);
+
 
     if (!trimmedEmail || !password) {
       toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
-    // Added console log for debugging
-    console.log('Attempting to register with email:', trimmedEmail);
 
     if (action === 'register') {
       if (!trimmedFullName) {
@@ -79,7 +80,7 @@ export function AuthForm() {
       const { success, error } = await signUp(trimmedEmail, password, trimmedFullName);
       if (success) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        router.push('/student/dashboard/overview'); // Redirect to student dashboard
+        router.push('/student/dashboard/overview'); 
       } else {
         toast({ title: "Registration Error", description: error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -87,7 +88,7 @@ export function AuthForm() {
       const { success, error } = await signIn(trimmedEmail, password);
       if (success) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        router.push('/student/dashboard/overview'); // Redirect to student dashboard
+        router.push('/student/dashboard/overview'); 
       } else {
         toast({ title: "Login Error", description: error || "Invalid credentials or server error.", variant: "destructive" });
       }
@@ -95,7 +96,6 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
-  const pathname = usePathname(); // Define pathname here
 
   if (authLoading) {
     return (
@@ -104,8 +104,7 @@ export function AuthForm() {
       </div>
     );
   }
-  // If user is already logged in and tries to access /auth, they should be redirected
-  // This is now primarily handled by AuthContext's useEffect, but kept as a fallback visual.
+  
   if (user && !authLoading && pathname === '/auth') { 
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
