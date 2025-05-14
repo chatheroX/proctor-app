@@ -7,22 +7,22 @@ export function ThreeScenePlaceholder() {
   return (
     <div
       className="relative w-full h-[400px] md:h-[500px] bg-gradient-to-br from-primary/10 via-background to-secondary/20 rounded-xl shadow-xl overflow-hidden border flex items-center justify-center"
-      aria-label="Placeholder for 3D animation"
+      aria-label="Visual representation of secure proctoring technology"
     >
       <Image
         src="https://placehold.co/800x500.png"
-        alt="Abstract 3D shapes"
+        alt="Abstract representation of secure technology"
         fill
-        className="object-cover" // Use Tailwind class for object-fit, removed opacity-50
-        data-ai-hint="abstract geometric"
-        priority // Consider adding priority if it's a Large Contentful Paint element
+        className="object-cover"
+        data-ai-hint="abstract technology" // Updated hint
+        priority
       />
-      <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-black/30">
-        <h2 className="text-3xl font-bold text-primary-foreground mb-4">Interactive 3D Experience</h2>
-        <p className="text-lg text-primary-foreground/80 max-w-md">
-          Imagine a captivating 3D animation here, showcasing the future of secure proctoring.
-          <br />
-          <span className="text-sm mt-2 block">(Hint: Use Three.js for implementation)</span>
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 md:p-8 text-center bg-black/40"> {/* Slightly increased overlay darkness for contrast */}
+        <h2 className="text-2xl md:text-3xl font-bold text-primary-foreground mb-3 md:mb-4">
+          Advanced Proctoring Technology
+        </h2>
+        <p className="text-md md:text-lg text-primary-foreground/80 max-w-md">
+          Visualizing a secure and intuitive platform for modern online assessments.
         </p>
       </div>
     </div>
