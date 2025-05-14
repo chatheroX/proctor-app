@@ -7,9 +7,10 @@ import { ShieldCheck, UserPlus, LogIn, LogOut, LayoutDashboard, Loader2 } from '
 import { useAuth } from '@/contexts/AuthContext';
 
 export function AppHeader() {
-  const { session, userMetadata, signOut, isLoading } = useAuth();
-  const isAuthenticated = !!session;
-  const userRole = userMetadata?.role;
+  const { user, signOut, isLoading } = useAuth();
+  const isAuthenticated = !!user;
+  // Role is not available in the custom user object from proctorX table
+  // const userRole = user?.role; // This would require role to be in CustomUser
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -24,8 +25,14 @@ export function AppHeader() {
           ) : isAuthenticated ? (
             <>
               <Button variant="ghost" asChild>
-                <Link href={userRole === 'student' ? '/student/dashboard' : userRole === 'teacher' ? '/teacher/dashboard' : '/'}>
-                 <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+                {/* 
+                  Since role is not in proctorX, we can't easily link to a specific student/teacher dashboard.
+                  Linking to a generic '/dashboard' or letting users navigate from '/' based on what middleware allows.
+                  For now, linking to '/'. The actual dashboards are at /student/dashboard and /teacher/dashboard.
+                  A better UX would involve storing and using role information.
+                */}
+                <Link href="/"> 
+                 <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard Entry
                 </Link>
               </Button>
               <Button variant="outline" onClick={signOut}>

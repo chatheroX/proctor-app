@@ -11,17 +11,17 @@ import { User, Mail, Lock, Camera, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface UserProfileFormProps {
-  user: {
+  user: { // Reflects CustomUser from AuthContext or similar structure
     name: string;
     email: string;
-    avatarUrl?: string;
+    avatarUrl?: string; // Kept for UI, but not directly from proctorX
   };
   onSave: (data: { name: string; email: string; password?: string; avatarFile?: File }) => Promise<void>;
 }
 
 export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
   const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email); // Email change might need verification flow with Supabase
+  const [email, setEmail] = useState(user.email);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | undefined>(undefined);
@@ -49,6 +49,16 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Email is the primary key in 'proctorX' and should ideally not be changed easily.
+    // If changed, onSave logic would need to handle potential PK update or re-registration flow.
+    // For this demo, we'll assume email change is complex and focus on name/password.
+    if (email !== user.email) {
+        toast({title: "Info", description: "Email change is a complex operation with the current custom setup. Please contact support if needed.", variant: "default"});
+        // Potentially disallow email editing or make it read-only if it's the PK
+        // setEmail(user.email); // Revert if not allowed
+        // return;
+    }
+
     if (password && password.length < 6) {
       toast({ title: "Error", description: "New password must be at least 6 characters long.", variant: "destructive" });
       return;
@@ -59,17 +69,12 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     }
     setIsLoading(true);
     try {
-      // Note: Supabase email change usually requires a confirmation email.
-      // Password change is direct. Name/metadata change is direct.
-      // Avatar upload involves Supabase Storage.
-      // The onSave prop will handle the actual Supabase calls.
       await onSave({ 
         name, 
-        email, // If email is changed, onSave should handle Supabase's email change flow.
+        email, // Send current email, onSave should know it's the identifier
         password: password || undefined, 
         avatarFile 
       });
-      // toast({ title: "Success", description: "Profile update initiated!" }); // onSave should show its own toasts
       setPassword(''); 
       setConfirmPassword('');
     } catch (error: any) {
@@ -84,7 +89,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
       <form onSubmit={handleSubmit}>
         <CardHeader>
           <CardTitle className="text-2xl">Edit Profile</CardTitle>
-          <CardDescription>Update your personal information. Email or password changes may require verification.</CardDescription>
+          <CardDescription>Update your personal information. Email is your unique ID.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
@@ -93,17 +98,19 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               <AvatarFallback>{name?.substring(0, 2)?.toUpperCase() || 'U'}</AvatarFallback>
             </Avatar>
             <div className="relative">
-              <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('avatarUpload')?.click()}>
-                <Camera className="mr-2 h-4 w-4" /> Change Photo
+              <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('avatarUpload')?.click()} disabled>
+                <Camera className="mr-2 h-4 w-4" /> Change Photo (Disabled)
               </Button>
               <Input 
                 id="avatarUpload" 
                 type="file" 
                 className="hidden" 
                 accept="image/*" 
-                onChange={handleAvatarChange} 
+                onChange={handleAvatarChange}
+                disabled // Avatar not part of proctorX
               />
             </div>
+             <p className="text-xs text-muted-foreground">Avatar functionality not supported with current setup.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -115,12 +122,12 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+              <Label htmlFor="email">Email Address (Your ID)</Label>
                <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" />
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" readOnly />
               </div>
-               <p className="text-xs text-muted-foreground">Changing email may require re-verification.</p>
+               <p className="text-xs text-muted-foreground">Email is your unique identifier and cannot be changed here.</p>
             </div>
           </div>
 

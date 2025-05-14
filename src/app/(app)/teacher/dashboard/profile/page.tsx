@@ -6,24 +6,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
-
 export default function TeacherProfilePage() {
-  const { user, userMetadata, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth(); // user is CustomUser type
   const { toast } = useToast();
 
   const handleSaveProfile = async (data: { name: string; email: string; password?: string; avatarFile?: File }) => {
-    console.log('Attempting to save teacher profile (Supabase integration pending):', data);
-    // TODO: Implement actual Supabase profile update logic (similar to student profile)
+    console.log('Attempting to save teacher profile (custom auth - proctorX table):', data);
+    // Similar to student profile, updates would target the 'proctorX' table.
+    // See student profile page for detailed comments on updating 'proctorX'.
+    
     await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
     
     toast({
       title: "Profile Update (Demo)",
-      description: "Profile data logged. Backend update with Supabase is the next step.",
+      description: "Profile data logged. Backend update for 'proctorX' table would be implemented here.",
     });
 
-     if (data.avatarFile) {
-      console.log('Avatar file to upload (demo):', data.avatarFile.name);
-      toast({ description: `Avatar "${data.avatarFile.name}" would be uploaded.`});
+    if (data.avatarFile) {
+      toast({ description: `Avatar functionality not supported with current 'proctorX' table.`});
+    }
+    if (data.password) {
+        toast({ description: `Password change for 'proctorX' would be implemented here (Note: plaintext storage is insecure).` });
     }
   };
   
@@ -35,12 +38,13 @@ export default function TeacherProfilePage() {
     );
   }
 
+  // Using CustomUser from AuthContext
   const profileData = {
-    name: userMetadata?.full_name || user.email?.split('@')[0] || 'Teacher User',
+    name: user.name || user.email?.split('@')[0] || 'Teacher User',
     email: user.email || '',
-    avatarUrl: userMetadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userMetadata?.full_name || user.email || 'T').substring(0,2).toUpperCase()}`,
+    // avatarUrl is not part of proctorX, so using placeholder
+    avatarUrl: `https://placehold.co/100x100.png?text=${(user.name || user.email || 'T').substring(0,2).toUpperCase()}`,
   };
-
 
   return (
     <div className="space-y-6">

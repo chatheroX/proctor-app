@@ -27,13 +27,13 @@ export interface NavItem {
 
 interface DashboardSidebarProps {
   navItems: NavItem[];
-  userRole: 'student' | 'teacher'; // Passed to determine settings link, or could be derived from context
+  userRole: 'student' | 'teacher'; // This prop is passed by the specific dashboard layout
 }
 
 export function DashboardSidebar({ navItems, userRole }: DashboardSidebarProps) {
   const pathname = usePathname();
-  const { signOut, isLoading: authLoading, userMetadata } = useAuth();
-  const actualUserRole = userMetadata?.role || userRole; // Prefer role from context if available
+  const { user, signOut, isLoading: authLoading } = useAuth();
+  // The `userRole` prop is critical here as custom auth context doesn't store role from `proctorX`
 
   return (
     <SidebarProvider defaultOpen>
@@ -71,10 +71,11 @@ export function DashboardSidebar({ navItems, userRole }: DashboardSidebarProps) 
             <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname.startsWith(`/${actualUserRole}/dashboard/settings`)} 
+                  isActive={pathname.startsWith(`/${userRole}/dashboard/settings`)} 
                   tooltip={{ children: "Settings", className: "group-data-[collapsible=icon]:block hidden"}}
                 >
-                  <Link href={`/${actualUserRole}/dashboard/settings`}>
+                  {/* The userRole prop determines this link. Custom auth context does not have role. */}
+                  <Link href={`/${userRole}/dashboard/settings`}>
                     <Settings className="h-5 w-5" />
                     <span>Settings</span>
                   </Link>

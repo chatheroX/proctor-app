@@ -1,17 +1,19 @@
 
 'use client';
 
-import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
-import type { UserMetadata } from '@/types/supabase';
+import Cookies from 'js-cookie';
+import type { CustomUser } from '@/types/supabase'; // Using CustomUser
+
+const SESSION_COOKIE_NAME = 'proctorprep-user-session';
 
 type AuthContextType = {
-  session: Session | null;
-  user: User | null;
-  userMetadata: UserMetadata | null;
+  user: CustomUser | null;
   isLoading: boolean;
+  signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, pass: string, name: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
 };
 
@@ -22,77 +24,125 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [userMetadata, setUserMetadata] = useState<UserMetadata | null>(null);
+  const [user, setUser] = useState<CustomUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchSession = useCallback(async () => {
+  const loadUserFromCookie = useCallback(async () => {
     setIsLoading(true);
-    const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      console.error('Error fetching session:', error);
-      setSession(null);
-      setUser(null);
-      setUserMetadata(null);
+    const userCookie = Cookies.get(SESSION_COOKIE_NAME);
+    if (userCookie) {
+      try {
+        const parsedUser: CustomUser = JSON.parse(userCookie);
+        // Optionally re-validate with DB, but for simplicity, trust cookie for now
+        // For this custom auth, the cookie IS the session.
+        // If re-validation is needed:
+        // const { data, error } = await supabase.from('proctorX').select('id, name').eq('id', parsedUser.email).single();
+        // if (data) setUser({ email: data.id, name: data.name }); else Cookies.remove(SESSION_COOKIE_NAME);
+        setUser(parsedUser);
+      } catch (e) {
+        console.error('Failed to parse user cookie:', e);
+        Cookies.remove(SESSION_COOKIE_NAME);
+        setUser(null);
+      }
     } else {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setUserMetadata((currentSession?.user?.user_metadata as UserMetadata) ?? null);
+      setUser(null);
     }
     setIsLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase.auth]);
+  }, []);
 
   useEffect(() => {
-    fetchSession();
+    loadUserFromCookie();
+  }, [loadUserFromCookie]);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        setUserMetadata((newSession?.user?.user_metadata as UserMetadata) ?? null);
-        setIsLoading(false);
-
-        // If user logs out and is on a protected route, redirect to auth
-        if (!newSession && (pathname?.startsWith('/student/dashboard') || pathname?.startsWith('/teacher/dashboard'))) {
-          router.replace('/auth');
-        }
-         // If user logs in and is on auth page, redirect to dashboard
-        if (newSession && pathname === '/auth') {
-           const role = (newSession?.user?.user_metadata as UserMetadata)?.role;
-           if (role === 'student') {
-             router.replace('/student/dashboard');
-           } else if (role === 'teacher') {
-             router.replace('/teacher/dashboard');
-           } else {
-             router.replace('/'); // Fallback if role is not defined
-           }
-        }
+  // Handle redirects based on custom auth state and path
+  useEffect(() => {
+    if (!isLoading) {
+      if (!user && (pathname?.startsWith('/student/dashboard') || pathname?.startsWith('/teacher/dashboard'))) {
+        router.replace('/auth');
       }
-    );
+      if (user && pathname === '/auth') {
+        // Role is not stored in proctorX, so cannot redirect to role-specific dashboard directly from here.
+        // Redirect to a generic authenticated route, let middleware or further navigation handle specifics.
+        router.replace('/'); 
+      }
+    }
+  }, [user, isLoading, pathname, router]);
 
-    return () => {
-      authListener?.unsubscribe();
-    };
-  }, [supabase.auth, fetchSession, router, pathname]);
+
+  const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('proctorX')
+      .select('id, pass, name')
+      .eq('id', email)
+      .single();
+
+    if (error || !data) {
+      setIsLoading(false);
+      return { success: false, error: 'User not found or database error.' };
+    }
+
+    // PLAIN TEXT PASSWORD COMPARISON - HIGHLY INSECURE
+    if (data.pass === pass) {
+      const userData: CustomUser = { email: data.id, name: data.name };
+      Cookies.set(SESSION_COOKIE_NAME, JSON.stringify(userData), { expires: 7, path: '/' }); // Expires in 7 days
+      setUser(userData);
+      setIsLoading(false);
+      return { success: true };
+    } else {
+      setIsLoading(false);
+      return { success: false, error: 'Incorrect password.' };
+    }
+  };
+
+  const signUp = async (email: string, pass: string, name: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    // Check if user already exists
+    const { data: existingUser, error: selectError } = await supabase
+      .from('proctorX')
+      .select('id')
+      .eq('id', email)
+      .single();
+
+    if (selectError && selectError.code !== 'PGRST116') { // PGRST116: "Row to retrieve was not found" (expected if user doesn't exist)
+      setIsLoading(false);
+      return { success: false, error: 'Error checking existing user: ' + selectError.message };
+    }
+    if (existingUser) {
+      setIsLoading(false);
+      return { success: false, error: 'User with this email already exists.' };
+    }
+
+    // Insert new user - STORING PLAINTEXT PASSWORD - HIGHLY INSECURE
+    const { error: insertError } = await supabase
+      .from('proctorX')
+      .insert([{ id: email, pass: pass, name: name }]);
+
+    if (insertError) {
+      setIsLoading(false);
+      return { success: false, error: 'Registration failed: ' + insertError.message };
+    }
+
+    const userData: CustomUser = { email, name };
+    Cookies.set(SESSION_COOKIE_NAME, JSON.stringify(userData), { expires: 7, path: '/' });
+    setUser(userData);
+    setIsLoading(false);
+    return { success: true };
+  };
 
   const signOut = async () => {
     setIsLoading(true);
-    await supabase.auth.signOut();
-    setSession(null);
+    Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
     setUser(null);
-    setUserMetadata(null);
     router.push('/auth'); // Redirect to login after sign out
     setIsLoading(false);
   };
 
   const value = {
-    session,
     user,
-    userMetadata,
     isLoading,
+    signIn,
+    signUp,
     signOut,
   };
 

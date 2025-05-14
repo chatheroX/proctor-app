@@ -7,27 +7,35 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
 export default function StudentProfilePage() {
-  const { user, userMetadata, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth(); // user is CustomUser type
   const { toast } = useToast();
 
   const handleSaveProfile = async (data: { name: string; email: string; password?: string; avatarFile?: File }) => {
-    console.log('Attempting to save student profile (Supabase integration pending):', data);
-    // TODO: Implement actual Supabase profile update logic
-    // This would involve:
-    // 1. supabase.auth.updateUser({ email, password, data: { full_name: data.name } })
-    // 2. If avatarFile exists, upload to Supabase Storage, get URL, then update user_metadata.avatar_url or a profiles table.
-    // 3. If using a separate 'profiles' table, update that table.
+    // This is a custom auth system. Updating profile means updating the 'proctorX' table.
+    // Supabase.auth.updateUser is not applicable here.
+    console.log('Attempting to save student profile (custom auth - proctorX table):', data);
+
+    // Example: Update name in proctorX table
+    // const supabase = createSupabaseBrowserClient(); // Get client if not available
+    // const { error } = await supabase.from('proctorX').update({ name: data.name }).eq('id', data.email);
+    // if (error) { toast({ title: "Error", description: `Failed to update name: ${error.message}`, variant: "destructive" }); }
+    // else { toast({ title: "Success", description: "Name updated (demo)."}); }
+    // Password change would require updating the 'pass' column in 'proctorX' (highly insecure with plaintext).
+    // Email change is complex as 'id' (email) is the primary key in 'proctorX'.
+    // Avatar uploads are not supported by the 'proctorX' table structure.
     
     await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
     
     toast({
       title: "Profile Update (Demo)",
-      description: "Profile data logged. Backend update with Supabase is the next step.",
+      description: "Profile data logged. Backend update for 'proctorX' table would be implemented here.",
     });
 
     if (data.avatarFile) {
-      console.log('Avatar file to upload (demo):', data.avatarFile.name);
-      toast({ description: `Avatar "${data.avatarFile.name}" would be uploaded.`});
+      toast({ description: `Avatar functionality not supported with current 'proctorX' table.`});
+    }
+    if (data.password) {
+        toast({ description: `Password change for 'proctorX' would be implemented here (Note: plaintext storage is insecure).` });
     }
   };
 
@@ -39,10 +47,12 @@ export default function StudentProfilePage() {
     );
   }
   
+  // Using CustomUser from AuthContext
   const profileData = {
-    name: userMetadata?.full_name || user.email?.split('@')[0] || 'Student User',
+    name: user.name || user.email?.split('@')[0] || 'Student User',
     email: user.email || '',
-    avatarUrl: userMetadata?.avatar_url || `https://placehold.co/100x100.png?text=${(userMetadata?.full_name || user.email || 'S').substring(0,2).toUpperCase()}`,
+    // avatarUrl is not part of proctorX, so using placeholder
+    avatarUrl: `https://placehold.co/100x100.png?text=${(user.name || user.email || 'S').substring(0,2).toUpperCase()}`,
   };
 
   return (

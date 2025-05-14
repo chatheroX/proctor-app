@@ -1,58 +1,62 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { createSupabaseClientForNextMiddleware } from '@/lib/supabase/middleware'; // Updated import name
+// Supabase client for middleware is not used in custom auth
+// import { createSupabaseClientForNextMiddleware } from '@/lib/supabase/middleware'; 
 
 const PROTECTED_ROUTES_STUDENT = ['/student/dashboard'];
 const PROTECTED_ROUTES_TEACHER = ['/teacher/dashboard'];
 const AUTH_ROUTE = '/auth';
-const PUBLIC_ROUTES = ['/', '/privacy', '/terms']; // Add any other public routes
+const PUBLIC_ROUTES = ['/', '/privacy', '/terms', '/supabase-test']; // Added supabase-test as public for easier testing
+
+const SESSION_COOKIE_NAME = 'proctorprep-user-session';
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next();
-  // Client creation is synchronous, no await here
-  const supabase = createSupabaseClientForNextMiddleware(req, res);
-
-  // Async operations like getSession should be awaited
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
   const { pathname } = req.nextUrl;
+  const res = NextResponse.next(); // Prepare response object for potential cookie operations (though not used here for reads)
 
-  // Allow public routes and Next.js specific paths
-  if (PUBLIC_ROUTES.includes(pathname) || pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.endsWith('.png') || pathname.endsWith('.ico')) {
+  // Allow Next.js specific paths and static assets
+  if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.match(/\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/)) {
     return res;
   }
   
-  // If user is logged in
-  if (session) {
-    const userRole = session.user.user_metadata?.role;
-    // If user is on auth page, redirect to their dashboard
-    if (pathname === AUTH_ROUTE) {
-      if (userRole === 'student') {
-        return NextResponse.redirect(new URL('/student/dashboard', req.url));
-      } else if (userRole === 'teacher') {
-        return NextResponse.redirect(new URL('/teacher/dashboard', req.url));
-      } else {
-        // If role is unknown, redirect to home, or handle as an error
-        return NextResponse.redirect(new URL('/', req.url)); 
-      }
-    }
+  // Check for the custom session cookie
+  const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME);
+  const isAuthenticated = !!sessionCookie;
 
-    // Check role-based access for protected routes
-    if (pathname.startsWith('/student/dashboard') && userRole !== 'student') {
-      return NextResponse.redirect(new URL(AUTH_ROUTE, req.url)); // Or an unauthorized page
+  // If user is on a public route, allow access
+  if (PUBLIC_ROUTES.includes(pathname)) {
+    // If authenticated and trying to access auth page, redirect to home
+    if (isAuthenticated && pathname === AUTH_ROUTE) {
+      return NextResponse.redirect(new URL('/', req.url));
     }
-    if (pathname.startsWith('/teacher/dashboard') && userRole !== 'teacher') {
-      return NextResponse.redirect(new URL(AUTH_ROUTE, req.url)); // Or an unauthorized page
-    }
-    
-    // User is logged in and has correct role or is on a non-auth public-like page
     return res;
   }
+  
+  // If user is authenticated
+  if (isAuthenticated) {
+    // If user is on auth page (should have been caught above, but as a safeguard)
+    if (pathname === AUTH_ROUTE) {
+      return NextResponse.redirect(new URL('/', req.url));
+    }
+    
+    // Role-based access for protected routes
+    // NOTE: With the current proctorX table (id, pass, name), role is not stored.
+    // This middleware can't distinguish between student/teacher for redirection.
+    // It will allow access to any protected route if authenticated.
+    // True role-based protection would require role information in the session cookie or fetched from DB.
+    const isStudentRoute = PROTECTED_ROUTES_STUDENT.some(route => pathname.startsWith(route));
+    const isTeacherRoute = PROTECTED_ROUTES_TEACHER.some(route => pathname.startsWith(route));
 
-  // User is not logged in
-  // If trying to access a protected route, redirect to auth page
+    if (isStudentRoute || isTeacherRoute) {
+      // Allow access as we can't verify role with current custom auth.
+      // A more robust solution would involve storing role in the cookie or fetching it.
+      return res;
+    }
+    
+    return res; // Allow other authenticated routes
+  }
+
+  // User is not authenticated
   const isProtectedRoute = PROTECTED_ROUTES_STUDENT.some(route => pathname.startsWith(route)) ||
                            PROTECTED_ROUTES_TEACHER.some(route => pathname.startsWith(route));
 
@@ -66,7 +70,9 @@ export async function middleware(req: NextRequest) {
   }
   
   // For any other route not explicitly public or auth, and user is not logged in, redirect to login.
-  if (!PUBLIC_ROUTES.includes(pathname) && pathname !== AUTH_ROUTE) {
+  // This might be too restrictive if there are other intended unauthenticated pages.
+  // For now, keeping it simple: if not public, not auth, and not logged in -> redirect to auth.
+   if (!PUBLIC_ROUTES.includes(pathname) && pathname !== AUTH_ROUTE) {
      return NextResponse.redirect(new URL(AUTH_ROUTE, req.url));
   }
 
