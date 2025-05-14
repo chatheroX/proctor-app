@@ -8,13 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Eye, EyeOff, User, Mail, Lock, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Eye, EyeOff, User, Mail, Lock, Loader2, Briefcase } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CustomUser } from '@/types/supabase';
 
 type AuthAction = 'login' | 'register';
-const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; 
 
 export function AuthForm() {
   const pathname = usePathname(); 
@@ -30,18 +30,23 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<'student' | 'teacher' | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getRedirectPathForRole = (currentRole: 'student' | 'teacher' | null) => {
+    if (currentRole === 'teacher') return '/teacher/dashboard/overview';
+    return '/student/dashboard/overview'; // Default to student dashboard
+  };
 
   useEffect(() => {
     setAction(initialAction);
   }, [initialAction]);
 
   useEffect(() => {
-    // This effect handles redirecting away from /auth if user is already logged in and auth is not loading.
     if (!authLoading && user && pathname === '/auth') {
-      router.replace(DEFAULT_DASHBOARD_ROUTE); 
+      router.replace(getRedirectPathForRole(user.role));
     }
   }, [user, authLoading, router, pathname]);
 
@@ -69,6 +74,11 @@ export function AuthForm() {
         setIsSubmitting(false);
         return;
       }
+      if (!role) {
+        toast({ title: "Error", description: "Please select a role (Student or Teacher).", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
+      }
       if (password !== confirmPassword) {
         toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
         setIsSubmitting(false);
@@ -80,18 +90,18 @@ export function AuthForm() {
          return;
       }
 
-      result = await signUp(trimmedEmail, password, trimmedFullName);
-      if (result.success) {
+      result = await signUp(trimmedEmail, password, trimmedFullName, role as 'student' | 'teacher');
+      if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        router.push(DEFAULT_DASHBOARD_ROUTE); 
+        router.push(getRedirectPathForRole(result.user.role)); 
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
     } else { // Login
       result = await signIn(trimmedEmail, password);
-      if (result.success) {
+      if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        router.push(DEFAULT_DASHBOARD_ROUTE); 
+        router.push(getRedirectPathForRole(result.user.role)); 
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
@@ -99,8 +109,6 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
-
-  // Show loader if AuthContext is still loading initial user state and we are on the auth page
   if (authLoading && user === undefined && pathname === '/auth') { 
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
@@ -109,8 +117,6 @@ export function AuthForm() {
     );
   }
   
-  // If user is determined and we are on /auth page, but they are logged in, this means
-  // the useEffect for redirection hasn't fired yet or is in progress. Show a minimal loader.
   if (user && !authLoading && pathname === '/auth') { 
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
@@ -120,11 +126,14 @@ export function AuthForm() {
     );
   }
 
-
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
       <Card className="w-full max-w-md shadow-xl">
-        <Tabs value={action} onValueChange={(value) => setAction(value as AuthAction)} className="w-full">
+        <Tabs value={action} onValueChange={(value) => {
+          setAction(value as AuthAction);
+          // Reset fields when switching tabs for cleaner UX
+          setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
+        }} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>
             <TabsTrigger value="register">Register</TabsTrigger>
@@ -161,7 +170,7 @@ export function AuthForm() {
                 </Button>
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   Don&apos;t have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword('');}}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');}}>
                     Register here
                   </button>
                 </p>
@@ -207,6 +216,21 @@ export function AuthForm() {
                     </Button>
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="register-role">Register as</Label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Select value={role} onValueChange={(value) => setRole(value as 'student' | 'teacher' | '')}>
+                      <SelectTrigger id="register-role" className="pl-10">
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="student">Student</SelectItem>
+                        <SelectItem value="teacher">Teacher</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardContent>
               <CardFooter className="flex flex-col">
                 <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
@@ -215,7 +239,7 @@ export function AuthForm() {
                 </Button>
                  <p className="mt-4 text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword('');}}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');}}>
                     Login here
                   </button>
                 </p>

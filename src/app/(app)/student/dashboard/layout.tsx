@@ -1,9 +1,9 @@
 
 'use client';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar'; // Renamed import if you renamed the file/component
+import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, UserCircle, Edit3, History, Settings, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, UserCircle, Edit3, History, CheckSquare } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 
 const studentNavItems: NavItem[] = [
@@ -30,10 +30,10 @@ export default function StudentDashboardLayout({
   
   return (
     <SidebarProvider defaultOpen>
-      <div className="flex h-screen w-full bg-muted/40"> {/* This div is now a child of SidebarProvider's wrapper */}
+      <div className="flex h-screen w-full bg-muted/40 overflow-x-hidden">
         <SidebarElements 
           navItems={studentNavItems} 
-          userRole="student"
+          userRoleDashboard="student"
           user={user}
           signOut={signOut}
           authLoading={authLoading} 

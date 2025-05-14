@@ -12,21 +12,27 @@ export interface Database {
     Tables: {
       proctorX: {
         Row: {
-          id: string; // TEXT, stores email
+          uuid: string; // Primary Key
+          id: string; // TEXT, stores email (should be unique)
           pass: string; // TEXT, stores plaintext password
           name: string | null; // TEXT, stores full name, can be null
+          role: 'student' | 'teacher' | null; // TEXT, stores user role
           created_at?: string; // timestamptz
         };
         Insert: {
+          uuid?: string; // Optional on insert if DB generates it
           id: string; // Email
           pass: string;
           name: string;
+          role: 'student' | 'teacher';
           created_at?: string;
         };
         Update: {
+          uuid?: string;
           id?: string;
           pass?: string;
           name?: string;
+          role?: 'student' | 'teacher';
           created_at?: string;
         };
       };
@@ -47,16 +53,10 @@ export interface Database {
   };
 }
 
-// Simplified User object for custom context
+// User object for custom context
 export interface CustomUser {
-  email: string;
-  name: string | null; // Name can be null
-}
-
-// UserMetadata for Supabase Auth (kept for reference, but not primary for custom auth)
-export interface UserMetadata {
-  full_name?: string;
-  avatar_url?: string;
-  role?: 'student' | 'teacher';
-  [key: string]: any;
+  uuid: string;
+  email: string; // This was 'id' in proctorX, mapping to email conceptually
+  name: string | null;
+  role: 'student' | 'teacher' | null;
 }

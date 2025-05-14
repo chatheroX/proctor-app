@@ -5,20 +5,23 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
-import type { CustomUser, Database } from '@/types/supabase'; // Ensure Database is imported if needed by createSupabaseBrowserClient
+import type { CustomUser } from '@/types/supabase';
 
-const SESSION_COOKIE_NAME = 'proctorprep-user-session';
+const SESSION_COOKIE_NAME = 'proctorprep-user-email'; // Store email in cookie
+const ROLE_COOKIE_NAME = 'proctorprep-user-role'; // Store role in cookie
+
 const AUTH_ROUTE = '/auth';
-const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; 
+const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
+const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
 const PROTECTED_ROUTES_PATTERNS = ['/student/dashboard', '/teacher/dashboard'];
-
 
 type AuthContextType = {
   user: CustomUser | null;
   isLoading: boolean;
   signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string; user?: CustomUser }>;
-  signUp: (email: string, pass: string, name: string) => Promise<{ success: boolean; error?: string; user?: CustomUser }>;
+  signUp: (email: string, pass: string, name: string, role: 'student' | 'teacher') => Promise<{ success: boolean; error?: string; user?: CustomUser }>;
   signOut: () => Promise<void>;
+  updateUserProfile: (data: { name: string; currentEmail: string; password?: string}) => Promise<{ success: boolean; error?: string }>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,13 +34,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const getRedirectPathForRole = (role: 'student' | 'teacher' | null) => {
+    if (role === 'teacher') return TEACHER_DASHBOARD_ROUTE;
+    return STUDENT_DASHBOARD_ROUTE; // Default to student dashboard
+  };
+  
   const loadUserFromCookie = useCallback(async () => {
     const userEmailFromCookie = Cookies.get(SESSION_COOKIE_NAME);
+    const userRoleFromCookie = Cookies.get(ROLE_COOKIE_NAME) as 'student' | 'teacher' | undefined;
 
-    if (user && user.email === userEmailFromCookie && !isLoading) {
-      // User context is already set and matches cookie, and not forced loading, skip DB.
-      // This helps prevent re-fetch immediately after login/signup if state is already good.
-      // If isLoading was true, it means we *want* to reload or are in an initial state.
+    if (user && user.email === userEmailFromCookie && user.role === userRoleFromCookie && !isLoading) {
       return; 
     }
     
@@ -46,40 +52,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userEmailFromCookie) {
       console.time('Supabase LoadUserFromCookie Query');
       try {
-        // Fetch only necessary fields, id (email) and name
         const { data, error } = await supabase
           .from('proctorX')
-          .select('id, name') 
-          .eq('id', userEmailFromCookie)
-          .single(); // Use single() as email (id) should be unique
+          .select('uuid, id, name, role') // id is email column
+          .eq('id', userEmailFromCookie) // Query by email
+          .single();
         console.timeEnd('Supabase LoadUserFromCookie Query');
 
         if (data && !error) {
-          const loadedUser: CustomUser = { email: data.id, name: data.name ?? null };
+          const loadedUser: CustomUser = { uuid: data.uuid, email: data.id, name: data.name ?? null, role: data.role as CustomUser['role'] };
           setUser(loadedUser);
+          // Ensure role cookie is also consistent if it wasn't already
+          if (data.role && Cookies.get(ROLE_COOKIE_NAME) !== data.role) {
+            Cookies.set(ROLE_COOKIE_NAME, data.role, { expires: 7, path: '/' });
+          }
         } else {
           Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
+          Cookies.remove(ROLE_COOKIE_NAME, { path: '/' });
           setUser(null);
-          if (error && error.code !== 'PGRST116') { // PGRST116: "Searched for a single row, but found no rows" - expected if cookie is stale
+          if (error && error.code !== 'PGRST116') { 
             console.error('Error re-validating user from DB:', error.message);
           }
         }
       } catch (e: any) {
         console.error('Error processing user session:', e);
         Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
+        Cookies.remove(ROLE_COOKIE_NAME, { path: '/' });
         setUser(null);
       }
     } else {
       setUser(null);
+      Cookies.remove(ROLE_COOKIE_NAME, { path: '/' }); // Also clear role cookie if email cookie is gone
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user?.email]); // Removed user from dep array to avoid loop, user?.email covers change
+  }, [supabase, user?.email, user?.role]);
 
   useEffect(() => {
     loadUserFromCookie();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]); 
+  }, [pathname]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -87,37 +99,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isProtectedRoute = PROTECTED_ROUTES_PATTERNS.some(p => pathname?.startsWith(p));
 
       if (user && isAuthRoute) {
-        router.replace(DEFAULT_DASHBOARD_ROUTE);
+        router.replace(getRedirectPathForRole(user.role));
       } else if (!user && isProtectedRoute) {
         router.replace(AUTH_ROUTE);
       }
     }
   }, [user, isLoading, pathname, router]);
 
-
   const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string; user?: CustomUser }> => {
     setIsLoading(true);
     console.time('Supabase SignIn Query');
     const { data, error } = await supabase
       .from('proctorX')
-      .select('id, pass, name') // Select specific columns
+      .select('uuid, id, pass, name, role') // id is the email column
       .eq('id', email) // Filter by email
       .single(); // Expect a single row
     console.timeEnd('Supabase SignIn Query');
 
-    if (error) { // Handles query errors or if no row is found (as .single() errors on no row)
+    if (error) {
       setIsLoading(false);
-      if (error.code === 'PGRST116') { // "Searched for a single row, but found no rows"
+      if (error.code === 'PGRST116') {
         return { success: false, error: 'User not found.' };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: 'Login failed: ' + error.message };
     }
-
-    // No need to check !data here, as .single() would have errored if no data.
     
-    if (data.pass === pass) {
-      const userData: CustomUser = { email: data.id, name: data.name ?? null };
+    if (data.pass === pass) { // Plaintext password check - UNSAFE FOR PRODUCTION
+      const userData: CustomUser = { uuid: data.uuid, email: data.id, name: data.name ?? null, role: data.role as CustomUser['role'] };
       Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
+      if (userData.role) {
+        Cookies.set(ROLE_COOKIE_NAME, userData.role, { expires: 7, path: '/' });
+      }
       setUser(userData);
       setIsLoading(false);
       return { success: true, user: userData };
@@ -127,16 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, pass: string, name: string): Promise<{ success: boolean; error?: string; user?: CustomUser }> => {
+  const signUp = async (email: string, pass: string, name: string, role: 'student' | 'teacher'): Promise<{ success: boolean; error?: string; user?: CustomUser }> => {
     setIsLoading(true);
-    // Check if user already exists
     const { data: existingUser, error: selectError } = await supabase
       .from('proctorX')
-      .select('id')
+      .select('id') // id is email column
       .eq('id', email)
-      .maybeSingle(); // Use maybeSingle to not error if user doesn't exist
+      .maybeSingle();
 
-    if (selectError && selectError.code !== 'PGRST116') { // PGRST116 means no user found, which is good for signup
+    if (selectError && selectError.code !== 'PGRST116') {
       setIsLoading(false);
       return { success: false, error: 'Error checking existing user: ' + selectError.message };
     }
@@ -145,18 +156,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: 'User with this email already exists.' };
     }
 
-    // Insert new user
-    const { error: insertError } = await supabase
+    const { data: insertedData, error: insertError } = await supabase
       .from('proctorX')
-      .insert([{ id: email, pass: pass, name: name }]);
+      .insert([{ id: email, pass: pass, name: name, role: role }]) // pass is plaintext - UNSAFE FOR PRODUCTION
+      .select('uuid, id, name, role') // id is email column
+      .single();
 
-    if (insertError) {
+    if (insertError || !insertedData) {
       setIsLoading(false);
-      return { success: false, error: 'Registration failed: ' + insertError.message };
+      return { success: false, error: 'Registration failed: ' + (insertError?.message || "Could not retrieve user after insert.") };
     }
-
-    const userData: CustomUser = { email, name };
+    
+    const userData: CustomUser = { uuid: insertedData.uuid, email: insertedData.id, name: insertedData.name ?? null, role: insertedData.role as CustomUser['role'] };
     Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
+    if (userData.role) {
+      Cookies.set(ROLE_COOKIE_NAME, userData.role, { expires: 7, path: '/' });
+    }
     setUser(userData);
     setIsLoading(false);
     return { success: true, user: userData };
@@ -165,10 +180,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setIsLoading(true); 
     Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
+    Cookies.remove(ROLE_COOKIE_NAME, { path: '/' });
     setUser(null);
+    setIsLoading(false); // Set loading to false before push to avoid race condition with useEffect
     router.push(AUTH_ROUTE); 
-    // setIsLoading(false); // loadUserFromCookie will set it after path change
   };
+  
+  const updateUserProfile = async (profileData: { name: string; currentEmail: string; password?: string }): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    const updates: { name: string; pass?: string } = { name: profileData.name };
+    if (profileData.password) {
+      updates.pass = profileData.password; // Plaintext password update - UNSAFE
+    }
+
+    const { error } = await supabase
+      .from('proctorX')
+      .update(updates)
+      .eq('id', profileData.currentEmail); // id is email column
+
+    if (error) {
+      setIsLoading(false);
+      return { success: false, error: error.message };
+    }
+
+    // Re-fetch user data to update context
+    await loadUserFromCookie(); 
+    setIsLoading(false);
+    return { success: true };
+  };
+
 
   const value = {
     user,
@@ -176,6 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signUp,
     signOut,
+    updateUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

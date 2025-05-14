@@ -7,50 +7,38 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Mail, Lock, Camera, Save, Loader2 } from 'lucide-react';
+import { User, Mail, Lock, Camera, Save, Loader2, Fingerprint, Briefcase } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { CustomUser } from '@/types/supabase'; // Ensure CustomUser is imported
+import type { CustomUser } from '@/types/supabase';
 
 interface UserProfileFormProps {
-  user: CustomUser; // Reflects CustomUser from AuthContext or similar structure
-  onSave: (data: { name: string; email: string; password?: string; avatarFile?: File }) => Promise<void>;
+  user: CustomUser;
+  onSave: (data: { name: string; currentEmail: string; password?: string; avatarFile?: File }) => Promise<void>;
 }
 
 export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
-  const [name, setName] = useState(user.name || ''); // Handle potentially null name
-  const [email, setEmail] = useState(user.email);
+  const [name, setName] = useState(user.name || '');
+  const [email, setEmail] = useState(user.email); // Email from CustomUser is user.email
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [avatarFile, setAvatarFile] = useState<File | undefined>(undefined);
-  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(undefined); // Placeholder, not used by proctorX
+  // Avatar functionality remains disabled as proctorX doesn't support it directly
+  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(undefined); 
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     setName(user.name || '');
     setEmail(user.email);
-    // For avatar, using placeholder text if name is available
     const initial = (user.name || user.email || 'U').substring(0, 2).toUpperCase();
     setAvatarPreview(`https://placehold.co/100x100.png?text=${initial}`);
   }, [user]);
 
-  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setAvatarFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email !== user.email) {
-        toast({title: "Info", description: "Email (your ID) cannot be changed with this setup.", variant: "default"});
-        setEmail(user.email); // Revert if not allowed
+    if (email !== user.email) { // Email is conceptually the 'id' from proctorX in CustomUser
+        toast({title: "Info", description: "Email (your login ID) cannot be changed.", variant: "default"});
+        setEmail(user.email); 
         return;
     }
 
@@ -65,10 +53,10 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     setIsLoading(true);
     try {
       await onSave({ 
-        name: name, // Send current name from state 
-        email, 
+        name: name, 
+        currentEmail: user.email, // Pass current email for query
         password: password || undefined, 
-        avatarFile 
+        // avatarFile - not used
       });
       setPassword(''); 
       setConfirmPassword('');
@@ -84,7 +72,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
       <form onSubmit={handleSubmit}>
         <CardHeader>
           <CardTitle className="text-2xl">Edit Profile</CardTitle>
-          <CardDescription>Update your personal information. Email is your unique ID.</CardDescription>
+          <CardDescription>Update your personal information. Email and UUID are your unique identifiers.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
@@ -101,14 +89,27 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
                 type="file" 
                 className="hidden" 
                 accept="image/*" 
-                onChange={handleAvatarChange}
-                disabled // Avatar not part of proctorX
+                disabled
               />
             </div>
              <p className="text-xs text-muted-foreground">Avatar functionality not supported with current setup.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="uuid">User UUID (Read-only)</Label>
+              <div className="relative">
+                <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input id="uuid" value={user.uuid} readOnly className="pl-10 bg-muted/50 cursor-not-allowed" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address (Login ID)</Label>
+               <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input id="email" type="email" value={email} readOnly className="pl-10 bg-muted/50 cursor-not-allowed" />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="fullName">Full Name</Label>
               <div className="relative">
@@ -117,12 +118,11 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address (Your ID)</Label>
-               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" readOnly />
+              <Label htmlFor="role">Role (Read-only)</Label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input id="role" value={user.role || 'N/A'} readOnly className="pl-10 capitalize bg-muted/50 cursor-not-allowed" />
               </div>
-               <p className="text-xs text-muted-foreground">Email is your unique identifier and cannot be changed here.</p>
             </div>
           </div>
 

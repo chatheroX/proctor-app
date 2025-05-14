@@ -12,8 +12,8 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-} from '@/components/ui/sidebar'; // SidebarProvider is removed from here
-import { ShieldCheck, LogOut, Settings, Loader2 } from 'lucide-react';
+} from '@/components/ui/sidebar'; 
+import { ShieldCheck, LogOut, Settings, Loader2, UserCircle2, Fingerprint } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
 
@@ -26,15 +26,14 @@ export interface NavItem {
 
 interface SidebarElementsProps {
   navItems: NavItem[];
-  userRole: 'student' | 'teacher';
-  user: CustomUser | null; // Pass user from layout
-  signOut: () => Promise<void>; // Pass signOut from layout
-  authLoading: boolean; // Pass authLoading from layout
+  userRoleDashboard: 'student' | 'teacher'; // To construct settings link
+  user: CustomUser | null; 
+  signOut: () => Promise<void>; 
+  authLoading: boolean; 
 }
 
-export function SidebarElements({ navItems, userRole, user, signOut, authLoading }: SidebarElementsProps) {
+export function SidebarElements({ navItems, userRoleDashboard, user, signOut, authLoading }: SidebarElementsProps) {
   const pathname = usePathname();
-  // useAuth() is no longer called here; props are passed down
 
   return (
     <Sidebar collapsible="icon" className="border-r bg-sidebar text-sidebar-foreground">
@@ -48,6 +47,25 @@ export function SidebarElements({ navItems, userRole, user, signOut, authLoading
         </div>
       </SidebarHeader>
       <SidebarContent className="p-2 flex-grow">
+        {user && (
+          <div className="px-2 py-3 mb-2 border-b border-sidebar-border group-data-[collapsible=icon]:hidden">
+            <div className="flex items-center gap-2">
+              <UserCircle2 className="h-7 w-7 text-sidebar-foreground/80"/>
+              <div>
+                <p className="text-sm font-medium text-sidebar-foreground truncate" title={user.name || user.email}>
+                  {user.name || user.email}
+                </p>
+                <p className="text-xs text-sidebar-foreground/60 capitalize">
+                  Role: {user.role || 'N/A'}
+                </p>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-1 text-xs text-sidebar-foreground/50" title={user.uuid}>
+                <Fingerprint className="h-3 w-3"/> 
+                <span className="truncate">ID: {user.uuid}</span>
+            </div>
+          </div>
+        )}
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
@@ -71,10 +89,10 @@ export function SidebarElements({ navItems, userRole, user, signOut, authLoading
           <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
-                isActive={pathname.startsWith(`/${userRole}/dashboard/settings`)} 
+                isActive={pathname.startsWith(`/${userRoleDashboard}/dashboard/settings`)} 
                 tooltip={{ children: "Settings", className: "group-data-[collapsible=icon]:block hidden"}}
               >
-                <Link href={`/${userRole}/dashboard/settings`}>
+                <Link href={`/${userRoleDashboard}/dashboard/settings`}>
                   <Settings className="h-5 w-5" />
                   <span>Settings</span>
                 </Link>
