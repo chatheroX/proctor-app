@@ -80,6 +80,8 @@ export function AuthForm() {
         return;
       }
 
+      console.log('Attempting to register with email:', email); // Added for debugging
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
