@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -8,8 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Eye, EyeOff, User, Briefcase, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, User, Briefcase, Mail, Lock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
 
 type AuthAction = 'login' | 'register';
 type UserRole = 'student' | 'teacher';
@@ -18,12 +21,14 @@ export function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const supabase = createSupabaseBrowserClient();
+  const { session, isLoading: authLoading, userMetadata } = useAuth(); // Use auth context
 
   const initialAction = (searchParams.get('action') as AuthAction) || 'login';
-  const initialRole = (searchParams.get('role') as UserRole) || 'student';
+  const initialRoleParam = (searchParams.get('role') as UserRole) || 'student';
 
   const [action, setAction] = useState<AuthAction>(initialAction);
-  const [role, setRole] = useState<UserRole>(initialRole);
+  const [role, setRole] = useState<UserRole>(initialRoleParam);
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,43 +40,106 @@ export function AuthForm() {
 
   useEffect(() => {
     setAction(initialAction);
-    setRole(initialRole);
-  }, [initialAction, initialRole]);
+    setRole(initialRoleParam);
+  }, [initialAction, initialRoleParam]);
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (!authLoading && session) {
+      const userRoleFromMeta = userMetadata?.role;
+      if (userRoleFromMeta === 'student') {
+        router.replace('/student/dashboard');
+      } else if (userRoleFromMeta === 'teacher') {
+        router.replace('/teacher/dashboard');
+      } else {
+         router.replace('/'); // Fallback
+      }
+    }
+  }, [session, authLoading, router, userMetadata]);
+
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Basic validation
     if (!email || !password) {
       toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
       setIsLoading(false);
       return;
     }
-    if (action === 'register' && !fullName) {
-      toast({ title: "Error", description: "Full name is required for registration.", variant: "destructive" });
-      setIsLoading(false);
-      return;
-    }
-    if (action === 'register' && password !== confirmPassword) {
-      toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
-      setIsLoading(false);
-      return;
-    }
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    if (action === 'register') {
+      if (!fullName) {
+        toast({ title: "Error", description: "Full name is required for registration.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
 
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: role,
+          },
+        },
+      });
+
+      if (error) {
+        toast({ title: "Registration Error", description: error.message, variant: "destructive" });
+      } else if (data.user) {
+        // Check if email confirmation is required
+        if (data.user.identities && data.user.identities.length > 0 && !data.user.email_confirmed_at) {
+           toast({ title: "Registration Successful", description: "Please check your email to confirm your account before logging in." });
+           // Optionally clear form or redirect to a "check email" page
+           // router.push('/auth/check-email'); // Or similar
+        } else {
+            toast({ title: "Registration Successful!", description: `Registered as a ${role}. Redirecting...` });
+            // Supabase auth listener in AuthContext should handle redirect
+        }
+      } else {
+         toast({ title: "Registration Note", description: "Please check your email to verify your account if required by the application setup." });
+      }
+    } else { // Login
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        toast({ title: "Login Error", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Login Successful!", description: "Redirecting to your dashboard..." });
+        // Supabase auth listener in AuthContext should handle redirect
+      }
+    }
     setIsLoading(false);
-    toast({ title: "Success!", description: `${action === 'login' ? 'Logged in' : 'Registered'} successfully as a ${role}. Redirecting...` });
-    
-    // Redirect to respective dashboard
-    if (role === 'student') {
-      router.push('/student/dashboard');
-    } else {
-      router.push('/teacher/dashboard');
-    }
   };
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+  // If already logged in (and not loading), this component shouldn't render due to useEffect redirect.
+  // But as a fallback, or if redirect is slow:
+  if (session && !authLoading) { 
+      return (
+        <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
+            <p>Already logged in. Redirecting...</p>
+            <Loader2 className="ml-2 h-5 w-5 animate-spin text-primary" />
+        </div>
+    );
+  }
+
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
@@ -107,7 +175,8 @@ export function AuthForm() {
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col">
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {isLoading ? 'Logging in...' : 'Login'}
                 </Button>
                 <p className="mt-4 text-center text-sm text-muted-foreground">
@@ -126,7 +195,7 @@ export function AuthForm() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>I am a...</Label>
-                  <RadioGroup defaultValue={role} onValueChange={(value) => setRole(value as UserRole)} className="flex space-x-4">
+                  <RadioGroup value={role} onValueChange={(value) => setRole(value as UserRole)} className="flex space-x-4">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="student" id="role-student" />
                       <Label htmlFor="role-student" className="flex items-center cursor-pointer">
@@ -159,7 +228,7 @@ export function AuthForm() {
                   <Label htmlFor="register-password">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="register-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10" />
+                    <Input id="register-password" type={showPassword ? 'text' : 'password'} placeholder="•••••••• (min. 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10" />
                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -177,7 +246,8 @@ export function AuthForm() {
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col">
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {isLoading ? 'Registering...' : 'Register'}
                 </Button>
                  <p className="mt-4 text-center text-sm text-muted-foreground">

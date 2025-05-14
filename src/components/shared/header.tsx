@@ -1,13 +1,16 @@
+
+'use client';
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, UserPlus, LogIn } from 'lucide-react';
+import { ShieldCheck, UserPlus, LogIn, LogOut, LayoutDashboard, Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface HeaderProps {
-  isAuthenticated?: boolean;
-  userRole?: 'student' | 'teacher';
-}
+export function AppHeader() {
+  const { session, userMetadata, signOut, isLoading } = useAuth();
+  const isAuthenticated = !!session;
+  const userRole = userMetadata?.role;
 
-export function AppHeader({ isAuthenticated = false, userRole }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
@@ -16,14 +19,18 @@ export function AppHeader({ isAuthenticated = false, userRole }: HeaderProps) {
           <span className="font-bold text-xl">ProctorPrep</span>
         </Link>
         <nav className="flex items-center space-x-4">
-          {isAuthenticated ? (
+          {isLoading ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : isAuthenticated ? (
             <>
               <Button variant="ghost" asChild>
-                <Link href={userRole === 'student' ? '/student/dashboard' : '/teacher/dashboard'}>
-                  Dashboard
+                <Link href={userRole === 'student' ? '/student/dashboard' : userRole === 'teacher' ? '/teacher/dashboard' : '/'}>
+                 <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                 </Link>
               </Button>
-              <Button variant="outline">Logout</Button> {/* Mock logout */}
+              <Button variant="outline" onClick={signOut}>
+                <LogOut className="mr-2 h-4 w-4" /> Logout
+              </Button>
             </>
           ) : (
             <>

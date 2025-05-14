@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -13,9 +14,9 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { ShieldCheck, LogOut, Settings } from 'lucide-react';
+import { ShieldCheck, LogOut, Settings, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface NavItem {
   href: string;
@@ -26,11 +27,13 @@ export interface NavItem {
 
 interface DashboardSidebarProps {
   navItems: NavItem[];
-  userRole: 'student' | 'teacher';
+  userRole: 'student' | 'teacher'; // Passed to determine settings link, or could be derived from context
 }
 
 export function DashboardSidebar({ navItems, userRole }: DashboardSidebarProps) {
   const pathname = usePathname();
+  const { signOut, isLoading: authLoading, userMetadata } = useAuth();
+  const actualUserRole = userMetadata?.role || userRole; // Prefer role from context if available
 
   return (
     <SidebarProvider defaultOpen>
@@ -68,27 +71,28 @@ export function DashboardSidebar({ navItems, userRole }: DashboardSidebarProps) 
             <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname.startsWith(`/${userRole}/dashboard/settings`)} // Generic settings path
+                  isActive={pathname.startsWith(`/${actualUserRole}/dashboard/settings`)} 
                   tooltip={{ children: "Settings", className: "group-data-[collapsible=icon]:block hidden"}}
                 >
-                  <Link href={`/${userRole}/dashboard/settings`}>
+                  <Link href={`/${actualUserRole}/dashboard/settings`}>
                     <Settings className="h-5 w-5" />
                     <span>Settings</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             <SidebarMenuItem>
-                 {/* This is a mock logout. In a real app, it would clear session/token and redirect. */}
                 <SidebarMenuButton
-                    asChild
+                    onClick={async () => {
+                      if (authLoading) return;
+                      await signOut();
+                    }}
                     variant="outline"
                     className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     tooltip={{ children: "Logout", className: "group-data-[collapsible=icon]:block hidden"}}
+                    disabled={authLoading}
                 >
-                    <Link href="/auth?action=login">
-                        <LogOut className="h-5 w-5" />
-                        <span>Logout</span>
-                    </Link>
+                  {authLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+                  <span>Logout</span>
                 </SidebarMenuButton>
             </SidebarMenuItem>
            </SidebarMenu>
