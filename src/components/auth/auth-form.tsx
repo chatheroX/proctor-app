@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Eye, EyeOff, User, Mail, Lock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import type { CustomUser } from '@/types/supabase';
 
 type AuthAction = 'login' | 'register';
 const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; 
@@ -60,6 +61,8 @@ export function AuthForm() {
       return;
     }
 
+    let result: { success: boolean; error?: string; user?: CustomUser | null };
+
     if (action === 'register') {
       if (!trimmedFullName) {
         toast({ title: "Error", description: "Full name is required for registration.", variant: "destructive" });
@@ -77,46 +80,41 @@ export function AuthForm() {
          return;
       }
 
-      const { success, error } = await signUp(trimmedEmail, password, trimmedFullName);
-      if (success) {
+      result = await signUp(trimmedEmail, password, trimmedFullName);
+      if (result.success) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        // router.push will trigger AuthContext re-evaluation which handles redirect if necessary
-        // Or the useEffect above will catch it.
-         router.push(DEFAULT_DASHBOARD_ROUTE); 
+        router.push(DEFAULT_DASHBOARD_ROUTE); 
       } else {
-        toast({ title: "Registration Error", description: error || "An unknown error occurred.", variant: "destructive" });
+        toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
     } else { // Login
-      const { success, error } = await signIn(trimmedEmail, password);
-      if (success) {
+      result = await signIn(trimmedEmail, password);
+      if (result.success) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
         router.push(DEFAULT_DASHBOARD_ROUTE); 
       } else {
-        toast({ title: "Login Error", description: error || "Invalid credentials or server error.", variant: "destructive" });
+        toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
     }
     setIsSubmitting(false);
   };
   
 
-  if (authLoading && pathname === '/auth') { 
-    // Show loader specifically for auth page if initial session is loading
-    // but don't block form display if user is already known to be null.
-    // This prevents flashing the loader if user is known to be unauthenticated.
-    if (user === undefined || (user === null && Cookies.get('proctorprep-user-session') === undefined)) {
-       return (
-        <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-      );
-    }
+  // Show loader if AuthContext is still loading initial user state and we are on the auth page
+  if (authLoading && user === undefined && pathname === '/auth') { 
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
   }
   
+  // If user is determined and we are on /auth page, but they are logged in, this means
+  // the useEffect for redirection hasn't fired yet or is in progress. Show a minimal loader.
   if (user && !authLoading && pathname === '/auth') { 
-      // This state is if the component renders before the useEffect redirect fires.
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
-            <p>Already logged in. Redirecting...</p>
+            <p>Redirecting...</p>
             <Loader2 className="ml-2 h-5 w-5 animate-spin text-primary" />
         </div>
     );
