@@ -5,32 +5,40 @@ import { UserProfileForm } from '@/components/shared/user-profile-form';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import type { CustomUser } from '@/types/supabase';
+
 
 export default function TeacherProfilePage() {
-  const { user, isLoading: authLoading } = useAuth(); // user is CustomUser type
+  const { user, isLoading: authLoading, updateUserProfile } = useAuth();
   const { toast } = useToast();
 
   const handleSaveProfile = async (data: { name: string; email: string; password?: string; avatarFile?: File }) => {
-    console.log('Attempting to save teacher profile (custom auth - proctorX table):', data);
-    // Similar to student profile, updates would target the 'proctorX' table.
-    // See student profile page for detailed comments on updating 'proctorX'.
-    
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-    
-    toast({
-      title: "Profile Update (Demo)",
-      description: "Profile data logged. Backend update for 'proctorX' table would be implemented here.",
-    });
+     if (!user) {
+      toast({ title: "Error", description: "You must be logged in to update your profile.", variant: "destructive" });
+      return;
+    }
+    // Ensure we're passing the current user's email (ID) for the update, especially if email isn't changeable.
+    const result = await updateUserProfile({ ...data, currentEmail: user.email });
 
+    if (result.success) {
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been successfully updated.",
+      });
+    } else {
+      toast({
+        title: "Update Failed",
+        description: result.error || "Could not update your profile. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
     if (data.avatarFile) {
       toast({ description: `Avatar functionality not supported with current 'proctorX' table.`});
     }
-    if (data.password) {
-        toast({ description: `Password change for 'proctorX' would be implemented here (Note: plaintext storage is insecure).` });
-    }
   };
   
-  if (authLoading || !user) {
+  if (authLoading || !user && user !== null) { // Show loader if auth is loading OR user is undefined (initial state)
     return (
       <div className="flex justify-center items-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -38,12 +46,17 @@ export default function TeacherProfilePage() {
     );
   }
 
-  // Using CustomUser from AuthContext
-  const profileData = {
-    name: user.name || user.email?.split('@')[0] || 'Teacher User',
-    email: user.email || '',
-    // avatarUrl is not part of proctorX, so using placeholder
-    avatarUrl: `https://placehold.co/100x100.png?text=${(user.name || user.email || 'T').substring(0,2).toUpperCase()}`,
+  if (!user) { // If user is explicitly null, means not logged in (or error fetching)
+    return (
+      <div className="flex justify-center items-center h-full">
+        <p>Please log in to view your profile.</p>
+      </div>
+    );
+  }
+  
+  const profileData: CustomUser = { // Construct CustomUser from user context
+    name: user.name || '', // Default to empty string if name is null
+    email: user.email,
   };
 
   return (
@@ -54,6 +67,7 @@ export default function TeacherProfilePage() {
   );
 }
 
-export const metadata = {
-  title: 'My Profile | Teacher Dashboard | ProctorPrep',
-};
+// Removed metadata export as this is a Client Component
+// export const metadata = {
+//   title: 'My Profile | Teacher Dashboard | ProctorPrep',
+// };

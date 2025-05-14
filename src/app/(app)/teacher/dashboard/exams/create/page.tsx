@@ -1,3 +1,4 @@
+
 'use client';
 
 import { ExamForm } from '@/components/teacher/exam-form';
@@ -37,6 +38,7 @@ export default function CreateExamPage() {
   );
 }
 
-export const metadata = {
-  title: 'Create New Exam | Teacher Dashboard | ProctorPrep',
-};
+// Removed metadata export as this is a Client Component
+// export const metadata = {
+//   title: 'Create New Exam | Teacher Dashboard | ProctorPrep',
+// };

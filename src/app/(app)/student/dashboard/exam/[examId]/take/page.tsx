@@ -243,6 +243,7 @@ export default function TakeExamPage() {
   );
 }
 
-export const metadata = {
-  title: 'Take Exam | ProctorPrep',
-};
+// Removed metadata export as this is a Client Component
+// export const metadata = {
+//   title: 'Take Exam | ProctorPrep',
+// };

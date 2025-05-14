@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -80,6 +81,7 @@ export default function JoinExamPage() {
   );
 }
 
-export const metadata = {
-  title: 'Join Exam | Student Dashboard | ProctorPrep',
-};
+// Removed metadata export as this is a Client Component
+// export const metadata = {
+//   title: 'Join Exam | Student Dashboard | ProctorPrep',
+// };

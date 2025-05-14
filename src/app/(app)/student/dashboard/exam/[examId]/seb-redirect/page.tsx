@@ -147,6 +147,7 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
   );
 }
 
-export const metadata = {
-  title: 'SEB Redirect & System Check | ProctorPrep',
-};
+// Removed metadata export as this is a Client Component
+// export const metadata = {
+//   title: 'SEB Redirect & System Check | ProctorPrep',
+// };
