@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { ShieldCheck, UserPlus, LogIn, LogOut, LayoutDashboard, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
+const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview';
+
 export function AppHeader() {
   const { user, signOut, isLoading } = useAuth();
   const isAuthenticated = !!user;
@@ -18,18 +20,18 @@ export function AppHeader() {
           <span className="font-bold text-xl">ProctorPrep</span>
         </Link>
         <nav className="flex items-center space-x-4">
-          {isLoading ? (
+          {isLoading && !isAuthenticated ? ( // Show loader only if not authenticated yet and loading
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : isAuthenticated ? (
             <>
               <Button variant="ghost" asChild>
-                {/* Defaulting to student dashboard overview as role is not explicitly stored in proctorX */}
-                <Link href="/student/dashboard/overview"> 
+                <Link href={DEFAULT_DASHBOARD_ROUTE}> 
                  <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                 </Link>
               </Button>
-              <Button variant="outline" onClick={signOut}>
-                <LogOut className="mr-2 h-4 w-4" /> Logout
+              <Button variant="outline" onClick={signOut} disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
+                 Logout
               </Button>
             </>
           ) : (

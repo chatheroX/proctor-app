@@ -5,19 +5,19 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
 import Cookies from 'js-cookie';
-import type { CustomUser, Database } from '@/types/supabase';
+import type { CustomUser } from '@/types/supabase';
 
-const SESSION_COOKIE_NAME = 'proctorprep-user-session'; // Using email as session identifier
+const SESSION_COOKIE_NAME = 'proctorprep-user-session';
 const AUTH_ROUTE = '/auth';
-const PROTECTED_ROUTES_STUDENT = ['/student/dashboard'];
-const PROTECTED_ROUTES_TEACHER = ['/teacher/dashboard'];
+const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; // Centralized default
+const PROTECTED_ROUTES_PATTERNS = ['/student/dashboard', '/teacher/dashboard'];
 
 
 type AuthContextType = {
   user: CustomUser | null;
   isLoading: boolean;
-  signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string; userName?: string | null }>;
-  signUp: (email: string, pass: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string; user?: CustomUser }>;
+  signUp: (email: string, pass: string, name: string) => Promise<{ success: boolean; error?: string; user?: CustomUser }>;
   signOut: () => Promise<void>;
 };
 
@@ -34,39 +34,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUserFromCookie = useCallback(async () => {
     const userEmailFromCookie = Cookies.get(SESSION_COOKIE_NAME);
 
-    // Optimization: If user context already exists and matches the cookie,
-    // and we are not doing an initial forced load, we might skip the DB query.
-    // However, for robustness on navigations/reloads, re-validating is safer.
-    // Let's ensure isLoading is true before any async op.
-    
-    if (user && user.email === userEmailFromCookie) {
-      // If user is already in context and matches cookie, assume valid for this render cycle.
-      // This prevents a flicker if context persists across quick navigations.
-      // On a full page load/reload, 'user' will be null initially, so this won't apply.
-      setIsLoading(false); 
+    // If user context is already set and matches cookie, and not currently forced loading, skip DB.
+    // This helps prevent re-fetch immediately after login/signup if state is already good.
+    if (user && user.email === userEmailFromCookie && !isLoading) {
+      // setUser(user); // Ensure state is consistent if needed, though should be already.
+      // setIsLoading(false); // Already false if this condition is met.
       return;
     }
-
+    
+    // If we are here, either user is null, or cookie doesn't match, or forced loading.
+    // Always set loading true before async operation.
     setIsLoading(true);
-
 
     if (userEmailFromCookie) {
       console.time('Supabase LoadUserFromCookie Query');
       try {
         const { data, error } = await supabase
           .from('proctorX')
-          .select('id, name') 
+          .select('id, name')
           .eq('id', userEmailFromCookie)
           .single();
         console.timeEnd('Supabase LoadUserFromCookie Query');
 
         if (data && !error) {
-          setUser({ email: data.id, name: data.name ?? null });
+          const loadedUser: CustomUser = { email: data.id, name: data.name ?? null };
+          setUser(loadedUser);
         } else {
           Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
           setUser(null);
-          if (error && error.code !== 'PGRST116') { // PGRST116: Row to retrieve was not found
-             console.error('Error re-validating user from DB:', error.message);
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error re-validating user from DB:', error.message);
           }
         }
       } catch (e: any) {
@@ -78,20 +75,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
     }
     setIsLoading(false);
-  }, [supabase, user]); // Added user to dependency array
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, user?.email]); // Depend on user.email to re-run if it changes from outside
 
   useEffect(() => {
     loadUserFromCookie();
-  }, [loadUserFromCookie, pathname]); // Rerun on pathname change to re-validate session potentially
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]); // Re-validate on path changes
 
   useEffect(() => {
     if (!isLoading) {
       const isAuthRoute = pathname === AUTH_ROUTE;
-      const isProtectedRoute = PROTECTED_ROUTES_STUDENT.some(r => pathname?.startsWith(r)) ||
-                               PROTECTED_ROUTES_TEACHER.some(r => pathname?.startsWith(r));
+      const isProtectedRoute = PROTECTED_ROUTES_PATTERNS.some(p => pathname?.startsWith(p));
 
       if (user && isAuthRoute) {
-        router.replace('/student/dashboard/overview');
+        router.replace(DEFAULT_DASHBOARD_ROUTE);
       } else if (!user && isProtectedRoute) {
         router.replace(AUTH_ROUTE);
       }
@@ -99,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, isLoading, pathname, router]);
 
 
-  const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string; userName?: string | null }> => {
+  const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string; user?: CustomUser }> => {
     setIsLoading(true);
     console.time('Supabase SignIn Query');
     const { data, error } = await supabase
@@ -114,20 +112,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: error?.message || 'User not found or database error.' };
     }
 
-    if (data.pass === pass) { // PLAIN TEXT PASSWORD COMPARISON - INSECURE
-      const userName = data.name ?? null;
-      const userData: CustomUser = { email: data.id, name: userName };
+    if (data.pass === pass) {
+      const userData: CustomUser = { email: data.id, name: data.name ?? null };
       Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
       setUser(userData);
       setIsLoading(false);
-      return { success: true, userName };
+      return { success: true, user: userData };
     } else {
       setIsLoading(false);
       return { success: false, error: 'Incorrect password.' };
     }
   };
 
-  const signUp = async (email: string, pass: string, name: string): Promise<{ success: boolean; error?: string }> => {
+  const signUp = async (email: string, pass: string, name: string): Promise<{ success: boolean; error?: string; user?: CustomUser }> => {
     setIsLoading(true);
     const { data: existingUser, error: selectError } = await supabase
       .from('proctorX')
@@ -135,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', email)
       .single();
 
-    if (selectError && selectError.code !== 'PGRST116') { 
+    if (selectError && selectError.code !== 'PGRST116') {
       setIsLoading(false);
       return { success: false, error: 'Error checking existing user: ' + selectError.message };
     }
@@ -146,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { error: insertError } = await supabase
       .from('proctorX')
-      .insert([{ id: email, pass: pass, name: name }]); 
+      .insert([{ id: email, pass: pass, name: name }]);
 
     if (insertError) {
       setIsLoading(false);
@@ -157,20 +154,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
     setUser(userData);
     setIsLoading(false);
-    return { success: true };
+    return { success: true, user: userData };
   };
 
   const signOut = async () => {
-    setIsLoading(true);
+    setIsLoading(true); // Set loading true before async op
     Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
     setUser(null);
-    // No need to setIsLoading(false) immediately before router.push,
-    // as the AuthContext will re-evaluate on the new page and set loading state.
-    router.push(AUTH_ROUTE);
-    // It's good practice to set isLoading to false if the component might not unmount immediately
-    // or if other effects depend on it. However, for a sign-out redirect, this is usually fine.
-    // For consistency, we can set it:
-    setIsLoading(false); 
+    // router.push will trigger path change, which re-runs loadUserFromCookie & protection useEffect.
+    // loadUserFromCookie will set isLoading false after it's done.
+    router.push(AUTH_ROUTE); 
+    // No need to setIsLoading(false) here if router.push causes context re-evaluation that handles it.
+    // However, for safety if component doesn't unmount/re-eval immediately:
+    // setIsLoading(false); 
   };
 
   const value = {

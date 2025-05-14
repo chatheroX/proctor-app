@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
 type AuthAction = 'login' | 'register';
+const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview'; // Consistent redirect target
 
 export function AuthForm() {
   const pathname = usePathname(); // Initialize pathname first
@@ -37,9 +38,10 @@ export function AuthForm() {
   }, [initialAction]);
 
   // This effect handles redirecting away from /auth if user is already logged in.
+  // AuthContext's own useEffect also handles this, but this can provide quicker feedback if AuthForm is mounted.
   useEffect(() => {
     if (!authLoading && user && pathname === '/auth') {
-      router.replace('/student/dashboard/overview'); // Default redirect for logged-in users trying to access /auth
+      router.replace(DEFAULT_DASHBOARD_ROUTE); 
     }
   }, [user, authLoading, router, pathname]);
 
@@ -52,7 +54,6 @@ export function AuthForm() {
     const trimmedFullName = fullName.trim();
     
     console.log('Attempting auth with email (trimmed):', trimmedEmail);
-
 
     if (!trimmedEmail || !password) {
       toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
@@ -80,7 +81,7 @@ export function AuthForm() {
       const { success, error } = await signUp(trimmedEmail, password, trimmedFullName);
       if (success) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        router.push('/student/dashboard/overview'); 
+        router.push(DEFAULT_DASHBOARD_ROUTE); 
       } else {
         toast({ title: "Registration Error", description: error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -88,7 +89,7 @@ export function AuthForm() {
       const { success, error } = await signIn(trimmedEmail, password);
       if (success) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        router.push('/student/dashboard/overview'); 
+        router.push(DEFAULT_DASHBOARD_ROUTE); 
       } else {
         toast({ title: "Login Error", description: error || "Invalid credentials or server error.", variant: "destructive" });
       }
@@ -97,7 +98,7 @@ export function AuthForm() {
   };
   
 
-  if (authLoading) {
+  if (authLoading && !user && pathname === '/auth') { // Show loader specifically for auth page if loading initial session
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -105,10 +106,12 @@ export function AuthForm() {
     );
   }
   
+  // If user is resolved and present, and we're on /auth, AuthContext or the effect above should redirect.
+  // This state is primarily for when the component mounts before redirection happens.
   if (user && !authLoading && pathname === '/auth') { 
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
-            <p>Already logged in. Redirecting to dashboard...</p>
+            <p>Already logged in. Redirecting...</p>
             <Loader2 className="ml-2 h-5 w-5 animate-spin text-primary" />
         </div>
     );
@@ -131,7 +134,7 @@ export function AuthForm() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Email (Gmail)</Label>
+                  <Label htmlFor="login-email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input id="login-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" />
@@ -175,7 +178,7 @@ export function AuthForm() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="register-email">Email (Gmail)</Label>
+                  <Label htmlFor="register-email">Email</Label>
                    <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input id="register-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" />

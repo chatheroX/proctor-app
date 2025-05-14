@@ -1,66 +1,47 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-// Supabase client for middleware is not used in custom auth
-// import { createSupabaseClientForNextMiddleware } from '@/lib/supabase/middleware'; 
 
-const PROTECTED_ROUTES_STUDENT = ['/student/dashboard'];
-const PROTECTED_ROUTES_TEACHER = ['/teacher/dashboard'];
+const PROTECTED_ROUTES_PATTERNS = ['/student/dashboard', '/teacher/dashboard'];
 const AUTH_ROUTE = '/auth';
-const PUBLIC_ROUTES = ['/', '/privacy', '/terms', '/supabase-test']; // Added supabase-test as public for easier testing
+const PUBLIC_ROUTES = ['/', '/privacy', '/terms', '/supabase-test'];
+const DEFAULT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 
 const SESSION_COOKIE_NAME = 'proctorprep-user-session';
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const res = NextResponse.next(); // Prepare response object for potential cookie operations (though not used here for reads)
+  const res = NextResponse.next();
 
-  // Allow Next.js specific paths and static assets
   if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.match(/\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/)) {
     return res;
   }
   
-  // Check for the custom session cookie
   const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME);
   const isAuthenticated = !!sessionCookie;
 
-  // If user is on a public route, allow access
   if (PUBLIC_ROUTES.includes(pathname)) {
-    // If authenticated and trying to access auth page, redirect to home
     if (isAuthenticated && pathname === AUTH_ROUTE) {
-      return NextResponse.redirect(new URL('/', req.url));
+      // If authenticated and trying to access auth page, redirect to dashboard
+      return NextResponse.redirect(new URL(DEFAULT_DASHBOARD_ROUTE, req.url));
     }
-    return res;
+    return res; // Allow access to public routes
   }
   
-  // If user is authenticated
-  if (isAuthenticated) {
-    // If user is on auth page (should have been caught above, but as a safeguard)
-    if (pathname === AUTH_ROUTE) {
-      return NextResponse.redirect(new URL('/', req.url));
-    }
-    
-    // Role-based access for protected routes
-    // NOTE: With the current proctorX table (id, pass, name), role is not stored.
-    // This middleware can't distinguish between student/teacher for redirection.
-    // It will allow access to any protected route if authenticated.
-    // True role-based protection would require role information in the session cookie or fetched from DB.
-    const isStudentRoute = PROTECTED_ROUTES_STUDENT.some(route => pathname.startsWith(route));
-    const isTeacherRoute = PROTECTED_ROUTES_TEACHER.some(route => pathname.startsWith(route));
+  const isProtectedRoute = PROTECTED_ROUTES_PATTERNS.some(p => pathname.startsWith(p));
 
-    if (isStudentRoute || isTeacherRoute) {
-      // Allow access as we can't verify role with current custom auth.
-      // A more robust solution would involve storing role in the cookie or fetching it.
-      return res;
+  if (isAuthenticated) {
+    if (pathname === AUTH_ROUTE) {
+      // Authenticated user trying to access /auth, redirect to dashboard
+      return NextResponse.redirect(new URL(DEFAULT_DASHBOARD_ROUTE, req.url));
     }
-    
-    return res; // Allow other authenticated routes
+    // Allow access to any other route if authenticated (including protected ones)
+    // Role-based restrictions would need more info in the session cookie or a DB lookup here
+    return res;
   }
 
-  // User is not authenticated
-  const isProtectedRoute = PROTECTED_ROUTES_STUDENT.some(route => pathname.startsWith(route)) ||
-                           PROTECTED_ROUTES_TEACHER.some(route => pathname.startsWith(route));
-
+  // User is NOT authenticated
   if (isProtectedRoute) {
+    // Unauthenticated user trying to access a protected route, redirect to login
     return NextResponse.redirect(new URL(AUTH_ROUTE, req.url));
   }
 
@@ -70,9 +51,15 @@ export async function middleware(req: NextRequest) {
   }
   
   // For any other route not explicitly public or auth, and user is not logged in, redirect to login.
-  // This might be too restrictive if there are other intended unauthenticated pages.
-  // For now, keeping it simple: if not public, not auth, and not logged in -> redirect to auth.
-   if (!PUBLIC_ROUTES.includes(pathname) && pathname !== AUTH_ROUTE) {
+  // This behavior might need adjustment based on specific non-auth, non-public pages.
+  // For now, if it's not public and not auth and not protected (caught above),
+  // and user is not logged in, it means it's an unknown route or a protected one missed.
+  // Redirecting to auth is a safe default.
+   if (!PUBLIC_ROUTES.includes(pathname) && pathname !== AUTH_ROUTE && !isProtectedRoute) {
+     // This case might need review: non-public, non-auth, non-protected route for unauth user.
+     // Example: if you had `/about` not in public routes, it would redirect to login.
+     // If this is undesired, add more routes to PUBLIC_ROUTES or adjust this condition.
+     // For now, redirecting to auth is consistent with locking down non-public areas.
      return NextResponse.redirect(new URL(AUTH_ROUTE, req.url));
   }
 
@@ -81,13 +68,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
