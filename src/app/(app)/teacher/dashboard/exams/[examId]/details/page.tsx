@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare, CalendarClock, AlertCircle, MonitorPlay } from 'lucide-react';
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare, CalendarClock, AlertCircle } from 'lucide-react'; // Removed MonitorPlay
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -38,7 +38,7 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
     if (!exam.start_time || !exam.end_time) {
       // If Published but no schedule, it cannot be Ongoing or Completed by time.
       // It remains 'Published' (effectively upcoming/needs scheduling).
-      return 'Published'; 
+      return 'Published';
     }
     const now = new Date();
     const startTime = parseISO(exam.start_time);
@@ -52,7 +52,7 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
     if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing'; // Within scheduled time
     if (isBefore(now, startTime)) return 'Published'; // Scheduled for future, so it's Upcoming (effectively)
   }
-  
+
   // If DB status is 'Ongoing', check if end_time has passed
   if (exam.status === 'Ongoing') {
     if (exam.end_time) {
@@ -61,7 +61,7 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
       if (isValid(endTime) && isAfter(now, endTime)) return 'Completed';
     }
     // If no end_time or end_time hasn't passed, it's still Ongoing
-    return 'Ongoing'; 
+    return 'Ongoing';
   }
 
   return exam.status; // Fallback to database status for other cases (e.g. 'Draft' if it existed)
@@ -100,11 +100,11 @@ export default function ExamDetailsPage() {
       if (data) {
         setEffectiveStatus(getEffectiveExamStatus(data));
       } else {
-        notFound(); 
+        notFound();
       }
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to fetch exam details: ${error.message}`, variant: "destructive" });
-      setExam(null); 
+      setExam(null);
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +123,7 @@ export default function ExamDetailsPage() {
           setEffectiveStatus(newEffectiveStatus);
         }
       }, 60000); // Check every minute
-      
+
       // Also re-check on window focus, as time might have passed significantly
       const handleFocus = () => {
          const newEffectiveStatus = getEffectiveExamStatus(exam);
@@ -307,14 +307,7 @@ export default function ExamDetailsPage() {
           <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/exams/${exam.exam_id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit Exam
           </Button>
-          {/* Demo Test button removed */}
-          {effectiveStatus === 'Ongoing' && (
-             <Button variant="secondary" asChild>
-              <Link href={`/teacher/dashboard/exams/${exam.exam_id}/monitor`}>
-                <MonitorPlay className="mr-2 h-4 w-4" /> Monitor Exam
-              </Link>
-            </Button>
-          )}
+          {/* Monitor Exam button removed */}
           <Button variant="outline" asChild disabled={effectiveStatus !== 'Completed'}>
             <Link href={`/teacher/dashboard/results/${exam.exam_id}`}>
                 <Users2 className="mr-2 h-4 w-4" /> View Results

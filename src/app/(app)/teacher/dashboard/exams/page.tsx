@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock, ClockIcon, CheckCircleIcon, PlayCircleIcon, MonitorPlay } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock, ClockIcon, CheckCircleIcon, PlayCircleIcon } from 'lucide-react'; // Removed MonitorPlay
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -25,7 +25,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Exam, ExamStatus } from '@/types/supabase';
 import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
-import { getEffectiveExamStatus } from './[examId]/details/page';
+import { getEffectiveExamStatus } from './[examId]/details/page'; // Corrected path
 
 interface CategorizedExams {
   ongoing: Exam[];
@@ -84,7 +84,7 @@ export default function ManageExamsPage() {
     if (user) {
       fetchAndCategorizeExams();
     } else {
-      setIsLoading(false);
+      setIsLoading(false); // Ensure loading stops if no user
       setCategorizedExams({ ongoing: [], upcoming: [], completed: [] });
     }
   }, [user, fetchAndCategorizeExams]);
@@ -101,7 +101,7 @@ export default function ManageExamsPage() {
 
       if (error) throw error;
       toast({ title: "Exam Deleted", description: `Exam "${examToDelete.title}" has been deleted.` });
-      fetchAndCategorizeExams();
+      fetchAndCategorizeExams(); // Refresh list
       setExamToDelete(null);
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to delete exam: ${error.message}`, variant: "destructive" });
@@ -166,7 +166,7 @@ export default function ManageExamsPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Title</TableHead>
-            <TableHead>DB Status</TableHead>
+            <TableHead>Effective Status</TableHead> {/* Changed from DB Status */}
             <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>Start Time</TableHead>
             <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>End Time</TableHead>
             <TableHead>Questions</TableHead>
@@ -176,15 +176,17 @@ export default function ManageExamsPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {exams.map((exam) => (
+          {exams.map((exam) => {
+            const effectiveStatus = getEffectiveExamStatus(exam);
+            return (
             <TableRow key={exam.exam_id}>
               <TableCell className="font-medium">{exam.title}</TableCell>
               <TableCell>
                  <Badge
-                  variant={getStatusBadgeVariant(exam.status)} // Display DB status
-                  className={getStatusBadgeClass(exam.status)}
+                  variant={getStatusBadgeVariant(effectiveStatus)}
+                  className={getStatusBadgeClass(effectiveStatus)}
                 >
-                  {exam.status}
+                  {effectiveStatus}
                 </Badge>
               </TableCell>
               <TableCell>{formatTableDateTime(exam.start_time)}</TableCell>
@@ -212,26 +214,27 @@ export default function ManageExamsPage() {
                     <DropdownMenuItem asChild>
                       <Link href={`/teacher/dashboard/exams/${exam.exam_id}/details`}><Eye className="mr-2 h-4 w-4" /> View Details</Link>
                     </DropdownMenuItem>
-                    {getEffectiveExamStatus(exam) === 'Ongoing' && (
-                      <DropdownMenuItem asChild>
-                        <Link href={`/teacher/dashboard/exams/${exam.exam_id}/monitor`}><MonitorPlay className="mr-2 h-4 w-4" /> Monitor Exam</Link>
-                      </DropdownMenuItem>
-                    )}
+                    {/* Monitor Exam option removed */}
                      <DropdownMenuItem asChild>
                       <Link href={`/teacher/dashboard/results/${exam.exam_id}`}><Users2 className="mr-2 h-4 w-4" /> View Results</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => copyExamCode(exam.exam_code)}>
+                    <DropdownMenuItem onClick={() => copyExamCode(exam.exam_code)} disabled={effectiveStatus === 'Completed'}>
                       <Share2 className="mr-2 h-4 w-4" /> Share Code
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => openDeleteDialog(exam)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                    <DropdownMenuItem 
+                      onClick={() => openDeleteDialog(exam)} 
+                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      disabled={effectiveStatus === 'Ongoing'} // Prevent deleting ongoing exams
+                    >
                       <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          ))}
+          );
+        })}
         </TableBody>
       </Table>
     );
@@ -279,7 +282,7 @@ export default function ManageExamsPage() {
             </div>
           ) : (
             <Accordion type="multiple" defaultValue={examCategories.filter(c=>c.defaultOpen).map(c => c.title)} className="w-full">
-              {examCategories.map(category => ( // Always show all categories
+              {examCategories.map(category => (
                 <AccordionItem value={category.title} key={category.title}>
                   <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                     <div className="flex items-center gap-2">
@@ -302,12 +305,16 @@ export default function ManageExamsPage() {
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the exam
-              "{examToDelete?.title}" and all its associated data (questions, submissions).
+              "{examToDelete?.title}" and all its associated data (questions, submissions). Ongoing exams cannot be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setExamToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteExam} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isDeleting}>
+            <AlertDialogAction 
+              onClick={handleDeleteExam} 
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" 
+              disabled={isDeleting || getEffectiveExamStatus(examToDelete) === 'Ongoing'}
+            >
               {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Yes, delete exam
             </AlertDialogAction>
@@ -317,5 +324,3 @@ export default function ManageExamsPage() {
     </div>
   );
 }
-
-    
