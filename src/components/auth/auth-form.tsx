@@ -15,8 +15,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { CustomUser } from '@/types/supabase';
 
 type AuthAction = 'login' | 'register';
-const DEFAULT_DASHBOARD_ROUTE_STUDENT = '/student/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE_TEACHER = '/teacher/dashboard/overview';
+const AUTH_ROUTE = '/auth'; // Defined for consistency
+const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
+const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
 
 
 export function AuthForm() {
@@ -24,10 +25,10 @@ export function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { user, isLoading: authLoading, signIn, signUp } = useAuth();
+  const { user, isLoading: authContextLoading, signIn, signUp } = useAuth();
 
   const initialAction = (searchParams.get('action') as AuthAction) || 'login';
-  const initialRole = (searchParams.get('role') as CustomUser['role']) || ''; // For pre-filling role if passed in query
+  const initialRoleQuery = (searchParams.get('role') as CustomUser['role']) || ''; 
   
   const [action, setAction] = useState<AuthAction>(initialAction);
   
@@ -35,28 +36,21 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role']>(initialRole);
+  const [role, setRole] = useState<CustomUser['role'] | ''>(initialRoleQuery);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // For form submission loading state
 
-  const getRedirectPathForRole = (currentRole: CustomUser['role']) => {
-    if (currentRole === 'teacher') return DEFAULT_DASHBOARD_ROUTE_TEACHER;
-    return DEFAULT_DASHBOARD_ROUTE_STUDENT; 
-  };
+  const getRedirectPathForRole = useCallback((userRole: CustomUser['role']) => {
+    if (userRole === 'teacher') return TEACHER_DASHBOARD_ROUTE;
+    return STUDENT_DASHBOARD_ROUTE;
+  }, []);
 
   useEffect(() => {
+    // Sync form action and role with URL query parameters
     setAction(initialAction);
-    setRole(initialRole);
-  }, [initialAction, initialRole]);
-
-  useEffect(() => {
-    // This effect handles redirection for already logged-in users trying to access /auth
-    if (!authLoading && user && pathname === '/auth') {
-      router.replace(getRedirectPathForRole(user.role));
-    }
-  }, [user, authLoading, router, pathname]);
-
+    setRole(initialRoleQuery);
+  }, [initialAction, initialRoleQuery]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +59,7 @@ export function AuthForm() {
     const trimmedEmail = email.trim();
     const trimmedFullName = fullName.trim();
     
-    console.log('Attempting auth with email (trimmed):', trimmedEmail);
+    console.log('[AuthForm] Attempting auth. Action:', action, 'Email (trimmed):', trimmedEmail);
 
     if (!trimmedEmail || !password) {
       toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
@@ -100,7 +94,8 @@ export function AuthForm() {
       result = await signUp(trimmedEmail, password, trimmedFullName, role as 'student' | 'teacher');
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        router.push(getRedirectPathForRole(result.user.role)); 
+        // AuthContext useEffect will handle the redirect based on the new user state
+        // router.push(getRedirectPathForRole(result.user.role)); 
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -108,7 +103,8 @@ export function AuthForm() {
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        router.push(getRedirectPathForRole(result.user.role)); 
+        // AuthContext useEffect will handle the redirect
+        // router.push(getRedirectPathForRole(result.user.role)); 
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
@@ -116,10 +112,10 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
-  // Show loader if AuthContext is still determining user state AND we are on /auth page
-  // but don't block form display if user is already known to be null.
-  // This prevents flashing the loader if user is known to be unauthenticated.
-  if (authLoading && user === undefined && pathname === '/auth') { 
+  // Show loader if AuthContext is still determining initial user state AND we are on /auth page.
+  // This is the main loader for the /auth page itself before the form is usable.
+  if (authContextLoading && user === undefined && pathname === AUTH_ROUTE) { 
+    console.log("[AuthForm] AuthContext loading initial state, showing page loader.");
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -127,23 +123,27 @@ export function AuthForm() {
     );
   }
   
-  // If user is determined and exists, and we are on /auth, AuthContext's useEffect will redirect.
-  // This return is a fallback or for cases where redirect hasn't happened yet.
-  if (user && !authLoading && pathname === '/auth') { 
+  // If user is authenticated and somehow lands on /auth, 
+  // AuthContext's useEffect should redirect them.
+  // This block is a fallback UI state while that redirect happens.
+  if (user && !authContextLoading && pathname === AUTH_ROUTE) { 
+    console.log("[AuthForm] User is authenticated on /auth page, showing 'Finalizing session...' (AuthContext should redirect).");
       return (
         <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
-            <p>Redirecting...</p>
+            <p>Finalizing session...</p>
             <Loader2 className="ml-2 h-5 w-5 animate-spin text-primary" />
         </div>
     );
   }
 
+  // Default: Render the form
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
       <Card className="w-full max-w-md shadow-xl">
         <Tabs value={action} onValueChange={(value) => {
           setAction(value as AuthAction);
-          setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRole); // keep initialRole from query
+          // Reset form fields when switching tabs
+          setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRoleQuery);
         }} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>
@@ -160,28 +160,28 @@ export function AuthForm() {
                   <Label htmlFor="login-email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="login-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" />
+                    <Input id="login-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" autoComplete="email" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10" />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
+                    <Input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10" autoComplete="current-password" />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword? "Hide password" : "Show password"}>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col">
-                <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
+                <Button type="submit" className="w-full" disabled={isSubmitting || authContextLoading}>
                   {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {isSubmitting ? 'Logging in...' : 'Login'}
                 </Button>
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   Don&apos;t have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRole);}}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRoleQuery);}}>
                     Register here
                   </button>
                 </p>
@@ -197,22 +197,22 @@ export function AuthForm() {
                   <Label htmlFor="register-fullname">Full Name</Label>
                   <div className="relative">
                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="register-fullname" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="pl-10" />
+                    <Input id="register-fullname" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="pl-10" autoComplete="name"/>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="register-email">Email</Label>
                    <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="register-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" />
+                    <Input id="register-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" autoComplete="email" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="register-password">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="register-password" type={showPassword ? 'text' : 'password'} placeholder="•••••••• (min. 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10" />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
+                    <Input id="register-password" type={showPassword ? 'text' : 'password'} placeholder="•••••••• (min. 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10" autoComplete="new-password"/>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword? "Hide password" : "Show password"}>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -221,8 +221,8 @@ export function AuthForm() {
                   <Label htmlFor="confirm-password">Confirm Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pl-10 pr-10" />
-                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                    <Input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pl-10 pr-10" autoComplete="new-password"/>
+                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -231,7 +231,7 @@ export function AuthForm() {
                   <Label htmlFor="register-role">Register as</Label>
                   <div className="relative">
                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Select value={role || ''} onValueChange={(value) => setRole(value as CustomUser['role'])}>
+                    <Select value={role || ''} onValueChange={(value) => setRole(value as CustomUser['role'])} required>
                       <SelectTrigger id="register-role" className="pl-10">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
@@ -244,13 +244,13 @@ export function AuthForm() {
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col">
-                <Button type="submit" className="w-full" disabled={isSubmitting || authLoading}>
+                <Button type="submit" className="w-full" disabled={isSubmitting || authContextLoading}>
                   {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {isSubmitting ? 'Registering...' : 'Register'}
                 </Button>
                  <p className="mt-4 text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRole);}}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRoleQuery);}}>
                     Login here
                   </button>
                 </p>
