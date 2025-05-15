@@ -26,13 +26,16 @@ export default function TeacherDemoExamPage() {
   const [error, setError] = useState<string | null>(null);
   const [examStarted, setExamStarted] = useState(false);
 
+  const teacherUserId = teacherUser?.user_id;
+  const teacherUserRole = teacherUser?.role;
+
   const fetchExamData = useCallback(async () => {
     if (!examId) {
       setError("Exam ID is missing.");
       setIsLoading(false);
       return;
     }
-    if (!teacherUser || teacherUser.role !== 'teacher') {
+    if (!teacherUserId || teacherUserRole !== 'teacher') {
       setError("Access denied. You must be a teacher to demo an exam.");
       setIsLoading(false);
       return;
@@ -42,14 +45,14 @@ export default function TeacherDemoExamPage() {
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('exam_id, title, description, duration, questions, allow_backtracking, status, teacher_id')
+        .select('exam_id, title, description, duration, questions, allow_backtracking, status, teacher_id, start_time, end_time')
         .eq('exam_id', examId)
         .single();
 
       if (fetchError) throw fetchError;
       if (!data) throw new Error("Exam not found.");
       
-      if (data.teacher_id !== teacherUser.user_id) {
+      if (data.teacher_id !== teacherUserId) {
         setError("Access denied. You can only demo exams you have created.");
         setExamDetails(null);
         setQuestions([]);
@@ -66,13 +69,13 @@ export default function TeacherDemoExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, teacherUser]);
+  }, [examId, supabase, teacherUserId, teacherUserRole]);
 
   useEffect(() => {
     fetchExamData();
   }, [fetchExamData]);
 
-  const handleStartDemoExam = () => {
+  const handleStartDemoExam = useCallback(() => {
     if (questions.length === 0 && !isLoading) { 
         toast({ title: "No Questions", description: "This exam has no questions to demo.", variant: "destructive" });
         return;
@@ -82,23 +85,23 @@ export default function TeacherDemoExamPage() {
         return;
     }
     setExamStarted(true);
-  };
+  }, [questions, isLoading, error, examDetails, toast]);
 
-  const handleDemoAnswerChange = (questionId: string, optionId: string) => {
+  const handleDemoAnswerChange = useCallback((questionId: string, optionId: string) => {
     console.log(`Demo Answer for QID ${questionId}: OptionID ${optionId}`);
-  };
+  }, []);
 
-  const handleDemoSubmitExam = async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
+  const handleDemoSubmitExam = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
     console.log('Demo Exam Submitted (Simulated)');
     console.log('Demo Answers:', answers);
     console.log('Demo Flagged Events (Informational):', flaggedEvents);
     toast({ title: "Demo Exam Finished!", description: "This was a simulation. No data was saved." });
-  };
+  }, [toast]);
 
-  const handleDemoTimeUp = async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
+  const handleDemoTimeUp = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
     console.log("Demo exam time is up. Answers:", answers, "Flagged Events:", flaggedEvents);
     toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended. No data was saved." });
-  };
+  }, [toast]);
   
   if (isLoading && !examStarted) {
     return (
@@ -133,11 +136,9 @@ export default function TeacherDemoExamPage() {
       onStartExam={handleStartDemoExam}
       onAnswerChange={handleDemoAnswerChange}
       onSubmitExam={handleDemoSubmitExam}
-      onTimeUp={(currentAnswers, currentFlaggedEvents) => handleDemoTimeUp(currentAnswers, currentFlaggedEvents)}
+      onTimeUp={handleDemoTimeUp}
       isDemoMode={true}
-      userIdForActivityMonitor={`teacher_demo_${teacherUser?.user_id || 'unknown'}`}
+      userIdForActivityMonitor={`teacher_demo_${teacherUserId || 'unknown'}`}
     />
   );
 }
-
-    

@@ -1,8 +1,8 @@
 
 'use client';
 
-import type { ChangeEvent, FormEvent } from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import type { FormEvent } from 'react'; // Removed ChangeEvent as it's not used
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -24,15 +24,15 @@ interface ExamTakingInterfaceProps {
   onStartExam: () => void;
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
-  onTimeUp: () => void;
-  isDemoMode?: boolean; // To slightly alter behavior for teacher demo
-  userIdForActivityMonitor: string; // Can be student ID or a generic "teacher_demo"
+  onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>; // Added arguments here
+  isDemoMode?: boolean; 
+  userIdForActivityMonitor: string; 
 }
 
 export function ExamTakingInterface({
   examDetails,
   questions,
-  initialAnswers = {},
+  initialAnswers, // Directly used in useState initializer
   isLoading,
   error,
   examStarted,
@@ -45,76 +45,77 @@ export function ExamTakingInterface({
 }: ExamTakingInterfaceProps) {
   const { toast } = useToast();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
+  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
   const [examFinished, setExamFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
 
+  const memoizedOnFlagEvent = useCallback((event: FlaggedEvent) => {
+    setFlaggedEvents(prev => [...prev, event]);
+    if (!isDemoMode) {
+      console.warn('Activity Flagged:', event);
+      toast({
+        title: "Activity Alert",
+        description: `Event: ${event.type}. This may be reported.`,
+        variant: "destructive",
+        duration: 5000,
+      });
+    } else {
+      console.log('Demo Mode - Activity Monitored (not flagged):', event);
+       toast({
+        title: "Demo: Activity Monitor",
+        description: `Event: ${event.type} (Informational for demo)`,
+        duration: 3000,
+      });
+    }
+  }, [isDemoMode, toast]); // setFlaggedEvents is stable
+
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
     examId: examDetails?.exam_id || 'unknown_exam',
-    enabled: examStarted && !examFinished, // Monitor activity as long as exam is ongoing
-    onFlagEvent: (event) => {
-      setFlaggedEvents(prev => [...prev, event]);
-      if (!isDemoMode) {
-        console.warn('Activity Flagged:', event);
-        toast({
-          title: "Activity Alert",
-          description: `Event: ${event.type}. This may be reported.`,
-          variant: "destructive",
-          duration: 5000,
-        });
-      } else {
-        console.log('Demo Mode - Activity Monitored (not flagged):', event);
-         toast({
-          title: "Demo: Activity Monitor",
-          description: `Event: ${event.type} (Informational for demo)`,
-          duration: 3000,
-        });
-      }
-    },
+    enabled: examStarted && !examFinished, 
+    onFlagEvent: memoizedOnFlagEvent,
   });
 
-  useEffect(() => {
-    setAnswers(initialAnswers);
-  }, [initialAnswers]);
 
-  const handleInternalAnswerChange = (questionId: string, optionId: string) => {
+  const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: optionId }));
-    onAnswerChange(questionId, optionId); // Propagate for potential local storage
-  };
+    onAnswerChange(questionId, optionId); 
+  }, [onAnswerChange]); // setAnswers is stable
 
-  const handleNextQuestion = () => {
+  const handleNextQuestion = useCallback(() => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     }
-  };
+  }, [currentQuestionIndex, questions.length]); // setCurrentQuestionIndex is stable
 
-  const handlePreviousQuestion = () => {
-    if (examDetails?.allow_backtracking && currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1); // Corrected to prev - 1
-    } else if (!examDetails?.allow_backtracking) {
+  const allowBacktracking = useMemo(() => examDetails?.allow_backtracking, [examDetails?.allow_backtracking]);
+
+  const handlePreviousQuestion = useCallback(() => {
+    if (allowBacktracking && currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1); 
+    } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  };
+  }, [allowBacktracking, currentQuestionIndex, toast]); // setCurrentQuestionIndex is stable
 
-  const handleInternalSubmitExam = async () => {
+  const handleInternalSubmitExam = useCallback(async () => {
     setIsSubmitting(true);
     await onSubmitExam(answers, flaggedEvents);
     setIsSubmitting(false);
     setExamFinished(true);
-  };
+  }, [onSubmitExam, answers, flaggedEvents]); // setIsSubmitting, setExamFinished are stable
 
-  const handleInternalTimeUp = async () => { // Added async here to align with potential onSubmitExam call
+  const handleInternalTimeUp = useCallback(async () => { 
     if (!isDemoMode) {
         toast({ title: "Time's Up!", description: "Auto-submitting your exam.", variant: "destructive" });
     } else {
         toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended." });
     }
-    await onSubmitExam(answers, flaggedEvents); // Auto-submit current answers
-    onTimeUp(); 
+    // Pass current answers and flagged events to the onTimeUp prop
+    await onTimeUp(answers, flaggedEvents); 
     setExamFinished(true);
-  };
+  }, [onTimeUp, answers, flaggedEvents, isDemoMode, toast]); // setExamFinished is stable
   
   if (isLoading && !examStarted) {
     return (
@@ -125,7 +126,6 @@ export function ExamTakingInterface({
     );
   }
 
-  // Error state when examDetails couldn't be fetched but it's not initial isLoading
   if (error && !examDetails && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
@@ -140,7 +140,6 @@ export function ExamTakingInterface({
   }
   
   if (!examStarted) {
-    // This error state is for when examDetails *are* fetched, but contain an error condition (e.g. exam not Published)
     const examNotReadyError = error && examDetails; 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -235,7 +234,7 @@ export function ExamTakingInterface({
   }
 
   const currentQuestion = questions[currentQuestionIndex];
-   if (!currentQuestion && examStarted) { // Add examStarted to avoid rendering this if exam hasn't begun
+   if (!currentQuestion && examStarted) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -243,34 +242,41 @@ export function ExamTakingInterface({
       </div>
     );
   }
+   
+  const currentQuestionId = currentQuestion?.id; // Memoize if currentQuestion can be unstable, but it's derived from state/props
+  const memoizedOnRadioValueChange = useCallback((optionId: string) => {
+    if (currentQuestionId) { // Use the stable currentQuestionId from above
+      handleInternalAnswerChange(currentQuestionId, optionId);
+    }
+  }, [currentQuestionId, handleInternalAnswerChange]);
 
   return (
     <div className="flex flex-col min-h-screen bg-muted">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          totalDurationSeconds={(examDetails.duration || 0) * 60} // Added default 0
-          onTimeUp={handleInternalTimeUp}
+          totalDurationSeconds={(examDetails.duration || 0) * 60} 
+          onTimeUp={handleInternalTimeUp} // This is already memoized
           examTitle={examDetails.title + (isDemoMode ? " (Demo)" : "")}
         />
       )}
-      <main className="flex-grow flex items-center justify-center p-4 pt-20"> {/* pt-20 for timer banner */}
+      <main className="flex-grow flex items-center justify-center p-4 pt-20"> 
         <Card className="w-full max-w-2xl shadow-xl">
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-xl md:text-2xl">{examDetails?.title || 'Exam'} {isDemoMode && "(Demo)"}</CardTitle>
               <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {questions.length}</span>
             </div>
-            <CardDescription className="pt-2 text-lg">{currentQuestion?.text}</CardDescription> {/* Added optional chaining */}
+            <CardDescription className="pt-2 text-lg">{currentQuestion?.text}</CardDescription> 
           </CardHeader>
           <CardContent>
-            {currentQuestion && ( /* Ensure currentQuestion exists before mapping options */
+            {currentQuestion && ( 
               <RadioGroup
                 value={answers[currentQuestion.id] || ''}
-                onValueChange={(value) => handleInternalAnswerChange(currentQuestion.id, value)}
+                onValueChange={memoizedOnRadioValueChange}
                 className="space-y-3"
               >
-                {currentQuestion.options.map((option, index) => (
-                  <div key={option.id || index} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-accent/50 transition-colors has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary">
+                {currentQuestion.options.map((option) => ( // Removed index from map as option.id should be unique
+                  <div key={option.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-accent/50 transition-colors has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary">
                     <RadioGroupItem value={option.id} id={`${currentQuestion.id}-option-${option.id}`} />
                     <Label htmlFor={`${currentQuestion.id}-option-${option.id}`} className="text-base flex-1 cursor-pointer">{option.text}</Label>
                   </div>
@@ -282,12 +288,12 @@ export function ExamTakingInterface({
             <Button
               variant="outline"
               onClick={handlePreviousQuestion}
-              disabled={currentQuestionIndex === 0 || !examDetails?.allow_backtracking}
+              disabled={currentQuestionIndex === 0 || !allowBacktracking}
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Previous
             </Button>
             {currentQuestionIndex < questions.length - 1 ? (
-              <Button onClick={handleNextQuestion} disabled={!currentQuestion}> {/* Disable if no currentQuestion */}
+              <Button onClick={handleNextQuestion} disabled={!currentQuestion}> 
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
