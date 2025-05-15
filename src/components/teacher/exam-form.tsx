@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +10,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarDays, Clock, CheckCircle, Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarDays, Clock, CheckCircle, Loader2, CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from "@/lib/utils";
-import type { Question, QuestionOption, Exam } from '@/types/supabase'; // Using types from supabase.ts
+import type { Question, QuestionOption, Exam } from '@/types/supabase';
+import { format, parseISO } from 'date-fns';
+
 
 // ExamData for the form, matching parts of the Exam type
 export interface ExamFormData {
@@ -23,14 +27,15 @@ export interface ExamFormData {
   duration: number; // in minutes
   allowBacktracking: boolean;
   questions: Question[];
-  // For editing, we might pass the full exam_id, exam_code, status
+  startTime: Date | null;
+  endTime: Date | null;
   exam_id?: string;
   exam_code?: string;
   status?: Exam['status'];
 }
 
 interface ExamFormProps {
-  initialData?: ExamFormData; // Use ExamFormData
+  initialData?: ExamFormData;
   onSave: (data: ExamFormData) => Promise<{ success: boolean; error?: string; examId?: string }>;
   isEditing?: boolean;
 }
@@ -45,6 +50,12 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
   const [allowBacktracking, setAllowBacktracking] = useState(initialData?.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
   const [questions, setQuestions] = useState<Question[]>(initialData?.questions || []);
 
+  const [startTime, setStartTime] = useState<Date | null>(initialData?.startTime ? (typeof initialData.startTime === 'string' ? parseISO(initialData.startTime) : initialData.startTime) : null);
+  const [endTime, setEndTime] = useState<Date | null>(initialData?.endTime ? (typeof initialData.endTime === 'string' ? parseISO(initialData.endTime) : initialData.endTime) : null);
+  const [startTimeStr, setStartTimeStr] = useState(initialData?.startTime ? format(typeof initialData.startTime === 'string' ? parseISO(initialData.startTime) : initialData.startTime, "HH:mm") : "00:00");
+  const [endTimeStr, setEndTimeStr] = useState(initialData?.endTime ? format(typeof initialData.endTime === 'string' ? parseISO(initialData.endTime) : initialData.endTime, "HH:mm") : "00:00");
+
+
   const [currentQuestionText, setCurrentQuestionText] = useState('');
   const [currentOptions, setCurrentOptions] = useState<QuestionOption[]>([
     { id: `opt-0-${Date.now()}`, text: '' }, { id: `opt-1-${Date.now() + 1}`, text: '' }, { id: `opt-2-${Date.now() + 2}`, text: '' }, { id: `opt-3-${Date.now() + 3}`, text: '' }
@@ -52,6 +63,59 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
   const [currentCorrectOptionId, setCurrentCorrectOptionId] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (initialData) {
+        setTitle(initialData.title || '');
+        setDescription(initialData.description || '');
+        setDuration(initialData.duration || 60);
+        setAllowBacktracking(initialData.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
+        setQuestions(initialData.questions || []);
+        
+        const initialStartTime = initialData.startTime ? (typeof initialData.startTime === 'string' ? parseISO(initialData.startTime) : initialData.startTime) : null;
+        const initialEndTime = initialData.endTime ? (typeof initialData.endTime === 'string' ? parseISO(initialData.endTime) : initialData.endTime) : null;
+
+        setStartTime(initialStartTime);
+        setEndTime(initialEndTime);
+        setStartTimeStr(initialStartTime ? format(initialStartTime, "HH:mm") : "00:00");
+        setEndTimeStr(initialEndTime ? format(initialEndTime, "HH:mm") : "00:00");
+    }
+  }, [initialData]);
+
+  const handleDateChange = (date: Date | undefined, type: 'start' | 'end') => {
+    if (!date) {
+        if (type === 'start') setStartTime(null);
+        else setEndTime(null);
+        return;
+    }
+
+    const timeStr = type === 'start' ? startTimeStr : endTimeStr;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    
+    const newDateTime = new Date(date);
+    newDateTime.setHours(hours, minutes, 0, 0);
+
+    if (type === 'start') {
+        setStartTime(newDateTime);
+    } else {
+        setEndTime(newDateTime);
+    }
+  };
+
+  const handleTimeChange = (timeValue: string, type: 'start' | 'end') => {
+    const currentDate = type === 'start' ? startTime : endTime;
+    if (type === 'start') setStartTimeStr(timeValue);
+    else setEndTimeStr(timeValue);
+
+    if (currentDate) {
+        const [hours, minutes] = timeValue.split(':').map(Number);
+        const newDateTime = new Date(currentDate);
+        newDateTime.setHours(hours, minutes, 0, 0);
+        if (type === 'start') setStartTime(newDateTime);
+        else setEndTime(newDateTime);
+    }
+  };
+
 
   const resetOptionIdsAndText = (): QuestionOption[] => {
     return Array.from({ length: 4 }, (_, i) => ({ id: `opt-${i}-${Date.now() + i}`, text: '' }));
@@ -75,7 +139,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
     const newQuestion: Question = {
       id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       text: currentQuestionText,
-      options: filledOptions.map(opt => ({ ...opt, id: `opt-${Math.random().toString(36).substring(2, 9)}-${Date.now()}` })),
+      options: filledOptions.map(opt => ({ ...opt, id: `opt-${Math.random().toString(36).substring(2, 9)}-${Date.now()}` })), // Ensure new IDs for options when added to question
       correctOptionId: currentCorrectOptionId,
     };
     setQuestions([...questions, newQuestion]);
@@ -106,21 +170,28 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
       toast({ title: "Invalid Duration", description: "Duration must be greater than 0 minutes.", variant: "destructive" });
       return;
     }
-    if (questions.length === 0 && !isEditing) { // Allow saving changes to metadata even if no questions for editing
-      toast({ title: "No Questions", description: "Please add at least one question to the exam.", variant: "destructive" });
+     if (startTime && endTime && startTime >= endTime) {
+      toast({ title: "Invalid Dates", description: "Start time must be before end time.", variant: "destructive" });
       return;
     }
+    // Questions are optional for draft, but might be required for publishing later
+    // if (questions.length === 0 && !isEditing) {
+    //   toast({ title: "No Questions", description: "Please add at least one question to the exam.", variant: "destructive" });
+    //   return;
+    // }
 
     setIsLoading(true);
     const examFormData: ExamFormData = {
-      exam_id: initialData?.exam_id, // Pass existing ID if editing
+      exam_id: initialData?.exam_id,
       title,
       description,
       duration,
       allowBacktracking,
       questions,
+      startTime,
+      endTime,
       exam_code: initialData?.exam_code,
-      status: initialData?.status
+      status: initialData?.status || 'Draft' // Default to Draft if not editing an existing status
     };
 
     const result = await onSave(examFormData);
@@ -169,9 +240,77 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Scheduling (Coming Soon)</Label>
-              <p className="text-sm text-muted-foreground">Set start and end dates/times for the exam.</p>
-              <Input type="datetime-local" disabled className="w-full md:w-1/2" />
+              <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Scheduling</Label>
+              <p className="text-sm text-muted-foreground">Set start and end dates/times for the exam. (Optional)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="startTimeDate">Start Date & Time</Label>
+                  <div className="flex gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !startTime && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {startTime ? format(startTime, "PPP") : <span>Pick start date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={startTime ?? undefined}
+                          onSelect={(date) => handleDateChange(date, 'start')}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <Input 
+                        type="time" 
+                        value={startTimeStr}
+                        onChange={(e) => handleTimeChange(e.target.value, 'start')}
+                        className="w-[120px]"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="endTimeDate">End Date & Time</Label>
+                   <div className="flex gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !endTime && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {endTime ? format(endTime, "PPP") : <span>Pick end date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={endTime ?? undefined}
+                          onSelect={(date) => handleDateChange(date, 'end')}
+                          initialFocus
+                          disabled={(date) => startTime ? date < startTime : false}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                     <Input 
+                        type="time" 
+                        value={endTimeStr}
+                        onChange={(e) => handleTimeChange(e.target.value, 'end')}
+                        className="w-[120px]"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -225,7 +364,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
             {questions.length > 0 && (
               <div className="mt-6 space-y-3">
                 <h4 className="font-semibold">Added Questions:</h4>
-                <ul className="space-y-2">
+                <ul className="space-y-2 max-h-96 overflow-y-auto pr-2">
                   {questions.map((q, index) => (
                     <li key={q.id} className="p-3 border rounded-md bg-background flex justify-between items-start">
                       <div>

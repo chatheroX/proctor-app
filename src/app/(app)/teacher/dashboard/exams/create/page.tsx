@@ -5,9 +5,8 @@ import { ExamForm, ExamFormData } from '@/components/teacher/exam-form';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam } from '@/types/supabase'; // Using the specific Exam type
+import type { Exam } from '@/types/supabase';
 
-// Helper function to generate a unique exam code (simple version)
 const generateExamCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
@@ -29,8 +28,10 @@ export default function CreateExamPage() {
       duration: data.duration,
       allow_backtracking: data.allowBacktracking,
       questions: data.questions,
-      exam_code: generateExamCode(), // Generate a unique code
-      status: 'Draft', // Default status for new exams
+      exam_code: generateExamCode(),
+      status: data.status || 'Draft',
+      start_time: data.startTime ? data.startTime.toISOString() : null,
+      end_time: data.endTime ? data.endTime.toISOString() : null,
     };
 
     try {
@@ -42,6 +43,9 @@ export default function CreateExamPage() {
 
       if (error) {
         console.error('Error creating exam:', error);
+        if (error.code === '23505' && error.message.includes('ExamX_exam_code_key')) {
+             return { success: false, error: "Failed to generate a unique exam code. Please try again." };
+        }
         return { success: false, error: error.message };
       }
       if (!insertedExam) {

@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2 } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Exam } from '@/types/supabase'; // Using the specific Exam type from supabase.ts
+import type { Exam } from '@/types/supabase';
+import { format, parseISO } from 'date-fns';
 
 export default function ManageExamsPage() {
   const supabase = createSupabaseBrowserClient();
@@ -65,7 +66,9 @@ export default function ManageExamsPage() {
 
   const handleDeleteExam = async () => {
     if (!examToDelete) return;
-    setIsLoading(true);
+    // Optimistically set loading state for the whole page for simplicity
+    // Or, you could add a specific `isDeleting` state for the dialog button
+    setIsLoading(true); 
     try {
       const { error } = await supabase
         .from('ExamX')
@@ -101,26 +104,35 @@ export default function ManageExamsPage() {
   
   const getStatusBadgeVariant = (status: Exam['status']) => {
     switch (status) {
-      case 'Published': return 'default'; // Blueish
-      case 'Ongoing': return 'destructive'; // Redish
-      case 'Completed': return 'outline'; // Greyish
+      case 'Published': return 'default';
+      case 'Ongoing': return 'destructive'; 
+      case 'Completed': return 'outline'; 
       case 'Draft':
       default:
-        return 'secondary'; // Lighter grey
+        return 'secondary';
     }
   };
   
   const getStatusBadgeClass = (status: Exam['status']) => {
      switch (status) {
       case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white';
-      case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black'; // Ongoing might be yellow
-      case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white'; // Completed is green
-      default: return ''; // Draft and others use default secondary styling
+      case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
+      case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
+      default: return '';
     }
   }
 
+  const formatTableDateTime = (isoString: string | null | undefined) => {
+    if (!isoString) return 'N/A';
+    try {
+      return format(parseISO(isoString), "MMM d, yyyy HH:mm");
+    } catch {
+      return "Invalid Date";
+    }
+  };
 
-  if (isLoading) {
+
+  if (isLoading && exams.length === 0) { // Show main loader only if exams array is empty during initial load
     return (
       <div className="flex justify-center items-center h-full py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -152,6 +164,7 @@ export default function ManageExamsPage() {
                 <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>Start Time</TableHead>
                   <TableHead>Questions</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Exam Code</TableHead>
@@ -170,6 +183,7 @@ export default function ManageExamsPage() {
                         {exam.status}
                       </Badge>
                     </TableCell>
+                    <TableCell>{formatTableDateTime(exam.start_time)}</TableCell>
                     <TableCell>{exam.questions?.length || 0}</TableCell>
                     <TableCell>{exam.duration} min</TableCell>
                     <TableCell>
@@ -188,6 +202,7 @@ export default function ManageExamsPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem asChild>
+                            {/* Ensure this uses exam_id for routing consistently */}
                             <Link href={`/teacher/dashboard/exams/${exam.exam_id}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit</Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
@@ -211,11 +226,18 @@ export default function ManageExamsPage() {
               </TableBody>
             </Table>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <BookOpenCheck className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg text-muted-foreground">No exams created yet.</p>
-              <p className="text-sm text-muted-foreground">Click "Create New Exam" to get started.</p>
-            </div>
+             isLoading ? (
+                <div className="flex justify-center items-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Loading exams...</p>
+                </div>
+             ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <BookOpenCheck className="h-16 w-16 text-muted-foreground mb-4" />
+                  <p className="text-lg text-muted-foreground">No exams created yet.</p>
+                  <p className="text-sm text-muted-foreground">Click "Create New Exam" to get started.</p>
+                </div>
+             )
           )}
         </CardContent>
       </Card>
