@@ -3,7 +3,7 @@
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, UserCircle, BookOpenCheck, Brain, BarChart3, Loader2, Settings, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, BookOpenCheck, Brain, BarChart3, Loader2, AlertTriangle } from 'lucide-react';
 import { useCallback, ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -29,14 +29,15 @@ export default function TeacherDashboardLayout({
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
+         <p className="ml-3 text-muted-foreground">Loading session...</p>
       </div>
     );
   }
   
-  if (!user && !authLoading) { 
+  if (!user) { // isLoading is false, and user is null
     return (
         <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
-            <Card className="p-6 modern-card text-center">
+            <Card className="p-6 modern-card text-center shadow-xl">
               <CardHeader>
                 <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-3"/>
                 <CardTitle className="text-xl text-foreground">Session Not Found</CardTitle>
@@ -52,16 +53,16 @@ export default function TeacherDashboardLayout({
     );
   }
   
-  if (user && user.role !== 'teacher') {
+  if (user.role !== 'teacher') {
      return (
         <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
-             <Card className="p-6 modern-card text-center">
+             <Card className="p-6 modern-card text-center shadow-xl">
                  <CardHeader>
                     <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-3"/>
                     <CardTitle className="text-xl text-foreground">Access Denied</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">Your role ({user.role}) does not permit access to the teacher dashboard.</p>
+                    <p className="text-sm text-muted-foreground">Your role ({user.role || 'Unknown'}) does not permit access to the teacher dashboard.</p>
                 </CardContent>
             </Card>
         </div>

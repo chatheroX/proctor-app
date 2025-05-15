@@ -11,19 +11,18 @@ import { User, Mail, Lock, Camera, Save, Loader2, Hash, Briefcase, Wand2, Refres
 import { useToast } from '@/hooks/use-toast';
 import type { CustomUser } from '@/types/supabase';
 
-// Define constants for DiceBear avatar generation
 const DICEBEAR_STYLES = ['micah', 'adventurer', 'bottts-neutral', 'pixel-art-neutral'];
 const DICEBEAR_TECH_KEYWORDS = ['coder', 'debugger', 'techie', 'pixelninja', 'cswizard', 'binary', 'script', 'stack', 'keyboard', 'neonbyte', 'glitch', 'algorithm', 'syntax', 'kernel'];
 
 interface UserProfileFormProps {
   user: CustomUser;
-  onSave: (data: { name: string; password?: string; avatar_url?: string }) => Promise<void>;
+  onSave: (data: { name: string; password?: string; avatar_url?: string }) => Promise<void>; // Removed currentEmail
 }
 
 const generateEnhancedDiceBearUrl = (style: string, role: CustomUser['role'], userId: string): string => {
   const randomKeyword = DICEBEAR_TECH_KEYWORDS[Math.floor(Math.random() * DICEBEAR_TECH_KEYWORDS.length)];
-  const userRoleStr = role || 'user'; // Default if role is null
-  const uniqueSuffix = Date.now().toString(36).slice(-6); // More unique suffix
+  const userRoleStr = role || 'user';
+  const uniqueSuffix = Date.now().toString(36).slice(-6);
   const seed = `${randomKeyword}-${userRoleStr}-${userId}-${uniqueSuffix}`;
   return `https://api.dicebear.com/8.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
 };
@@ -34,9 +33,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
-  // currentAvatarUrl will hold the URL that is currently saved/displayed
   const [currentAvatarUrl, setCurrentAvatarUrl] = useState(user.avatar_url || '');
-  // newAvatarPreviewUrl will hold a newly generated URL before saving
   const [newAvatarPreviewUrl, setNewAvatarPreviewUrl] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -44,9 +41,8 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
 
   useEffect(() => {
     setName(user.name || '');
-    // If avatar_url from user prop changes (e.g. after successful save & context update), reflect it
     setCurrentAvatarUrl(user.avatar_url || ''); 
-    setNewAvatarPreviewUrl(null); // Clear preview if main user data changes
+    setNewAvatarPreviewUrl(null); 
   }, [user]);
 
   const handleGenerateNewAvatar = useCallback(() => {
@@ -56,7 +52,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     }
     const randomStyle = DICEBEAR_STYLES[Math.floor(Math.random() * DICEBEAR_STYLES.length)];
     const newUrl = generateEnhancedDiceBearUrl(randomStyle, user.role, user.user_id);
-    setNewAvatarPreviewUrl(newUrl); // Set for preview
+    setNewAvatarPreviewUrl(newUrl);
     toast({ description: "New avatar preview generated. Click 'Save Changes' to apply."});
   }, [user?.user_id, user?.role, toast]);
 
@@ -72,21 +68,21 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     }
     setIsSaving(true);
     try {
-      // If newAvatarPreviewUrl is set, use it. Otherwise, use currentAvatarUrl (which might be empty if never set).
       const avatarToSave = newAvatarPreviewUrl || currentAvatarUrl;
 
       await onSave({
-        name: name.trim() || user.name || "User",
+        name: name.trim() || user.name || "User", // Provide a default if name is somehow empty
         password: password || undefined,
-        avatar_url: avatarToSave || undefined, // Send undefined if it's an empty string or null
+        avatar_url: avatarToSave || undefined,
       });
       setPassword('');
       setConfirmPassword('');
       if (newAvatarPreviewUrl) {
-        setCurrentAvatarUrl(newAvatarPreviewUrl); // Make preview the current one after save
-        setNewAvatarPreviewUrl(null); 
+        // The parent page's onSave should trigger AuthContext update, which in turn updates user prop.
+        // This effect will then set newAvatarPreviewUrl to null.
+        // No need to setCurrentAvatarUrl(newAvatarPreviewUrl) here; rely on prop update.
       }
-      // Toast for success is handled by parent page which calls onSave
+      // Success toast is handled by parent page
     } catch (error: any) {
       toast({ title: "Error Saving Profile", description: error.message || "Failed to update profile. Please try again.", variant: "destructive" });
     } finally {
@@ -94,11 +90,10 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     }
   };
 
-  // The avatar to display is the preview if available, otherwise the current one.
   const displayAvatarUrl = newAvatarPreviewUrl || currentAvatarUrl;
 
   return (
-    <Card className="w-full max-w-2xl mx-auto glass-card shadow-xl">
+    <Card className="w-full max-w-2xl mx-auto modern-card shadow-xl border-border/30">
       <form onSubmit={handleSubmit}>
         <CardHeader>
           <CardTitle className="text-2xl font-semibold text-foreground">Edit Your Profile</CardTitle>
@@ -113,7 +108,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               </AvatarFallback>
             </Avatar>
             
-            <div className="w-full max-w-xs space-y-2 p-4 border rounded-lg bg-card/30 backdrop-blur-sm shadow-sm border-border/30">
+            <div className="w-full max-w-xs space-y-2 p-4 border rounded-lg bg-card/50 dark:bg-card/80 backdrop-blur-sm shadow-sm border-border/30">
                 <Label htmlFor="refreshAvatar" className="text-sm font-medium text-foreground/90 flex items-center gap-2 justify-center">
                     <Wand2 className="h-4 w-4 text-primary" />
                     Avatar Options
@@ -126,7 +121,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
             </div>
 
             <div className="relative">
-              <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('avatarUpload')?.click()} disabled className="border-border/50 text-sm">
+              <Button type="button" variant="outline" size="sm" onClick={() => toast({description: "Custom photo upload coming soon!"})} disabled className="border-border/50 text-sm">
                 <Camera className="mr-2 h-4 w-4" /> Upload Custom Photo (Soon)
               </Button>
               <Input
@@ -134,7 +129,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
                 type="file"
                 className="hidden"
                 accept="image/*"
-                disabled // Custom upload not implemented
+                disabled 
               />
             </div>
           </div>
@@ -144,28 +139,28 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               <Label htmlFor="user_id">Roll Number / User ID</Label>
               <div className="relative">
                 <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input id="user_id" value={user.user_id} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm glass-input" />
+                <Input id="user_id" value={user.user_id || 'N/A'} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email Address (Login)</Label>
                <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input id="email" type="email" value={user.email} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm glass-input" />
+                <Input id="email" type="email" value={user.email || 'N/A'} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fullName">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input id="fullName" value={name} onChange={(e) => setName(e.target.value)} required className="pl-10 border-border/50 focus:ring-primary/50 text-sm glass-input" />
+                <Input id="fullName" value={name} onChange={(e) => setName(e.target.value)} required className="pl-10 border-border/50 focus:ring-primary/50 text-sm modern-input" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role">Role</Label>
               <div className="relative">
                 <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input id="role" value={user.role || 'N/A'} readOnly className="pl-10 capitalize bg-muted/60 cursor-not-allowed border-border/40 text-sm glass-input" />
+                <Input id="role" value={user.role || 'N/A'} readOnly className="pl-10 capitalize bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
               </div>
             </div>
           </div>
@@ -175,17 +170,17 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input type="password" placeholder="New Password (min. 6)" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 border-border/50 focus:ring-primary/50 text-sm glass-input" />
+                <Input type="password" placeholder="New Password (min. 6)" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 border-border/50 focus:ring-primary/50 text-sm modern-input" />
               </div>
               <div className="relative">
                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input type="password" placeholder="Confirm New Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="pl-10 border-border/50 focus:ring-primary/50 text-sm glass-input" />
+                <Input type="password" placeholder="Confirm New Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="pl-10 border-border/50 focus:ring-primary/50 text-sm modern-input" />
               </div>
             </div>
           </div>
         </CardContent>
         <CardFooter className="border-t border-border/20 p-6">
-          <Button type="submit" className="ml-auto btn-primary-gradient py-2.5 px-6 rounded-md text-sm" disabled={isSaving}>
+          <Button type="submit" className="ml-auto btn-primary-solid py-2.5 px-6 rounded-md text-sm" disabled={isSaving}>
             {isSaving ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
             {isSaving ? 'Saving Changes...' : 'Save Changes'}
           </Button>

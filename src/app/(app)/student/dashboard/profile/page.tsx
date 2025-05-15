@@ -4,20 +4,21 @@
 import { UserProfileForm } from '@/components/shared/user-profile-form';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
+import { Loader2, AlertTriangle } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Added Card imports
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function StudentProfilePage() {
   const { user, isLoading: authLoading, updateUserProfile } = useAuth();
   const { toast } = useToast();
 
-  const handleSaveProfile = async (data: { name: string; currentEmail: string; password?: string; avatar_url?: string }) => {
+  const handleSaveProfile = async (data: { name: string; password?: string; avatar_url?: string }) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to update your profile.", variant: "destructive" });
       return;
     }
 
+    // Ensure email is not passed to updateUserProfile as it's not updatable with custom auth
     const result = await updateUserProfile({
         name: data.name,
         password: data.password,
@@ -50,7 +51,7 @@ export default function StudentProfilePage() {
   if (!user) {
     return (
         <div className="flex h-full items-center justify-center p-4">
-            <Card className="p-6 modern-card text-center">
+            <Card className="p-6 modern-card text-center shadow-xl">
               <CardHeader>
                 <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-3"/>
                 <CardTitle className="text-xl">Profile Not Available</CardTitle>
@@ -63,14 +64,15 @@ export default function StudentProfilePage() {
     );
   }
 
-  const profileData: CustomUser = user;
+  // No need to cast if CustomUser type is correctly defined and user state matches it
+  const profileData: CustomUser = user; 
 
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-foreground">My Profile</h1>
       <UserProfileForm
-        user={profileData}
-        onSave={(data) => handleSaveProfile({ ...data, currentEmail: user.email })}
+        user={profileData} // Pass the CustomUser object directly
+        onSave={handleSaveProfile}
       />
     </div>
   );
