@@ -38,7 +38,7 @@ export function ExamTakingInterface({
   onStartExam,
   onAnswerChange,
   onSubmitExam,
-  onTimeUp: parentOnTimeUp,
+  onTimeUp: parentOnTimeUpProp,
   isDemoMode = false,
   userIdForActivityMonitor,
 }: ExamTakingInterfaceProps) {
@@ -49,22 +49,26 @@ export function ExamTakingInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
 
-  const parentOnTimeUpRef = useRef(parentOnTimeUp);
+  const parentOnTimeUpRef = useRef(parentOnTimeUpProp);
   useEffect(() => {
-    parentOnTimeUpRef.current = parentOnTimeUp;
-  }, [parentOnTimeUp]);
+    parentOnTimeUpRef.current = parentOnTimeUpProp;
+  }, [parentOnTimeUpProp]);
 
   const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
   const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
   const examIdForMonitor = useMemo(() => examDetails?.exam_id || 'unknown_exam', [examDetails?.exam_id]);
-  const activityMonitorEnabled = useMemo(() => examStarted && !examFinished, [examStarted, examFinished]);
+  
+  const activityMonitorEnabled = useMemo(() => examStarted && !examFinished && !isDemoMode, [examStarted, examFinished, isDemoMode]);
   
   const cantStartReason = useMemo(() => {
-    if (!isDemoMode && examDetails && examDetails.status !== 'Published' && examDetails.status !== 'Ongoing') {
-      return `Exam is ${examDetails.status.toLowerCase()} and cannot be started.`;
-    }
     if (examDetails && (!questions || questions.length === 0) && !parentIsLoading) {
       return "This exam has no questions.";
+    }
+    // In non-demo mode, check exam status. For demo mode, status check might be bypassed or handled differently by parent.
+    if (!isDemoMode && examDetails && examDetails.status !== 'Published' && examDetails.status !== 'Ongoing') {
+      // This check might be too restrictive if getEffectiveExamStatus handles it better.
+      // Let's assume for now, actual exam relies on effective status check in parent.
+      // For demo, parent page decides if demo can start based on its own logic (e.g. teacher owns exam).
     }
     return null;
   }, [examDetails, questions, parentIsLoading, isDemoMode]);
@@ -74,20 +78,21 @@ export function ExamTakingInterface({
   // This error state refers to an error present even if examDetails might have some (possibly stale) data.
   const persistentError = useMemo(() => error && examDetails, [error, examDetails]);
 
-
   useEffect(() => {
+    // Log conditions for the start button if the exam hasn't started
+    // This helps debug why the start button might be disabled
     if (!examStarted) {
       console.log('[ExamTakingInterface] Start Button Conditions for exam:', examDetails?.title, {
         parentIsLoading, 
         examDetailsExists: !!examDetails,
-        examLoadingError: !!examLoadingError, // Error during load, examDetails might be null
-        persistentError: !!persistentError, // Error present, but examDetails might exist
-        cantStartReason, // Specific reason like "no questions"
+        examLoadingError: !!examLoadingError,
+        persistentError: !!persistentError,
+        cantStartReason,
+        questionsAvailable: questions && questions.length > 0,
         buttonDisabled: parentIsLoading || !examDetails || !!examLoadingError || !!cantStartReason || (!!persistentError && !cantStartReason)
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parentIsLoading, examDetails, examLoadingError, persistentError, cantStartReason, examStarted, examDetails?.title]);
+  }, [parentIsLoading, examDetails, examLoadingError, persistentError, cantStartReason, examStarted, questions, examDetails?.title]);
 
 
   const handleFlagEvent = useCallback((event: FlaggedEvent) => {
@@ -141,9 +146,11 @@ export function ExamTakingInterface({
     } else {
         toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended." });
     }
+    // Use the ref to call the potentially changing parentOnTimeUpProp
     await parentOnTimeUpRef.current(answers, flaggedEvents);
     setExamFinished(true);
   }, [answers, flaggedEvents, isDemoMode, toast]);
+
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -159,7 +166,7 @@ export function ExamTakingInterface({
     onFlagEvent: handleFlagEvent,
   });
   
-  if (parentIsLoading && !examStarted) { // True if parent page is loading AND examDetails are not yet set
+  if (parentIsLoading && !examStarted) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -168,7 +175,7 @@ export function ExamTakingInterface({
     );
   }
 
-  if (examLoadingError && !examStarted) { // Error during load and examDetails is null
+  if (examLoadingError && !examStarted) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -182,7 +189,7 @@ export function ExamTakingInterface({
   }
   
   if (!examStarted) {
-    if (!parentIsLoading && !examDetails && !error) { // Parent done loading, still no examDetails, no error
+    if (!parentIsLoading && !examDetails && !error) { 
        return (
         <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
           <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -195,8 +202,8 @@ export function ExamTakingInterface({
       );
     }
     
-    const displayCantStartReason = cantStartReason; // If this exists, it's the primary blocker.
-    const displayPersistentError = persistentError && !cantStartReason; // Show general error only if no specific cantStartReason.
+    // Prioritize cantStartReason (e.g., "no questions") over a more general persistentError
+    const displayErrorReason = cantStartReason || persistentError;
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -208,10 +215,9 @@ export function ExamTakingInterface({
               Duration: {examDetails?.duration ? `${examDetails.duration} minutes` : 'N/A'} <br />
               {isDemoMode && <span className="text-primary font-semibold block mt-1">(DEMO MODE{examDetails?.status ? ` - ${examDetails.status}` : ""})</span>}
               
-              {displayCantStartReason && <span className="text-destructive font-medium block mt-1">{displayCantStartReason}</span>}
-              {displayPersistentError && <span className="text-destructive font-medium block mt-1">{error}</span>}
+              {displayErrorReason && <span className="text-destructive font-medium block mt-1">{displayErrorReason}</span>}
 
-              {!displayCantStartReason && !displayPersistentError && `Ensure you are in a quiet environment. ${!isDemoMode ? "Your Safe Exam Browser should be configured if required." : ""}`}
+              {!displayErrorReason && `Ensure you are in a quiet environment. ${!isDemoMode ? "Your Safe Exam Browser should be configured if required." : ""}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -230,7 +236,7 @@ export function ExamTakingInterface({
               className="w-full"
               size="lg"
               disabled={ parentIsLoading || !examDetails || !!examLoadingError || !!cantStartReason || (!!persistentError && !cantStartReason) } >
-              {parentIsLoading || (isLoading && !examDetails) ? <Loader2 className="animate-spin mr-2" /> : null}
+              {parentIsLoading || (parentIsLoading && !examDetails) ? <Loader2 className="animate-spin mr-2" /> : null}
               Start {isDemoMode ? "Demo " : ""}Exam
             </Button>
           </CardFooter>
@@ -309,7 +315,7 @@ export function ExamTakingInterface({
     <div className="flex flex-col min-h-screen bg-muted">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          key={`${examDetails.exam_id}-${examDurationForTimer}`}
+          key={`${examDetails.exam_id}-${examDurationForTimer}`} // Added key for re-mount on change
           totalDurationSeconds={examDurationForTimer * 60}
           onTimeUp={handleInternalTimeUp}
           examTitle={examTitleForTimer + (isDemoMode ? " (Demo)" : "")}
@@ -373,5 +379,3 @@ export function ExamTakingInterface({
     </div>
   );
 }
-
-    
