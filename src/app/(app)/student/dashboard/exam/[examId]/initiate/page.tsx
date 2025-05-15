@@ -145,8 +145,21 @@ export default function InitiateExamPage() {
       toast({ title: "Cannot Launch", description: "System checks not passed or exam/user data missing.", variant: "destructive" });
       return;
     }
-    const examUrl = `/student/dashboard/exam/${examDetails.exam_id}/take`;
+
+    // For developer testing, we just open the /take page.
+    // For actual SEB, this URL would be the SEB-specific link.
+    // "Encrypted" URL simulation (basic base64 encoding for demo)
+    // In a real scenario, this would involve more secure token generation and server-side validation.
+    const payload = JSON.stringify({ examId: examDetails.exam_id, studentId: studentUser.user_id, timestamp: Date.now() });
+    const token = typeof window !== 'undefined' ? btoa(payload) : ''; // Basic encoding, NOT encryption
+    
+    const examUrl = `/student/dashboard/exam/${examDetails.exam_id}/take?token=${encodeURIComponent(token)}`;
+    
+    // Attempt to open in a new tab.
+    // The 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes' options are good practice for new tabs.
+    // For SEB, specific kiosk mode flags might be needed if SEB is launched via a custom protocol from this link.
     const newWindow = window.open(examUrl, '_blank', 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes');
+
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
       setError("Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again.");
       toast({
@@ -157,8 +170,10 @@ export default function InitiateExamPage() {
       });
     } else {
       // Optional: Redirect current tab to a "waiting" or "exam in progress" page
-      // router.push('/student/dashboard/exam-history'); // Or a dedicated page
+      // For simplicity, we can just inform the user.
       toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
+      // Maybe close this "initiate" tab after a delay, or redirect to exam history
+      // router.push('/student/dashboard/exam-history');
     }
   }, [allChecksPassed, examDetails, studentUser, toast, router]);
 
@@ -181,6 +196,8 @@ export default function InitiateExamPage() {
   }
 
   if (error && !examDetails && !performingChecks) {
+    // This error state is for when exam details themselves fail to load,
+    // not for when a system check fails.
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -194,6 +211,7 @@ export default function InitiateExamPage() {
   }
 
   if (!examDetails && !isLoading && !performingChecks) {
+     // Handles case where exam details are null after loading attempt (e.g., not found but no specific error string)
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
@@ -264,10 +282,11 @@ export default function InitiateExamPage() {
               <AlertDescription>
                 This exam will be monitored. Ensure you adhere to all exam regulations.
                 System compatibility checks will be performed before starting.
+                For SEB compatibility, ensure you have SEB installed.
               </AlertDescription>
             </Alert>
             
-            {error && (
+            {error && ( // This error is for exam details loading issues, or system check failures shown before starting checks
               <Alert variant="destructive" className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
@@ -292,7 +311,7 @@ export default function InitiateExamPage() {
                 </li>
               ))}
             </ul>
-             {error && !allChecksPassed && ( // Show check-specific errors
+             {error && !allChecksPassed && ( // Show check-specific errors if checks are running/failed
                 <Alert variant="destructive" className="mt-4">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>System Check Failed</AlertTitle>

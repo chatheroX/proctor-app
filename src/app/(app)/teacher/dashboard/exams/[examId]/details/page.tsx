@@ -36,7 +36,9 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
   // If Published and has valid start/end times, determine if Upcoming, Ongoing, or past End (Completed)
   if (exam.status === 'Published') {
     if (!exam.start_time || !exam.end_time) {
-      return 'Published'; // Published but no schedule, treat as 'Published' (effectively upcoming until scheduled)
+      // If Published but no schedule, it cannot be Ongoing or Completed by time.
+      // It remains 'Published' (effectively upcoming/needs scheduling).
+      return 'Published'; 
     }
     const now = new Date();
     const startTime = parseISO(exam.start_time);
@@ -46,9 +48,9 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
       return 'Published'; // Invalid dates, treat as Published
     }
 
-    if (isAfter(now, endTime)) return 'Completed';
-    if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing';
-    if (isBefore(now, startTime)) return 'Published'; // Interpreted as Upcoming
+    if (isAfter(now, endTime)) return 'Completed'; // Time has passed
+    if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing'; // Within scheduled time
+    if (isBefore(now, startTime)) return 'Published'; // Scheduled for future, so it's Upcoming (effectively)
   }
   
   // If DB status is 'Ongoing', check if end_time has passed
@@ -58,10 +60,11 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
       const endTime = parseISO(exam.end_time);
       if (isValid(endTime) && isAfter(now, endTime)) return 'Completed';
     }
+    // If no end_time or end_time hasn't passed, it's still Ongoing
     return 'Ongoing'; 
   }
 
-  return exam.status; // Fallback to database status
+  return exam.status; // Fallback to database status for other cases (e.g. 'Draft' if it existed)
 };
 
 
@@ -111,13 +114,23 @@ export default function ExamDetailsPage() {
     fetchExamDetails();
   }, [fetchExamDetails]);
 
+  // Effect to periodically update the effective status based on current time
   useEffect(() => {
     if (exam) {
       const interval = setInterval(() => {
-        setEffectiveStatus(getEffectiveExamStatus(exam));
-      }, 60000); 
+        const newEffectiveStatus = getEffectiveExamStatus(exam);
+        if (newEffectiveStatus !== effectiveStatus) {
+          setEffectiveStatus(newEffectiveStatus);
+        }
+      }, 60000); // Check every minute
       
-      const handleFocus = () => setEffectiveStatus(getEffectiveExamStatus(exam));
+      // Also re-check on window focus, as time might have passed significantly
+      const handleFocus = () => {
+         const newEffectiveStatus = getEffectiveExamStatus(exam);
+         if (newEffectiveStatus !== effectiveStatus) {
+            setEffectiveStatus(newEffectiveStatus);
+         }
+      };
       window.addEventListener('focus', handleFocus);
 
       return () => {
@@ -125,7 +138,7 @@ export default function ExamDetailsPage() {
         window.removeEventListener('focus', handleFocus);
       };
     }
-  }, [exam]);
+  }, [exam, effectiveStatus]); // Re-run if exam data or effectiveStatus itself changes
 
 
   const copyExamCode = () => {
@@ -210,7 +223,8 @@ export default function ExamDetailsPage() {
   }
 
   const questionsList = exam.questions || [];
-  const isShareable = effectiveStatus === 'Ongoing' || effectiveStatus === 'Published';
+  // Exam code is shareable if the exam is not 'Completed'
+  const isShareable = effectiveStatus !== 'Completed';
 
 
   return (
@@ -293,11 +307,7 @@ export default function ExamDetailsPage() {
           <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/exams/${exam.exam_id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit Exam
           </Button>
-           <Button variant="outline" asChild>
-            <Link href={`/teacher/dashboard/exams/${exam.exam_id}/demo`}>
-              <PlaySquare className="mr-2 h-4 w-4" /> Take Demo Test
-            </Link>
-          </Button>
+          {/* Demo Test button removed */}
           {effectiveStatus === 'Ongoing' && (
              <Button variant="secondary" asChild>
               <Link href={`/teacher/dashboard/exams/${exam.exam_id}/monitor`}>

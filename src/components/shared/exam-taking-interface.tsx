@@ -19,8 +19,7 @@ interface ExamTakingInterfaceProps {
   initialAnswers?: Record<string, string>;
   isLoading: boolean; // True if parent page is still loading exam details.
   error: string | null; // Error from parent page's data fetching for the exam
-  examStarted: boolean; // If true, shows questions. If false, shows start screen (or error).
-  // onStartExam prop is removed; parent page now controls when this component is rendered in started state
+  examStarted: boolean; // If true, shows questions. This should always be true when this component is used by `take/page.tsx`
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -32,23 +31,21 @@ export function ExamTakingInterface({
   examDetails,
   questions,
   initialAnswers,
-  isLoading: parentIsLoading, // isLoading from the parent page (e.g. demo/page or take/page)
-  error: examLoadingError, // error from the parent page's data fetching
-  examStarted, // This prop dictates whether to show questions or the "start" screen.
+  isLoading: parentIsLoading,
+  error: examLoadingError,
+  examStarted, // Should be true when rendered by take/page.tsx
   onAnswerChange,
   onSubmitExam,
-  onTimeUp: parentOnTimeUpProp, // Renamed to avoid conflict
+  onTimeUp: parentOnTimeUpProp,
   isDemoMode = false,
   userIdForActivityMonitor,
 }: ExamTakingInterfaceProps) {
   const { toast } = useToast();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
-  const [examFinished, setExamFinished] = useState(false); // Indicates if exam was submitted or timed out
-  const [isSubmitting, setIsSubmitting] = useState(false); // For submit/timeup process
+  const [answers, setAnswers] = useState<Record<string, string>>(() => initialAnswers || {});
+  const [examFinished, setExamFinished] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
-  
-  // This state is for errors that occur within this component, distinct from parent loading errors
   const [internalError, setInternalError] = useState<string | null>(null);
 
   console.log('[ExamTakingInterface] Props received:', { examDetailsExists: !!examDetails, questionsLength: questions?.length, parentIsLoading, examLoadingError, examStarted, isDemoMode });
@@ -62,7 +59,6 @@ export function ExamTakingInterface({
   const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
   const examIdForMonitor = useMemo(() => examDetails?.exam_id || 'unknown_exam', [examDetails?.exam_id]);
   
-  // Activity monitor should be enabled only when the exam questions are actively being displayed
   const activityMonitorEnabled = useMemo(() => examStarted && !examFinished && !isDemoMode && !!currentQuestion, [examStarted, examFinished, isDemoMode, currentQuestion]);
 
   const handleFlagEvent = useCallback((event: FlaggedEvent) => {
@@ -83,7 +79,7 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast]);
+  }, [isDemoMode, toast, setFlaggedEvents]);
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -93,26 +89,26 @@ export function ExamTakingInterface({
   });
 
   useEffect(() => {
-    // This effect handles resetting answers if the underlying questions array changes
-    // which could happen if examDetails is re-fetched and has different questions.
-    // Or if initialAnswers prop changes after initial mount.
-    if (initialAnswers) {
+    // This effect could potentially cause issues if initialAnswers prop changes frequently
+    // For now, it only sets on initial mount or if initialAnswers prop itself changes.
+    // The useState initializer `useState<Record<string, string>>(() => initialAnswers || {});`
+    // already handles the initial setup. This effect is for potential re-sync if prop changes.
+    if (initialAnswers && JSON.stringify(initialAnswers) !== JSON.stringify(answers)) {
         setAnswers(initialAnswers);
-    } else {
-        setAnswers({}); // Reset if initialAnswers becomes null/undefined
     }
-  }, [initialAnswers, questions]); // Also depend on questions to reset if questions change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAnswers]); // Only run if initialAnswers reference changes
 
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
-    onAnswerChange(questionId, optionId); // Propagate to parent for local storage or other side effects
-  }, [onAnswerChange]);
+    onAnswerChange(questionId, optionId);
+  }, [onAnswerChange, setAnswers]);
 
   const handleNextQuestion = useCallback(() => {
     if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions]);
+  }, [currentQuestionIndex, questions, setCurrentQuestionIndex]);
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -120,7 +116,7 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast]);
+  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]);
 
   const handleInternalSubmitExam = useCallback(async () => {
     if (examFinished) return;
@@ -135,7 +131,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [onSubmitExam, answers, flaggedEvents, examFinished, toast]);
+  }, [onSubmitExam, answers, flaggedEvents, examFinished, toast, setIsSubmitting, setInternalError, setExamFinished]);
 
   const handleInternalTimeUp = useCallback(async () => {
     if (examFinished) return;
@@ -156,7 +152,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, isDemoMode, toast, examFinished]);
+  }, [answers, flaggedEvents, isDemoMode, toast, examFinished, setIsSubmitting, setInternalError, setExamFinished]);
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -167,7 +163,11 @@ export function ExamTakingInterface({
 
   // ------- UI Rendering Logic Starts Here --------
 
-  if (parentIsLoading && !examDetails) {
+  // Since this component is now only rendered by `take/page.tsx` (which handles loading/errors for examDetails),
+  // we can assume `examStarted` is true and `examDetails` should be present if this component renders.
+  // parentIsLoading and examLoadingError still signal issues from the parent.
+
+  if (parentIsLoading && !examDetails) { // Parent is still loading the core exam data
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -176,19 +176,18 @@ export function ExamTakingInterface({
     );
   }
 
-  if (examLoadingError && !examDetails) {
+  if (examLoadingError && !examDetails) { // Parent had an error fetching exam data
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <ServerCrash className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg text-destructive text-center mb-2">Error Loading Exam Data</p>
         <p className="text-sm text-muted-foreground text-center mb-4">{examLoadingError}</p>
-        {isDemoMode && <Button onClick={() => window.location.reload()} variant="outline">Retry Demo</Button>}
       </div>
     );
   }
   
-  // This condition handles cases where examDetails might be null even if parentIsLoading is false
-  // or if examStarted is false (though it should usually be true if this component is rendered for actual exam taking)
+  // If examDetails are somehow null even after parent loading logic, or examStarted is false
+  // (though examStarted should always be true when used by take/page.tsx)
   if (!examDetails || !examStarted) {
     console.error("[ExamTakingInterface] Critical error: examDetails is null or examStarted is false. This indicates a problem in the parent page's logic.", { examDetailsExists: !!examDetails, examStarted });
     return (
@@ -196,13 +195,11 @@ export function ExamTakingInterface({
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg text-destructive">Exam session not properly initiated.</p>
         <p className="text-sm text-muted-foreground">Required exam details are missing or the session was not started correctly.</p>
-         {isDemoMode && <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">Retry Demo</Button>}
       </div>
     );
   }
 
   if (examFinished) {
-    // Exam submitted or timed out screen
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-md shadow-xl text-center">
@@ -239,14 +236,16 @@ export function ExamTakingInterface({
           <CardFooter>
             <Button onClick={() => {
               if (isDemoMode && examDetails.exam_id) {
+                // This path is less relevant now as demo mode is removed
                 window.location.href = `/teacher/dashboard/exams/${examDetails.exam_id}/details`;
               } else if (!isDemoMode) {
+                 // For students, redirect to exam history or a generic "exam submitted" page.
                  window.location.href = `/student/dashboard/exam-history`;
               } else {
-                window.close(); // Fallback for other cases or if redirection not applicable
+                window.close(); 
               }
             }} className="w-full">
-              {isDemoMode ? "Back to Exam Details" : "View Exam History"}
+              {isDemoMode ? "Back to Exam Details" : "View Exam History / Close"}
             </Button>
           </CardFooter>
         </Card>
@@ -254,8 +253,7 @@ export function ExamTakingInterface({
     );
   }
 
-  // This case should ideally be caught by the parent, but added for robustness
-  if (questions.length === 0 && !parentIsLoading) {
+  if (questions.length === 0 && !parentIsLoading) { // Parent finished loading, but no questions
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -265,7 +263,6 @@ export function ExamTakingInterface({
     );
   }
 
-  // If currentQuestion is somehow null but questions array is not empty (e.g., index issue)
    if (!currentQuestion && questions.length > 0 && !parentIsLoading) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
@@ -275,7 +272,6 @@ export function ExamTakingInterface({
     );
   }
   
-  // Exam is active and questions are available
   const examDurationForTimer = examDetails.duration ?? 0;
   const examTitleForTimer = examDetails.title ?? "Exam";
 
@@ -283,7 +279,7 @@ export function ExamTakingInterface({
     <div className="flex flex-col min-h-screen bg-muted">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          key={`${examDetails.exam_id}-${examDurationForTimer}`}
+          key={`${examDetails.exam_id}-${examDurationForTimer}`} // Key to re-mount if duration/ID changes
           totalDurationSeconds={examDurationForTimer * 60}
           onTimeUp={handleInternalTimeUp}
           examTitle={examTitleForTimer + (isDemoMode ? " (Demo)" : "")}

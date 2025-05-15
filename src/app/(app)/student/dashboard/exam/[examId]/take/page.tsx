@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Question, Exam, FlaggedEvent, ExamSubmissionInsert } from '@/types/supabase';
@@ -15,6 +15,7 @@ import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[exa
 export default function TakeExamPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams(); // To potentially read the token
   const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
   const { user: studentUser, isLoading: authIsLoading } = useAuth();
@@ -45,6 +46,11 @@ export default function TakeExamPage() {
     setIsLoading(true);
     setError(null);
     try {
+      // For actual SEB integration, you might validate the token from searchParams here
+      // const token = searchParams.get('token');
+      // if (!token) { throw new Error("Exam token missing or invalid. Access denied."); }
+      // Add server-side token validation if implementing actual encryption/SEB server.
+
       const { data, error: fetchError } = await supabase
         .from('ExamX')
         .select('*') // Fetch all columns including questions
@@ -87,22 +93,23 @@ export default function TakeExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, studentUserId, authIsLoading]);
+  }, [examId, supabase, studentUserId, authIsLoading, searchParams]); // Added searchParams for token
 
   useEffect(() => {
     // Fetch data only if examId is present and auth state is resolved
     if (examId && !authIsLoading) {
         // Check if studentUserId is available before fetching
         if (studentUserId) {
-            if (!examDetails && !error) { // Fetch only if not already fetched/errored
+            if (!examDetails && !error && isLoading) { // Fetch only if not already fetched/errored
                 fetchExamData();
             }
-        } else if (!error) { // If studentUser is still null after auth is no longer loading
+        } else if (!error && isLoading) { // If studentUser is still null after auth is no longer loading
             setError("Student authentication details are not available. Cannot load exam.");
             setIsLoading(false);
         }
     } else if (!isLoading && !examId) {
         setError("Exam ID is missing for fetch.");
+        setIsLoading(false); // Ensure loading stops if no examId
     }
   }, [examId, authIsLoading, studentUserId, examDetails, error, isLoading, fetchExamData]);
 
@@ -124,10 +131,11 @@ export default function TakeExamPage() {
     const submissionData: Partial<ExamSubmissionInsert> = {
         exam_id: examId,
         student_user_id: studentUserId,
-        answers: answers as any,
-        flagged_events: flaggedEvents as any,
+        answers: answers as any, // Cast for now, ensure correct type for Supabase
+        flagged_events: flaggedEvents as any, // Cast for now
         status: 'Completed',
         submitted_at: new Date().toISOString(),
+        // Score calculation would happen server-side or here based on correctOptionId
     };
     console.log("[TakeExamPage] TODO: Save final submission data to Supabase ExamSubmissionsX:", submissionData);
     await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
@@ -150,7 +158,7 @@ export default function TakeExamPage() {
         student_user_id: studentUserId,
         answers: answers as any,
         flagged_events: flaggedEvents as any,
-        status: 'Completed', 
+        status: 'Completed', // Or 'Auto-Completed'
         submitted_at: new Date().toISOString(),
     };
     console.log("[TakeExamPage] TODO: Auto-save final submission data to Supabase ExamSubmissionsX (Time Up):", submissionData);
@@ -197,7 +205,7 @@ export default function TakeExamPage() {
       examDetails={examDetails}
       questions={questions || []}
       isLoading={isLoading && !examDetails} 
-      error={error} 
+      error={error} // This error is if examDetails is present but something else is wrong internally
       examStarted={true} // This page only renders the interface if the exam should be active
       onAnswerChange={handleAnswerChangeLocal}
       onSubmitExam={handleSubmitExamActual}

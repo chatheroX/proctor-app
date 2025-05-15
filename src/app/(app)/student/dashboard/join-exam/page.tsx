@@ -37,7 +37,7 @@ export default function JoinExamPage() {
         .single();
 
       if (error || !exam) {
-        if (error && error.code === 'PGRST116') {
+        if (error && error.code === 'PGRST116') { // No rows found
           toast({ title: "Invalid Code", description: "Exam code not found. Please check and try again.", variant: "destructive" });
         } else {
           toast({ title: "Error", description: error?.message || "Could not verify exam code.", variant: "destructive" });
@@ -49,7 +49,7 @@ export default function JoinExamPage() {
       const effectiveStatus = getEffectiveExamStatus(exam as Exam);
 
       if (effectiveStatus !== 'Ongoing') {
-         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined. Please check the schedule.`, variant: "default" });
+         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined. Please check the schedule.`, variant: "default", duration: 5000 });
          setIsLoading(false);
          return;
       }
@@ -98,7 +98,7 @@ export default function JoinExamPage() {
               <AlertTitle className="text-primary font-semibold">Important Notice</AlertTitle>
               <AlertDescription className="text-primary/80">
                 Ensure you are in a quiet environment and ready for the exam.
-                The exam will open in a new tab.
+                The exam will open in a new tab after system checks.
               </AlertDescription>
             </Alert>
           </CardContent>
