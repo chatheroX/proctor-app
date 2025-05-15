@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam } from '@/types/supabase';
-import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page'; 
+import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
@@ -32,12 +32,12 @@ export default function JoinExamPage() {
     try {
       const { data: exam, error } = await supabase
         .from('ExamX')
-        .select('*') 
+        .select('exam_id, title, description, duration, questions, allow_backtracking, status, teacher_id, start_time, end_time, exam_code')
         .eq('exam_code', examCode.trim().toUpperCase())
         .single();
 
       if (error || !exam) {
-        if (error && error.code === 'PGRST116') { 
+        if (error && error.code === 'PGRST116') {
           toast({ title: "Invalid Code", description: "Exam code not found. Please check and try again.", variant: "destructive" });
         } else {
           toast({ title: "Error", description: error?.message || "Could not verify exam code.", variant: "destructive" });
@@ -45,23 +45,23 @@ export default function JoinExamPage() {
         setIsLoading(false);
         return;
       }
-      
+
       const effectiveStatus = getEffectiveExamStatus(exam as Exam);
 
       if (effectiveStatus !== 'Ongoing') {
-         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined. Please check the schedule.`, variant: "destructive" });
+         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined. Please check the schedule.`, variant: "default" });
          setIsLoading(false);
          return;
       }
-      
-      // Check if exam has questions
+
       if (!exam.questions || exam.questions.length === 0) {
         toast({ title: "Exam Not Ready", description: "This exam currently has no questions. Please contact your teacher.", variant: "destructive" });
         setIsLoading(false);
         return;
       }
       
-      router.push(`/student/dashboard/exam/${exam.exam_id}/seb-redirect`);
+      // Redirect to the new initiate page, which will handle pre-exam checks and launching in a new tab.
+      router.push(`/student/dashboard/exam/${exam.exam_id}/initiate`);
 
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
@@ -78,7 +78,6 @@ export default function JoinExamPage() {
             <CardTitle>Enter Exam Code</CardTitle>
             <CardDescription>
               Please enter the unique code provided by your teacher to join the exam.
-              Ensure you are using Safe Exam Browser if required by the exam.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -98,8 +97,8 @@ export default function JoinExamPage() {
               <AlertTriangle className="h-5 w-5 text-primary" />
               <AlertTitle className="text-primary font-semibold">Important Notice</AlertTitle>
               <AlertDescription className="text-primary/80">
-                Some exams may require <strong>Safe Exam Browser (SEB)</strong>.
-                Attempting to join these via a regular browser will not work.
+                Ensure you are in a quiet environment and ready for the exam.
+                The exam will open in a new tab.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -110,7 +109,7 @@ export default function JoinExamPage() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying Code...
                 </>
               ) : (
-                'Proceed to Exam'
+                'Proceed to Exam Instructions'
               )}
             </Button>
           </CardFooter>

@@ -36,8 +36,7 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
   // If Published and has valid start/end times, determine if Upcoming, Ongoing, or past End (Completed)
   if (exam.status === 'Published') {
     if (!exam.start_time || !exam.end_time) {
-      // Published but no schedule, treat as 'Published' (potentially misconfigured but not yet started/ended by time)
-      return 'Published';
+      return 'Published'; // Published but no schedule, treat as 'Published' (effectively upcoming until scheduled)
     }
     const now = new Date();
     const startTime = parseISO(exam.start_time);
@@ -49,7 +48,7 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
 
     if (isAfter(now, endTime)) return 'Completed';
     if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing';
-    if (isBefore(now, startTime)) return 'Published'; // Upcoming
+    if (isBefore(now, startTime)) return 'Published'; // Interpreted as Upcoming
   }
   
   // If DB status is 'Ongoing', check if end_time has passed
@@ -59,11 +58,10 @@ export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatu
       const endTime = parseISO(exam.end_time);
       if (isValid(endTime) && isAfter(now, endTime)) return 'Completed';
     }
-    return 'Ongoing'; // Still ongoing if end_time not passed or not set
+    return 'Ongoing'; 
   }
 
-  // Fallback to the database status if none of the above conditions are met.
-  return exam.status;
+  return exam.status; // Fallback to database status
 };
 
 
@@ -90,7 +88,7 @@ export default function ExamDetailsPage() {
     try {
       const { data, error } = await supabase
         .from('ExamX')
-        .select('*')
+        .select('*, teacher_id') // Ensure teacher_id is fetched if needed for ownership checks
         .eq('exam_id', examId)
         .single();
 
@@ -99,11 +97,11 @@ export default function ExamDetailsPage() {
       if (data) {
         setEffectiveStatus(getEffectiveExamStatus(data));
       } else {
-        notFound(); // Exam not found
+        notFound(); 
       }
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to fetch exam details: ${error.message}`, variant: "destructive" });
-      setExam(null); // Keep exam null on error
+      setExam(null); 
     } finally {
       setIsLoading(false);
     }
@@ -113,12 +111,11 @@ export default function ExamDetailsPage() {
     fetchExamDetails();
   }, [fetchExamDetails]);
 
-  // Recalculate effective status periodically or on focus, as time passes
   useEffect(() => {
     if (exam) {
       const interval = setInterval(() => {
         setEffectiveStatus(getEffectiveExamStatus(exam));
-      }, 60000); // Check every minute
+      }, 60000); 
       
       const handleFocus = () => setEffectiveStatus(getEffectiveExamStatus(exam));
       window.addEventListener('focus', handleFocus);
@@ -162,8 +159,8 @@ export default function ExamDetailsPage() {
 
   const getStatusBadgeVariant = (status: ExamStatus) => {
     switch (status) {
-      case 'Published': return 'default';
-      case 'Ongoing': return 'destructive';
+      case 'Published': return 'default'; // Usually means upcoming if start_time is in future
+      case 'Ongoing': return 'destructive'; // Often highlighted
       case 'Completed': return 'outline';
       default: return 'secondary';
     }
@@ -171,7 +168,7 @@ export default function ExamDetailsPage() {
 
   const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
-      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // Upcoming
+      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // For upcoming
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
       case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
       default: return '';
@@ -316,7 +313,7 @@ export default function ExamDetailsPage() {
           <Button variant="outline" onClick={copyExamCode} disabled={!isShareable}>
             <Share2 className="mr-2 h-4 w-4" /> Share Exam Code
           </Button>
-          <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} disabled={isDeleting}>
+          <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} disabled={isDeleting || effectiveStatus === 'Ongoing'}>
             {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <Trash2 className="mr-2 h-4 w-4" /> Delete Exam
           </Button>
@@ -329,12 +326,12 @@ export default function ExamDetailsPage() {
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the exam
-              "{exam?.title}" and all its associated data.
+              "{exam?.title}" and all its associated data. Ongoing exams cannot be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteExam} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isDeleting}>
+            <AlertDialogAction onClick={handleDeleteExam} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isDeleting || effectiveStatus === 'Ongoing'}>
               {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Yes, delete exam
             </AlertDialogAction>
@@ -344,5 +341,3 @@ export default function ExamDetailsPage() {
     </div>
   );
 }
-
-    

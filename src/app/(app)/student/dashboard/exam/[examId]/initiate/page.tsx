@@ -7,14 +7,28 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, AlertTriangle, Clock, HelpCircle, ListChecks, PlayCircle } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Loader2, AlertTriangle, Clock, HelpCircle, ListChecks, PlayCircle, ExternalLink, CheckCircle, XCircle, ShieldAlert } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam, Question, FlaggedEvent } from '@/types/supabase';
+import type { Exam, Question } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { ExamTakingInterface } from '@/components/shared/exam-taking-interface';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { format } from 'date-fns';
+
+interface CheckStatus {
+  name: string;
+  status: 'pending' | 'checking' | 'success' | 'failed';
+  details?: string;
+}
+
+const initialChecks: CheckStatus[] = [
+  { name: 'Browser Compatibility', status: 'pending' },
+  { name: 'Internet Connectivity', status: 'pending' },
+  { name: 'System Integrity (Basic)', status: 'pending' },
+  { name: 'Secure Session Readiness', status: 'pending' },
+];
+
 
 export default function InitiateExamPage() {
   const params = useParams();
@@ -26,11 +40,17 @@ export default function InitiateExamPage() {
   const examId = params.examId as string;
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionsCount, setQuestionsCount] = useState(0); // Only count, not full questions
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [examLocallyStarted, setExamLocallyStarted] = useState(false);
   const [effectiveStatus, setEffectiveStatus] = useState<string | null>(null);
+  
+  // State for system checks
+  const [checks, setChecks] = useState<CheckStatus[]>(initialChecks);
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [allChecksPassed, setAllChecksPassed] = useState(false);
+  const [performingChecks, setPerformingChecks] = useState(false);
+
 
   const fetchExamData = useCallback(async () => {
     if (!examId || !supabase) {
@@ -40,11 +60,12 @@ export default function InitiateExamPage() {
     }
     console.log(`[InitiatePage] Fetching exam data for examId: ${examId}`);
     setIsLoading(true);
-    setError(null); // Clear previous errors before fetching
+    setError(null);
     try {
+      // Fetch only essential details for the instruction page
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('*')
+        .select('exam_id, title, description, duration, questions, start_time, end_time, status')
         .eq('exam_id', examId)
         .single();
 
@@ -54,14 +75,14 @@ export default function InitiateExamPage() {
       const currentExam = data as Exam;
       console.log("[InitiatePage] Exam data fetched:", currentExam);
       setExamDetails(currentExam);
-      setQuestions(currentExam.questions || []);
+      setQuestionsCount(currentExam.questions?.length || 0);
       setEffectiveStatus(getEffectiveExamStatus(currentExam));
 
     } catch (e: any) {
-      console.error("[InitiatePage] Failed to fetch exam data for initiation:", e);
+      console.error("[InitiatePage] Failed to fetch exam data:", e);
       setError(e.message || "Failed to load exam data.");
-      setExamDetails(null); // Ensure examDetails is null on error
-      setQuestions([]);
+      setExamDetails(null);
+      setQuestionsCount(0);
     } finally {
       setIsLoading(false);
     }
@@ -69,79 +90,101 @@ export default function InitiateExamPage() {
 
   useEffect(() => {
     if (examId && !authLoading && supabase) {
-      // Fetch only if examDetails are not yet loaded or if examId changed
       if (!examDetails || examDetails.exam_id !== examId) {
          fetchExamData();
       }
     }
   }, [examId, authLoading, supabase, fetchExamData, examDetails]);
 
-  const handleActualStartExam = useCallback(() => {
-    console.log("[InitiatePage] handleActualStartExam called. Current examDetails:", examDetails);
+  const startSystemChecks = useCallback(async () => {
     if (!studentUser?.user_id) {
-      toast({ title: "Authentication Error", description: "Student details not found. Cannot start exam.", variant: "destructive" });
+      toast({ title: "Authentication Error", description: "Student details not found.", variant: "destructive" });
       setError("Student details not found. Please re-login.");
       return;
     }
-    if (!examDetails) { // Ensure examDetails is loaded
-        toast({ title: "Error", description: "Exam details are not loaded. Please wait or refresh.", variant: "destructive" });
+    if (!examDetails) {
+        toast({ title: "Error", description: "Exam details are not loaded.", variant: "destructive" });
         return;
     }
     if (effectiveStatus !== 'Ongoing') {
       toast({ title: "Cannot Start", description: `Exam is ${effectiveStatus?.toLowerCase() || 'not available'}.`, variant: "destructive" });
       return;
     }
-    if (!examDetails.questions || examDetails.questions.length === 0) {
-      toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
+    if (questionsCount === 0) {
+      toast({ title: "No Questions", description: "This exam has no questions.", variant: "destructive" });
       return;
     }
-    setExamLocallyStarted(true);
-    console.log("[InitiatePage] TODO: Create ExamSubmissionsX record for student:", studentUser.user_id, "exam:", examId);
-  }, [studentUser?.user_id, examDetails, effectiveStatus, toast, examId]);
+
+    setPerformingChecks(true);
+    setError(null); // Clear previous check errors
+    setAllChecksPassed(false);
+    setChecks(initialChecks.map(c => ({ ...c, status: 'pending', details: undefined })));
+    setOverallProgress(0);
+
+    for (let i = 0; i < initialChecks.length; i++) {
+      setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
+      await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); // Simulate check
+
+      const isSuccess = Math.random() > 0.05; // High success rate for demo
+      setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
+      setOverallProgress(((i + 1) / initialChecks.length) * 100);
+      if (!isSuccess) {
+        setError(`System check failed: ${initialChecks[i].name}. Cannot proceed with the exam.`);
+        setPerformingChecks(false);
+        return;
+      }
+    }
+    setAllChecksPassed(true);
+    setPerformingChecks(false);
+    toast({ title: "System Checks Passed!", description: "You can now proceed to the exam.", variant: "default" });
+  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast, examId]);
 
 
-  const handleSubmitExamActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
-    if (!studentUser?.user_id || !examDetails) {
-      console.error("[InitiatePage] handleSubmitExamActual: Missing studentUser or examDetails.");
-      toast({ title: "Submission Error", description: "Could not submit exam due to missing data.", variant: "destructive"});
+  const launchExamInNewTab = useCallback(() => {
+    if (!allChecksPassed || !examDetails || !studentUser) {
+      toast({ title: "Cannot Launch", description: "System checks not passed or exam/user data missing.", variant: "destructive" });
       return;
     }
-    console.log('[InitiatePage] Submitting answers to backend:', answers);
-    console.log('[InitiatePage] Flagged Events to backend:', flaggedEvents);
-    // TODO: Update 'ExamSubmissionsX' record
-    toast({ title: "Exam Submitted!", description: "Your responses have been recorded (simulation)." });
-    router.push('/student/dashboard/exam-history');
-  }, [studentUser?.user_id, examDetails, toast, router]);
-
-  const handleTimeUpActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
-    if (!studentUser?.user_id || !examDetails) {
-      console.error("[InitiatePage] handleTimeUpActual: Missing studentUser or examDetails.");
-      toast({ title: "Auto-Submission Error", description: "Could not auto-submit exam due to missing data.", variant: "destructive"});
-      return;
+    const examUrl = `/student/dashboard/exam/${examDetails.exam_id}/take`;
+    const newWindow = window.open(examUrl, '_blank', 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes');
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      setError("Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again.");
+      toast({
+          title: "Pop-up Blocked?",
+          description: "Could not open exam. Please disable pop-up blocker or use the manual launch button.",
+          variant: "destructive",
+          duration: 7000,
+      });
+    } else {
+      // Optional: Redirect current tab to a "waiting" or "exam in progress" page
+      // router.push('/student/dashboard/exam-history'); // Or a dedicated page
+      toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
     }
-    console.log("[InitiatePage] Time is up. Auto-submitting answers:", answers);
-    console.log("[InitiatePage] Time is up. Auto-submitting flagged events:", flaggedEvents);
-    // TODO: Update 'ExamSubmissionsX' record
-    toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up (simulation)." });
-    router.push('/student/dashboard/exam-history');
-  }, [studentUser?.user_id, examDetails, toast, router]);
+  }, [allChecksPassed, examDetails, studentUser, toast, router]);
+
+  const getStatusIcon = (status: CheckStatus['status']) => {
+    if (status === 'pending') return <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />;
+    if (status === 'checking') return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
+    if (status === 'success') return <CheckCircle className="h-5 w-5 text-green-500" />;
+    if (status === 'failed') return <XCircle className="h-5 w-5 text-destructive" />;
+    return null;
+  };
 
 
-  if (authLoading || (isLoading && !examDetails && !error)) { // Show loader if auth is loading OR page is loading initial exam data
+  if (authLoading || (isLoading && !examDetails && !error)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-muted-foreground">Loading exam details...</p>
+        <p className="text-lg text-muted-foreground">Loading exam instructions...</p>
       </div>
     );
   }
 
-  // This error display is for critical failures to load exam data initially
-  if (error && !examDetails && !examLocallyStarted) {
+  if (error && !examDetails && !performingChecks) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Error Loading Exam</p>
+        <p className="text-lg text-destructive text-center mb-2">Error Loading Exam Information</p>
         <p className="text-sm text-muted-foreground text-center mb-4">{error}</p>
         <Button onClick={() => router.push('/student/dashboard/join-exam')} className="mt-4">
           Back to Join Exam
@@ -150,8 +193,7 @@ export default function InitiateExamPage() {
     );
   }
 
-  // If exam details are simply not found after loading (and no critical error shown above)
-  if (!examDetails && !isLoading && !examLocallyStarted) {
+  if (!examDetails && !isLoading && !performingChecks) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
@@ -162,61 +204,13 @@ export default function InitiateExamPage() {
       </div>
     );
   }
-
-
-  // If exam has started locally, attempt to render the exam taking interface
-  if (examLocallyStarted) {
-    // CRITICAL CHECK: Ensure examDetails are available before rendering the interface
-    if (!examDetails) {
-      // This state means the user clicked "Start Test", but examDetails are now missing.
-      // This could be due to a rapid re-fetch error or an unexpected state update.
-      // Show a loader or a specific error message.
-      console.error("[InitiatePage] examLocallyStarted is true, but examDetails is null. This should not happen if handleActualStartExam guards are correct.");
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-          <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-          <p className="text-lg text-muted-foreground">Finalizing exam setup...</p>
-          {error && <p className="text-sm text-destructive mt-2">Error: {error}</p>}
-          {!error && <p className="text-sm text-muted-foreground mt-2">If this persists, please try rejoining the exam.</p>}
-           <Button onClick={() => router.push(`/student/dashboard/exam/${examId}/initiate`)} variant="outline" className="mt-4 mr-2">
-            Retry
-          </Button>
-          <Button onClick={() => router.push('/student/dashboard/join-exam')} className="mt-4">
-            Back to Join Exam
-          </Button>
-        </div>
-      );
-    }
-    // If examDetails is populated, render the ExamTakingInterface
-    console.log("[InitiatePage] Rendering ExamTakingInterface with examDetails:", examDetails);
-    return (
-      <ExamTakingInterface
-        examDetails={examDetails}
-        questions={questions} // questions state is also managed in initiate/page
-        isLoading={false} // Loading is handled by this parent page before this point
-        error={null}      // Error handling is done by this parent page before this point
-        examStarted={true} // This component is only rendered if exam is locally started
-        onAnswerChange={(questionId, optionId) => {
-          // TODO: Local storage auto-save
-          console.log(`[InitiatePage] Answer changed for QID ${questionId}: OptionID ${optionId}`);
-        }}
-        onSubmitExam={handleSubmitExamActual}
-        onTimeUp={handleTimeUpActual}
-        isDemoMode={false}
-        userIdForActivityMonitor={studentUser?.user_id || 'anonymous_student_initiate'}
-      />
-    );
-  }
-
-  // Pre-exam information screen (if not examLocallyStarted and examDetails are available)
-  // This check is implicitly handled by the !examDetails checks above, but to be safe:
+  
+  // If examDetails is null at this point (should be caught above, but defensive)
   if (!examDetails) {
-     // This case should ideally be caught by the loaders/error screens above.
-     // If it reaches here, it means examDetails somehow became null after initial checks.
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
-        <p className="text-lg text-muted-foreground text-center">Could not display exam information.</p>
+        <p className="text-lg text-muted-foreground text-center">Could not display exam information. Critical data missing.</p>
          <Button onClick={() => router.push('/student/dashboard/join-exam')} className="mt-4">
           Back to Join Exam
         </Button>
@@ -224,80 +218,124 @@ export default function InitiateExamPage() {
     );
   }
 
-  const canStartTest = effectiveStatus === 'Ongoing';
+
+  const canStartTestProcess = effectiveStatus === 'Ongoing';
   const examTimeInfo = examDetails.start_time && examDetails.end_time
     ? `${format(new Date(examDetails.start_time), "dd MMM yyyy, hh:mm a")} - ${format(new Date(examDetails.end_time), "hh:mm a")}`
     : "Timing not specified";
 
+  // Main UI: Exam Instructions or System Checks
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-        {/* Left Column: Exam Details */}
-        <div className="space-y-6">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800">{examDetails.title}</h1>
-          {examDetails.description && <p className="text-gray-600">{examDetails.description}</p>}
+      <Card className="w-full max-w-3xl shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-3xl md:text-4xl font-bold text-gray-800 text-center">{examDetails.title}</CardTitle>
+          {examDetails.description && <CardDescription className="text-center text-gray-600 mt-2">{examDetails.description}</CardDescription>}
+        </CardHeader>
+        
+        {!performingChecks && !allChecksPassed && (
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-center space-x-2 text-gray-500 bg-gray-100 p-2 rounded-md text-sm">
+              <Clock size={18} />
+              <span>{examTimeInfo}</span>
+            </div>
 
-          <div className="flex items-center space-x-2 text-gray-500 bg-gray-100 p-2 rounded-md text-sm">
-            <Clock size={18} />
-            <span>{examTimeInfo}</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 p-4 border border-gray-200 rounded-lg bg-white shadow-sm">
-            <div className="text-center">
-              <p className="text-xl font-semibold text-gray-700">{examDetails.duration}</p>
-              <p className="text-xs text-gray-500">MINUTES</p>
-              <p className="text-xs text-gray-500">Duration</p>
+            <div className="grid grid-cols-3 gap-4 p-4 border border-gray-200 rounded-lg bg-white shadow-sm">
+              <div className="text-center">
+                <p className="text-xl font-semibold text-gray-700">{examDetails.duration}</p>
+                <p className="text-xs text-gray-500">MINUTES</p>
+                <p className="text-xs text-gray-500">Duration</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-semibold text-gray-700">100</p> {/* Placeholder */}
+                <p className="text-xs text-gray-500">MARKS</p>
+                <p className="text-xs text-gray-500">Max Marks</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-semibold text-gray-700">{questionsCount}</p>
+                <p className="text-xs text-gray-500">QUESTIONS</p>
+                <p className="text-xs text-gray-500">Total Questions</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-xl font-semibold text-gray-700">100</p> {/* Placeholder */}
-              <p className="text-xs text-gray-500">MARKS</p>
-              <p className="text-xs text-gray-500">Max Marks</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xl font-semibold text-gray-700">{questions.length}</p>
-              <p className="text-xs text-gray-500">QUESTIONS</p>
-              <p className="text-xs text-gray-500">Total Questions</p>
-            </div>
-          </div>
-
-          {canStartTest ? (
-            <Button
-              onClick={handleActualStartExam}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 text-lg rounded-md shadow-md"
-              disabled={authLoading || !studentUser || isLoading} // Disable if page is loading or auth is happening
-            >
-              {(authLoading || isLoading) ? <Loader2 className="animate-spin mr-2"/> : <PlayCircle className="mr-2" />}
-              Start Test
-            </Button>
-          ) : (
-            <div className="text-center p-4 bg-gray-100 rounded-md shadow">
-              <p className="text-gray-700 font-medium">
-                This test {effectiveStatus === 'Completed' ? 'has ended' : (effectiveStatus === 'Published' || effectiveStatus === 'Upcoming') ? 'has not started yet' : 'is not currently available'}.
-              </p>
-              {effectiveStatus !== 'Ongoing' && <p className="text-sm text-gray-500 mt-1">Please check the exam schedule or contact your administrator.</p>}
-            </div>
-          )}
-           {error && !examLocallyStarted && ( // Show non-critical errors on this screen if exam hasn't started
-            <Alert variant="destructive" className="mt-4">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+            
+            <Alert>
+              <ShieldAlert className="h-4 w-4" />
+              <AlertTitle>Exam Integrity Notice</AlertTitle>
+              <AlertDescription>
+                This exam will be monitored. Ensure you adhere to all exam regulations.
+                System compatibility checks will be performed before starting.
+              </AlertDescription>
             </Alert>
-          )}
-        </div>
+            
+            {error && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        )}
 
-        {/* Right Column: Illustration */}
-        <div className="hidden md:flex justify-center items-center">
-          <Image
-            src="https://placehold.co/600x450.png"
-            alt="Exam illustration"
-            width={600}
-            height={450}
-            className="rounded-lg shadow-lg"
-            data-ai-hint="student taking exam"
-          />
-        </div>
-      </div>
+        {(performingChecks || allChecksPassed) && (
+          <CardContent className="space-y-4">
+            <h3 className="text-xl font-semibold text-center mb-4">System Compatibility Checks</h3>
+            <Progress value={overallProgress} className="w-full mb-6 h-3" />
+            <ul className="space-y-3">
+              {checks.map((check) => (
+                <li key={check.name} className="flex items-center justify-between p-3 bg-background rounded-md border">
+                  <div className="flex items-center gap-3">
+                    {getStatusIcon(check.status)}
+                    <span className="font-medium">{check.name}</span>
+                  </div>
+                  {check.details && <span className={`text-sm ${check.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{check.details}</span>}
+                </li>
+              ))}
+            </ul>
+             {error && !allChecksPassed && ( // Show check-specific errors
+                <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>System Check Failed</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            )}
+            {allChecksPassed && !error && (
+                <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/30">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <AlertTitle className="text-green-700 font-semibold">System Ready!</AlertTitle>
+                    <AlertDescription className="text-green-600/80">
+                        Your system is compatible. The exam will open in a new tab.
+                        If it doesn&apos;t, please ensure pop-ups are allowed and use the "Launch Exam Manually" button.
+                    </AlertDescription>
+                </Alert>
+            )}
+          </CardContent>
+        )}
+        
+        <CardFooter className="flex flex-col items-center gap-3 pt-6 border-t">
+           {!allChecksPassed && (
+            <Button
+              onClick={startSystemChecks}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 text-lg rounded-md shadow-md"
+              disabled={performingChecks || !canStartTestProcess || authLoading || !studentUser || isLoading}
+            >
+              {performingChecks ? <Loader2 className="animate-spin mr-2"/> : <PlayCircle className="mr-2" />}
+              {performingChecks ? 'Running Checks...' : (canStartTestProcess ? 'Start System Checks & Proceed' : `Exam is ${effectiveStatus?.toLowerCase() || 'unavailable'}`)}
+            </Button>
+           )}
+           {allChecksPassed && !error && (
+             <Button
+              onClick={launchExamInNewTab}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg rounded-md shadow-md"
+            >
+              <ExternalLink className="mr-2" /> Launch Exam in New Tab
+            </Button>
+           )}
+            <Button variant="outline" onClick={() => router.push('/student/dashboard/join-exam')} className="w-full">
+              Cancel / Back to Join Exam
+            </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
