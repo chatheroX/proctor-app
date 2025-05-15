@@ -2,7 +2,6 @@
 import React from 'react';
 import { AppHeader } from '@/components/shared/header';
 import { AppFooter } from '@/components/shared/footer';
-// import { ThreeScenePlaceholder } from '@/components/landing/three-scene-placeholder'; // Removed import
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, BookOpenText, Users, Cpu, ArrowRight } from 'lucide-react';
@@ -45,9 +44,8 @@ export default function LandingPage() {
             <div className="blur-[106px] h-32 bg-gradient-to-r from-cyan-400 to-sky-300 dark:from-cyan-400/70 dark:to-sky-300/70"></div>
           </div>
           <div className="container px-4 md:px-6 relative">
-            {/* Adjusted to make the text content take full width or be more prominent */}
-            <div className="grid gap-12 md:grid-cols-1 md:items-center text-center md:text-left"> {/* Changed to md:grid-cols-1 for text to take full width */}
-              <div className="space-y-8 max-w-3xl mx-auto md:mx-0"> {/* Added max-w-3xl and centering for larger text block */}
+            <div className="grid gap-12 md:grid-cols-1 md:items-center text-center justify-items-center"> {/* Centered text and items */}
+              <div className="space-y-8 max-w-3xl mx-auto"> {/* mx-auto ensures it's centered within the grid column */}
                 {/* TODO: Add Framer Motion to h1 and p for staggered entrance */}
                 <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl md:text-7xl !leading-tight">
                   The Future of <span className="text-primary block">Secure Online</span> Proctoring
@@ -55,7 +53,7 @@ export default function LandingPage() {
                 <p className="text-lg text-muted-foreground md:text-xl">
                   ProctorPrep offers a robust, modern platform for conducting secure online exams, trusted by educators and students alike.
                 </p>
-                <div className="flex flex-col gap-4 sm:flex-row sm:justify-center md:justify-start"> {/* Centering for sm, start for md+ */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:justify-center"> {/* Centered buttons */}
                   {/* TODO: Add Framer Motion to buttons for hover/tap effects */}
                   <Button size="lg" className="shadow-lg hover:shadow-primary/40 transition-shadow duration-300" asChild>
                     <Link href="/auth?action=register&role=teacher">
@@ -69,7 +67,6 @@ export default function LandingPage() {
                   </Button>
                 </div>
               </div>
-              {/* ThreeScenePlaceholder was here and has been removed */}
             </div>
           </div>
         </section>
