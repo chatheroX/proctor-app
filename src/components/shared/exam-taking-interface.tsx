@@ -11,7 +11,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge"; // Added this import
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from '@/components/ui/textarea'; // Added import
 import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen, Check, XCircle, ThumbsUp, ClockIcon, LogOut, HelpCircle, MessageSquare, Menu, Bookmark, Palette, FileTextIcon, GripVertical, Type, UploadCloud, Minus } from 'lucide-react';
 import { ExamTimerWarning } from '@/components/student/exam-timer-warning';
 import { useActivityMonitor, type FlaggedEvent } from '@/hooks/use-activity-monitor';
@@ -23,7 +24,7 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean;
+  isLoading: boolean; // Renamed from parentIsLoading for clarity within this component
   error: string | null;
   examStarted: boolean;
   onAnswerChange: (questionId: string, optionId: string) => void;
@@ -39,7 +40,7 @@ export function ExamTakingInterface({
   examDetails,
   questions,
   initialAnswers,
-  isLoading: parentIsLoading,
+  isLoading: parentIsLoading, // Keep this prop name as it's passed from parent
   error: examLoadingError,
   examStarted,
   onAnswerChange,
@@ -103,7 +104,7 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast]); 
+  }, [isDemoMode, toast, setFlaggedEvents]); 
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -115,13 +116,13 @@ export function ExamTakingInterface({
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange]);
+  }, [onAnswerChange, setAnswers]);
 
   const handleNextQuestion = useCallback(() => {
     if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions]);
+  }, [currentQuestionIndex, questions, setCurrentQuestionIndex]);
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -129,7 +130,7 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast]); 
+  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]); 
 
   const handleQuestionNavigation = useCallback((index: number) => {
     if (index >= 0 && questions && index < questions.length) {
@@ -139,13 +140,13 @@ export function ExamTakingInterface({
       }
       setCurrentQuestionIndex(index);
     }
-  }, [allowBacktracking, currentQuestionIndex, questions, toast]); 
+  }, [allowBacktracking, currentQuestionIndex, questions, toast, setCurrentQuestionIndex]); 
 
   const toggleMarkForReview = useCallback(() => {
     if (currentQuestion) {
       setMarkedForReview(prev => ({ ...prev, [currentQuestion.id]: !prev[currentQuestion.id] }));
     }
-  }, [currentQuestion]);
+  }, [currentQuestion, setMarkedForReview]);
 
   const handleInternalSubmitExam = useCallback(async () => {
     if (examFinished) return;
@@ -160,7 +161,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, examFinished, toast]); 
+  }, [answers, flaggedEvents, examFinished, toast, setIsSubmitting, setExamFinished, setInternalError]); 
 
   const handleInternalTimeUp = useCallback(async () => {
     if (examFinished) return;
@@ -180,7 +181,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, isDemoMode, toast, examFinished]); 
+  }, [answers, flaggedEvents, isDemoMode, toast, examFinished, setIsSubmitting, setExamFinished, setInternalError]); 
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -199,8 +200,8 @@ export function ExamTakingInterface({
     if (isAns && isMarked) return "bg-purple-500 text-white relative after:content-[''] after:absolute after:top-1 after:right-1 after:w-2 after:h-2 after:bg-green-400 after:rounded-full";
     if (isMarked) return "bg-purple-500 text-white";
     if (isAns) return "bg-green-500 text-white";
-    if (!isAns && isVis) return "bg-red-500 text-white";
-    return "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300";
+    if (!isAns && isVis) return "bg-red-500 text-white"; // Not answered but visited
+    return "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"; // Not visited
   }, [currentQuestionIndex, answers, markedForReview, visitedQuestions]);
 
 
@@ -225,11 +226,12 @@ export function ExamTakingInterface({
   }
   
   if (!examDetails || !examStarted) {
+    console.log("[ExamTakingInterface] Rendering 'Exam session not properly initiated' error. examDetails:", examDetails, "examStarted:", examStarted);
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">Exam Session Error</h2>
-        <p className="text-md text-muted-foreground mb-6 max-w-md">Exam session not properly initiated or critical details are missing. ExamDetails: {examDetails ? 'Exists' : 'Missing'}, ExamStarted: {examStarted ? 'True' : 'False'}</p>
+        <p className="text-md text-muted-foreground mb-6 max-w-md">Exam session not properly initiated or critical details are missing.</p>
          <Button onClick={() => window.close()} className="mt-4 btn-primary-solid">Close Tab</Button>
       </div>
     );
@@ -273,7 +275,7 @@ export function ExamTakingInterface({
              <Button onClick={() => {
               if (typeof window !== 'undefined') {
                 window.close(); 
-                if (!window.closed && !isDemoMode) router.push('/student/dashboard/exam-history');
+                if (!window.closed && !isDemoMode && studentRollNumber) router.push('/student/dashboard/exam-history');
                 else if (!window.closed && isDemoMode && examDetails?.exam_id) router.push(`/teacher/dashboard/exams/${examDetails.exam_id}/details`);
                 else if (!window.closed) router.push('/'); 
               }
@@ -307,12 +309,13 @@ export function ExamTakingInterface({
   
   const examDurationForTimer = examDetails.duration ?? 0;
   const examTitleForTimer = examDetails.title ?? "Exam";
+  const progressValue = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 text-foreground overflow-hidden">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          key={`${examDetails.exam_id}-${examDetails.duration}`}
+          key={`${examDetails.exam_id}-${examDetails.duration}-${isDemoMode}`}
           totalDurationSeconds={examDurationForTimer * 60}
           onTimeUp={handleInternalTimeUp}
           examTitle={examTitleForTimer + (isDemoMode ? " (Demo)" : "")}
@@ -322,11 +325,11 @@ export function ExamTakingInterface({
       {/* Top Header Bar */}
       <header className="h-16 bg-white dark:bg-gray-900 shadow-md flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-0 z-40 border-b border-gray-200 dark:border-gray-700 mt-[52px]"> {/* Adjusted for timer warning */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="md:hidden"> {/* Placeholder for mobile panel toggle */}
+          <Button variant="ghost" size="icon" className="md:hidden">
             <Menu className="h-6 w-6" />
           </Button>
           <h1 className="text-lg font-semibold text-gray-800 dark:text-white truncate">
-            All Questions
+            {examDetails.title || 'Exam'}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -339,7 +342,6 @@ export function ExamTakingInterface({
               <SelectItem value="section-b">Section B - Chemistry</SelectItem>
             </SelectContent>
           </Select>
-          {/* Timer and End Test button are part of ExamTimerWarning or main page logic */}
         </div>
       </header>
 
@@ -350,7 +352,7 @@ export function ExamTakingInterface({
             <h2 className="text-md font-semibold text-gray-700 dark:text-gray-200">
                 {studentName || 'Student'}
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">ID: {studentRollNumber || 'N/A'}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Roll: {studentRollNumber || 'N/A'}</p>
           </div>
           
           <ScrollArea className="flex-grow">
@@ -507,4 +509,3 @@ export function ExamTakingInterface({
     </div>
   );
 }
-
