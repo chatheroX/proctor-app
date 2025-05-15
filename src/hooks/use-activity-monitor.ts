@@ -1,29 +1,15 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
-
-export type FlaggedEventType = 
-  | 'visibility_hidden' 
-  | 'visibility_visible' 
-  | 'fullscreen_entered' 
-  | 'fullscreen_exited'
-  | 'blur' // Window lost focus
-  | 'focus'; // Window gained focus
-
-export interface FlaggedEvent {
-  type: FlaggedEventType;
-  timestamp: Date;
-  studentId: string;
-  examId: string;
-  details?: string; 
-}
+import { useEffect, useRef } _from_ 'react';
+import type { FlaggedEvent, FlaggedEventType } _from_ '@/types/supabase'; // Using type from central location
 
 interface UseActivityMonitorProps {
-  studentId: string;
+  studentId: string; // Can be actual student ID or a demo identifier
   examId: string;
   onFlagEvent: (event: FlaggedEvent) => void;
-  enabled?: boolean;
+  enabled?: boolean; // Overall toggle for the monitor
+  isDemoMode?: boolean; // Special mode for teacher demos
 }
 
 export function useActivityMonitor({
@@ -31,6 +17,7 @@ export function useActivityMonitor({
   examId,
   onFlagEvent,
   enabled = true,
+  isDemoMode = false,
 }: UseActivityMonitorProps) {
   const onFlagEventRef = useRef(onFlagEvent);
 
@@ -41,29 +28,36 @@ export function useActivityMonitor({
   useEffect(() => {
     if (!enabled) return;
 
+    const createEvent = (type: FlaggedEventType, details?: string): FlaggedEvent => ({
+      type,
+      timestamp: new Date(),
+      studentId, // This will be the generic ID passed in props
+      examId,
+      details,
+    });
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        onFlagEventRef.current({ type: 'visibility_hidden', timestamp: new Date(), studentId, examId });
+        onFlagEventRef.current(createEvent('visibility_hidden'));
       } else {
-        onFlagEventRef.current({ type: 'visibility_visible', timestamp: new Date(), studentId, examId });
+        onFlagEventRef.current(createEvent('visibility_visible'));
       }
     };
 
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
-        onFlagEventRef.current({ type: 'fullscreen_exited', timestamp: new Date(), studentId, examId });
+        onFlagEventRef.current(createEvent('fullscreen_exited'));
       } else {
-        onFlagEventRef.current({ type: 'fullscreen_entered', timestamp: new Date(), studentId, examId });
+        onFlagEventRef.current(createEvent('fullscreen_entered'));
       }
     };
     
     const handleBlur = () => {
-      // This can be noisy if devtools are opened, etc. Use with caution or specific SEB configurations.
-      onFlagEventRef.current({ type: 'blur', timestamp: new Date(), studentId, examId, details: "Window lost focus" });
+      onFlagEventRef.current(createEvent('blur', "Window lost focus"));
     };
 
     const handleFocus = () => {
-      onFlagEventRef.current({ type: 'focus', timestamp: new Date(), studentId, examId, details: "Window gained focus" });
+      onFlagEventRef.current(createEvent('focus', "Window gained focus"));
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -73,7 +67,7 @@ export function useActivityMonitor({
 
     // Initial check for fullscreen
     if (document.fullscreenElement) {
-        onFlagEventRef.current({ type: 'fullscreen_entered', timestamp: new Date(), studentId, examId, details: "Initial state: fullscreen" });
+        onFlagEventRef.current(createEvent('fullscreen_entered', "Initial state: fullscreen"));
     }
 
 
@@ -83,5 +77,7 @@ export function useActivityMonitor({
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [enabled, studentId, examId]);
+  }, [enabled, studentId, examId, isDemoMode]); // isDemoMode included if behavior needs to change
 }
+
+    

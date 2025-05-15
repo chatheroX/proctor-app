@@ -1,16 +1,16 @@
 
 'use client';
 
-import { useParams, notFound, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { Label } from '@/components/ui/label';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam, Question } from '@/types/supabase'; // Using types from supabase.ts
+import { useParams, notFound, useRouter } _from_ 'next/navigation';
+import { useEffect, useState, useCallback } _from_ 'react';
+import { Button } _from_ '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } _from_ '@/components/ui/card';
+import { Badge } _from_ '@/components/ui/badge';
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare } _from_ 'lucide-react';
+import { useToast } _from_ '@/hooks/use-toast';
+import { Label } _from_ '@/components/ui/label';
+import { createSupabaseBrowserClient } _from_ '@/lib/supabase/client';
+import type { Exam, Question } _from_ '@/types/supabase';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,12 +20,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} _from_ "@/components/ui/alert-dialog";
+import Link _from_ 'next/link';
 
 export default function ExamDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { toast } = useToast();
+  const { toast } _from_ useToast();
   const supabase = createSupabaseBrowserClient();
   const examId = params.id as string;
 
@@ -42,7 +43,7 @@ export default function ExamDetailsPage() {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } _from_ await supabase
         .from('ExamX')
         .select('*')
         .eq('exam_id', examId)
@@ -52,7 +53,7 @@ export default function ExamDetailsPage() {
       setExam(data);
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to fetch exam details: ${error.message}`, variant: "destructive" });
-      setExam(null); // Explicitly set to null on error
+      setExam(null);
     } finally {
       setIsLoading(false);
     }
@@ -76,7 +77,7 @@ export default function ExamDetailsPage() {
     if (!exam) return;
     setIsDeleting(true);
     try {
-      const { error } = await supabase
+      const { error } _from_ await supabase
         .from('ExamX')
         .delete()
         .eq('exam_id', exam.exam_id);
@@ -95,8 +96,8 @@ export default function ExamDetailsPage() {
     if (!status) return 'secondary';
     switch (status) {
       case 'Published': return 'default';
-      case 'Ongoing': return 'destructive';
-      case 'Completed': return 'outline';
+      case 'Ongoing': return 'destructive'; // Often 'Ongoing' implies active and potentially critical
+      case 'Completed': return 'outline'; // Consider a success variant for completed
       case 'Draft':
       default:
         return 'secondary';
@@ -182,7 +183,7 @@ export default function ExamDetailsPage() {
           <div>
             <h3 className="text-xl font-semibold mb-3 flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary" /> Questions ({questionsList.length})</h3>
             {questionsList.length > 0 ? (
-              <ul className="space-y-4">
+              <ul className="space-y-4 max-h-96 overflow-y-auto pr-2">
                 {questionsList.map((q: Question, index: number) => (
                   <li key={q.id || index} className="p-4 border rounded-md bg-background shadow-sm">
                     <p className="font-medium text-md mb-1">Q{index + 1}: {q.text}</p>
@@ -201,9 +202,14 @@ export default function ExamDetailsPage() {
             )}
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 border-t pt-6">
+        <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 border-t pt-6 flex-wrap">
           <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/exams/${exam.exam_id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit Exam
+          </Button>
+           <Button variant="outline" asChild>
+            <Link href={`/teacher/dashboard/exams/${exam.exam_id}/demo`}>
+              <PlaySquare className="mr-2 h-4 w-4" /> Take Demo Test
+            </Link>
           </Button>
           <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/results/${exam.exam_id}`)}>
             <Users2 className="mr-2 h-4 w-4" /> View Results
@@ -239,3 +245,5 @@ export default function ExamDetailsPage() {
     </div>
   );
 }
+
+    
