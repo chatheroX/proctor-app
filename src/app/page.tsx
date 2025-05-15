@@ -1,3 +1,4 @@
+import React from 'react'; // Added this line
 import { AppHeader } from '@/components/shared/header';
 import { AppFooter } from '@/components/shared/footer';
 import { ThreeScenePlaceholder } from '@/components/landing/three-scene-placeholder';
