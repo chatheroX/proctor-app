@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Eye, EyeOff, User, Mail, Lock, Loader2, Briefcase } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast'; // Ensure this is imported
+import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CustomUser } from '@/types/supabase';
 
@@ -19,34 +19,32 @@ type AuthAction = 'login' | 'register';
 const AUTH_ROUTE = '/auth';
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE; // Default for now
+
 
 export function AuthForm() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast(); // Initialize useToast here
+  const { toast } = useToast();
   const { user, isLoading: authContextLoading, signIn, signUp } = useAuth();
 
   const initialAction = (searchParams.get('action') as AuthAction) || 'login';
-  const initialRoleQuery = (searchParams.get('role') as CustomUser['role']) || '';
-
+  
   const [action, setAction] = useState<AuthAction>(initialAction);
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role'] | ''>(initialRoleQuery);
+  const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // For form submission loading state
 
   useEffect(() => {
-    // Sync form action and role with URL query parameters
-    setAction(initialAction);
-    setRole(initialRoleQuery);
-  }, [initialAction, initialRoleQuery]);
+    setAction((searchParams.get('action') as AuthAction) || 'login');
+    setRole(''); // Reset role on action change
+  }, [searchParams]);
+
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +62,7 @@ export function AuthForm() {
     }
 
     let result: { success: boolean; error?: string; user?: CustomUser | null };
-    let targetDashboard = DEFAULT_DASHBOARD_ROUTE;
-
+    
     if (action === 'register') {
       if (!trimmedFullName) {
         toast({ title: "Error", description: "Full name is required for registration.", variant: "destructive" });
@@ -87,12 +84,10 @@ export function AuthForm() {
         setIsSubmitting(false);
         return;
       }
-      console.log('Attempting to register with email:', trimmedEmail, 'name:', trimmedFullName, 'role:', role);
       result = await signUp(trimmedEmail, password, trimmedFullName, role as 'student' | 'teacher');
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        targetDashboard = result.user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
-        router.push(targetDashboard);
+        // Redirection is now handled by AuthContext's useEffect
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -100,20 +95,18 @@ export function AuthForm() {
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        targetDashboard = result.user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
-        router.push(targetDashboard); // Direct push after context state is set by signIn
+         // Redirection is now handled by AuthContext's useEffect
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
     }
     setIsSubmitting(false);
   };
-
-  console.log('[AuthForm] Rendering. Pathname:', pathname, 'AuthContext Loading:', authContextLoading, 'User:', user ? user.email : 'null');
-
-  // Show loader if AuthContext is still determining initial user state AND we are on /auth page.
+  
+  // This loader shows when AuthContext is initially determining user state.
+  // It's specific to the /auth page to avoid flashes on other pages.
   if (authContextLoading && user === undefined && pathname === AUTH_ROUTE) {
-    console.log("[AuthForm] AuthContext loading initial state, showing page loader.");
+    console.log("[AuthForm] AuthContext loading initial state for /auth, showing page loader.");
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -121,11 +114,10 @@ export function AuthForm() {
     );
   }
 
-  // If user is authenticated and somehow lands on /auth,
-  // AuthContext's useEffect should redirect them.
-  // This block is a fallback UI state while that redirect happens.
+  // If user is authenticated (by AuthContext) and on /auth page, show "Finalizing..."
+  // AuthContext's useEffect is responsible for the actual redirect.
   if (user && !authContextLoading && pathname === AUTH_ROUTE) {
-    console.log("[AuthForm] User is authenticated on /auth page, showing 'Finalizing session...' (AuthContext should redirect). Pathname:", pathname);
+    console.log("[AuthForm] User is authenticated on /auth page. AuthContext should redirect. User:", user.email, "Role:", user.role);
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12">
         <p className="mb-2 text-lg">Finalizing session & redirecting to dashboard...</p>
@@ -135,12 +127,14 @@ export function AuthForm() {
     );
   }
 
+
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
       <Card className="w-full max-w-md shadow-xl">
         <Tabs value={action} onValueChange={(value) => {
           setAction(value as AuthAction);
-          setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRoleQuery);
+          // Reset fields when switching between login/register
+          setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
         }} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>
@@ -178,7 +172,7 @@ export function AuthForm() {
                 </Button>
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   Don&apos;t have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRoleQuery); }}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(''); }}>
                     Register here
                   </button>
                 </p>
@@ -247,7 +241,7 @@ export function AuthForm() {
                 </Button>
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(initialRoleQuery); }}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');}}>
                     Login here
                   </button>
                 </p>
