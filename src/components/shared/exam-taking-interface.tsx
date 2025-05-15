@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation'; // Added import
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -20,9 +21,9 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean;
-  error: string | null;
-  examStarted: boolean; // Should always be true when this component is rendered directly
+  isLoading: boolean; // Represents loading of exam data for this interface
+  error: string | null; // Represents error during exam data fetch
+  examStarted: boolean; // Indicates if the exam is actively being taken (e.g., after a "Start" button)
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -38,7 +39,7 @@ export function ExamTakingInterface({
   initialAnswers,
   isLoading: parentIsLoading,
   error: examLoadingError,
-  examStarted, // This prop now signifies if the exam is actively being taken
+  examStarted,
   onAnswerChange,
   onSubmitExam,
   onTimeUp,
@@ -47,6 +48,7 @@ export function ExamTakingInterface({
   studentName,
   studentRollNumber,
 }: ExamTakingInterfaceProps) {
+  const router = useRouter(); // Initialize router
   const { toast } = useToast();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
@@ -56,9 +58,16 @@ export function ExamTakingInterface({
   const [internalError, setInternalError] = useState<string | null>(null);
 
   const parentOnTimeUpRef = useRef(onTimeUp);
+  const parentOnSubmitExamRef = useRef(onSubmitExam);
+
   useEffect(() => {
     parentOnTimeUpRef.current = onTimeUp;
   }, [onTimeUp]);
+
+  useEffect(() => {
+    parentOnSubmitExamRef.current = onSubmitExam;
+  }, [onSubmitExam]);
+
 
   const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
   const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
@@ -84,7 +93,7 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast, setFlaggedEvents]); // Added setFlaggedEvents
+  }, [isDemoMode, toast]);
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -96,13 +105,13 @@ export function ExamTakingInterface({
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange, setAnswers]); // Added setAnswers
+  }, [onAnswerChange]);
 
   const handleNextQuestion = useCallback(() => {
     if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions, setCurrentQuestionIndex]); // Added setCurrentQuestionIndex
+  }, [currentQuestionIndex, questions]);
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -110,7 +119,7 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]); // Added setCurrentQuestionIndex
+  }, [allowBacktracking, currentQuestionIndex, toast]);
 
   const handleQuestionNavigation = useCallback((index: number) => {
     if (index >= 0 && questions && index < questions.length) {
@@ -120,7 +129,7 @@ export function ExamTakingInterface({
       }
       setCurrentQuestionIndex(index);
     }
-  }, [allowBacktracking, currentQuestionIndex, questions, toast, setCurrentQuestionIndex]);
+  }, [allowBacktracking, currentQuestionIndex, questions, toast]);
 
 
   const handleInternalSubmitExam = useCallback(async () => {
@@ -128,7 +137,7 @@ export function ExamTakingInterface({
     setIsSubmitting(true);
     setInternalError(null);
     try {
-        await onSubmitExam(answers, flaggedEvents);
+        await parentOnSubmitExamRef.current(answers, flaggedEvents);
         setExamFinished(true);
     } catch (e: any) {
         setInternalError(e.message || "Failed to submit exam.");
@@ -136,7 +145,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [onSubmitExam, answers, flaggedEvents, examFinished, toast, setIsSubmitting, setInternalError, setExamFinished]);
+  }, [answers, flaggedEvents, examFinished, toast]);
 
   const handleInternalTimeUp = useCallback(async () => {
     if (examFinished) return;
@@ -156,7 +165,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, isDemoMode, toast, examFinished, setIsSubmitting, setInternalError, setExamFinished]);
+  }, [answers, flaggedEvents, isDemoMode, toast, examFinished]);
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -233,12 +242,11 @@ export function ExamTakingInterface({
           <CardFooter>
              <Button onClick={() => {
               if (typeof window !== 'undefined') {
-                window.close(); // Attempt to close the tab
-                // If not closed by window.close(), provide fallback
-                if (!isDemoMode) {
-                   setTimeout(() => router.push('/student/dashboard/exam-history'), 500);
-                } else if (isDemoMode && examDetails.exam_id) {
-                   setTimeout(() => router.push(`/teacher/dashboard/exams/${examDetails.exam_id}/details`), 500);
+                window.close();
+                if (!isDemoMode && !window.closed) {
+                   router.push('/student/dashboard/exam-history');
+                } else if (isDemoMode && examDetails?.exam_id && !window.closed) {
+                   router.push(`/teacher/dashboard/exams/${examDetails.exam_id}/details`);
                 }
               }
             }} className="w-full">
@@ -272,10 +280,8 @@ export function ExamTakingInterface({
   const examDurationForTimer = examDetails.duration ?? 0;
   const examTitleForTimer = examDetails.title ?? "Exam";
   const questionProgress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
-  const router = useRouter(); // Added for fallback navigation on exam end
 
   return (
-    // Main container for the distinct exam UI
     <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-900">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
@@ -286,7 +292,6 @@ export function ExamTakingInterface({
         />
       )}
       
-      {/* Exam Interface Header - positioned below the timer */}
       <header className="sticky top-[calc(3rem)] z-10 w-full bg-white dark:bg-slate-800 shadow-md py-3 px-4 md:px-6 border-b border-slate-200 dark:border-slate-700">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4">
           <div className="flex-grow">
@@ -309,12 +314,10 @@ export function ExamTakingInterface({
         {questions.length > 0 && <Progress value={questionProgress} className="mt-2 h-2 rounded-full" />}
       </header>
 
-      {/* Main Exam Content Area with Question Panel */}
-      <div className="flex-grow flex overflow-hidden"> {/* Parent flex for panel and content */}
-        {/* Question Navigation Panel */}
+      <div className="flex-grow flex overflow-hidden">
         <aside className="w-1/4 md:w-1/5 lg:w-1/6 bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-3 shadow-sm">
           <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-200 sticky top-0 bg-slate-50 dark:bg-slate-800 py-2 z-10">Questions</h3>
-          <ScrollArea className="h-[calc(100vh-10rem)] pr-2"> {/* Adjust height as needed */}
+          <ScrollArea className="h-[calc(100vh-10rem)] pr-2">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {questions.map((q, index) => {
                 const isAnswered = !!answers[q.id];
@@ -343,7 +346,6 @@ export function ExamTakingInterface({
           </ScrollArea>
         </aside>
 
-        {/* Current Question and Options Area */}
         <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-6 overflow-y-auto bg-background">
           <Card className="w-full max-w-3xl shadow-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
             <CardHeader className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-700">
