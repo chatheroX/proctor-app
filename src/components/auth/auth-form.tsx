@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react'; // Removed useCallback as it's no longer used here
+import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,21 +10,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Eye, EyeOff, User, Mail, Lock, Loader2, Briefcase } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast'; // Ensure this is imported
 import { useAuth } from '@/contexts/AuthContext';
 import type { CustomUser } from '@/types/supabase';
 
 type AuthAction = 'login' | 'register';
 
 const AUTH_ROUTE = '/auth';
-const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview'; // Kept for direct push in handleAuth
-const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview'; // Kept for direct push in handleAuth
+const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
+const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
 const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE; // Default for now
 
 export function AuthForm() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast(); // Initialize useToast here
   const { user, isLoading: authContextLoading, signIn, signUp } = useAuth();
 
   const initialAction = (searchParams.get('action') as AuthAction) || 'login';
@@ -41,8 +42,6 @@ export function AuthForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Removed unused getRedirectPathForRole function
-
   useEffect(() => {
     // Sync form action and role with URL query parameters
     setAction(initialAction);
@@ -56,7 +55,7 @@ export function AuthForm() {
     const trimmedEmail = email.trim();
     const trimmedFullName = fullName.trim();
 
-    console.log('[AuthForm] Attempting auth. Action:', action, 'Email (trimmed):', trimmedEmail);
+    console.log('[AuthForm] Attempting auth. Action:', action, 'Email (trimmed):', trimmedEmail, "Role:", role);
 
     if (!trimmedEmail || !password) {
       toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
@@ -88,12 +87,12 @@ export function AuthForm() {
         setIsSubmitting(false);
         return;
       }
-
+      console.log('Attempting to register with email:', trimmedEmail, 'name:', trimmedFullName, 'role:', role);
       result = await signUp(trimmedEmail, password, trimmedFullName, role as 'student' | 'teacher');
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
         targetDashboard = result.user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
-        router.push(targetDashboard); // Direct push after context state is set by signUp
+        router.push(targetDashboard);
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
