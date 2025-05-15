@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation'; // Added missing import
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen, Check, XCircle, ThumbsUp } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen, Check, XCircle, ThumbsUp, ClockIcon, LogOut, HelpCircle, MessageSquare } from 'lucide-react';
 import { ExamTimerWarning } from '@/components/student/exam-timer-warning';
 import { useActivityMonitor, type FlaggedEvent } from '@/hooks/use-activity-monitor';
 import { useToast } from '@/hooks/use-toast';
@@ -21,9 +21,9 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean; 
-  error: string | null; 
-  examStarted: boolean; 
+  isLoading: boolean;
+  error: string | null;
+  examStarted: boolean;
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -39,7 +39,7 @@ export function ExamTakingInterface({
   initialAnswers,
   isLoading: parentIsLoading,
   error: examLoadingError,
-  examStarted, // This prop determines if the exam taking UI or pre-start screen is shown
+  examStarted,
   onAnswerChange,
   onSubmitExam: parentOnSubmitExam,
   onTimeUp: parentOnTimeUp,
@@ -57,7 +57,7 @@ export function ExamTakingInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
   const [internalError, setInternalError] = useState<string | null>(null);
-
+  
   const onSubmitExamRef = useRef(parentOnSubmitExam);
   const onTimeUpRef = useRef(parentOnTimeUp);
 
@@ -69,14 +69,9 @@ export function ExamTakingInterface({
     onTimeUpRef.current = parentOnTimeUp;
   }, [parentOnTimeUp]);
   
-  // This useEffect was removed because useState(initialAnswers || {}) handles initial state.
-  // Re-syncing based on initialAnswers prop changes can be complex and lead to loops.
-  // If dynamic reset is needed, parent should control examStarted or provide a key to ExamTakingInterface.
-  // useEffect(() => {
-  //   console.log("[ExamTakingInterface] initialAnswers prop changed:", initialAnswers);
-  //   setAnswers(initialAnswers || {});
-  // }, [initialAnswers]);
-
+  useEffect(() => {
+     setAnswers(initialAnswers || {});
+  }, [initialAnswers]);
 
   const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
   const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
@@ -100,7 +95,7 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast]); 
+  }, [isDemoMode, toast, setFlaggedEvents]); 
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -112,13 +107,13 @@ export function ExamTakingInterface({
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange]); 
+  }, [onAnswerChange, setAnswers]); 
 
   const handleNextQuestion = useCallback(() => {
     if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions]);
+  }, [currentQuestionIndex, questions, setCurrentQuestionIndex]);
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -126,7 +121,7 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast]); 
+  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]); 
 
   const handleQuestionNavigation = useCallback((index: number) => {
     if (index >= 0 && questions && index < questions.length) {
@@ -136,7 +131,7 @@ export function ExamTakingInterface({
       }
       setCurrentQuestionIndex(index);
     }
-  }, [allowBacktracking, currentQuestionIndex, questions, toast]); 
+  }, [allowBacktracking, currentQuestionIndex, questions, toast, setCurrentQuestionIndex]); 
 
   const handleInternalSubmitExam = useCallback(async () => {
     if (examFinished) return;
@@ -151,7 +146,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, examFinished, toast]); 
+  }, [answers, flaggedEvents, examFinished, toast, setIsSubmitting, setInternalError, setExamFinished]); 
 
   const handleInternalTimeUp = useCallback(async () => {
     if (examFinished) return;
@@ -171,9 +166,9 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, isDemoMode, toast, examFinished]); 
+  }, [answers, flaggedEvents, isDemoMode, toast, examFinished, setIsSubmitting, setInternalError, setExamFinished]); 
 
-  const currentQuestionId = useMemo(() => currentQuestion?.id, [currentQuestion?.id]);
+  const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
     if (currentQuestionId) {
       handleInternalAnswerChange(currentQuestionId, optionId);
@@ -182,7 +177,7 @@ export function ExamTakingInterface({
 
   if (parentIsLoading && !examDetails) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-950 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-lg text-muted-foreground">Loading exam interface...</p>
       </div>
@@ -191,7 +186,7 @@ export function ExamTakingInterface({
 
   if (examLoadingError && !examDetails) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-950 p-4 text-center">
         <ServerCrash className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">Error Loading Exam</h2>
         <p className="text-md text-muted-foreground mb-6 max-w-md">{examLoadingError}</p>
@@ -201,19 +196,19 @@ export function ExamTakingInterface({
   }
   
   if (!examDetails || !examStarted) {
-     console.log("[ExamTakingInterface] Not properly initiated. examDetails:", !!examDetails, "examStarted:", examStarted);
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-950 p-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">Exam Session Error</h2>
         <p className="text-md text-muted-foreground mb-6 max-w-md">Exam session not properly initiated or critical details are missing.</p>
+         <Button onClick={() => window.close()} className="mt-4">Close Tab</Button>
       </div>
     );
   }
 
   if (examFinished) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-950 p-4 text-center">
         <Card className="w-full max-w-md modern-card shadow-lg p-6">
           <CardHeader className="pb-4">
             <ThumbsUp className="h-16 w-16 text-green-500 mx-auto mb-4" />
@@ -249,9 +244,10 @@ export function ExamTakingInterface({
              <Button onClick={() => {
               if (typeof window !== 'undefined') {
                 window.close(); 
-                if (!window.closed) {
+                if (!window.closed) { // Fallback if window.close() was blocked or failed
                     if (!isDemoMode) router.push('/student/dashboard/exam-history');
                     else if (isDemoMode && examDetails?.exam_id) router.push(`/teacher/dashboard/exams/${examDetails.exam_id}/details`);
+                    else router.push('/'); // Generic fallback
                 }
               }
             }} className="btn-primary-solid w-full py-2 text-sm rounded-md">
@@ -263,9 +259,9 @@ export function ExamTakingInterface({
     );
   }
 
-  if (!questions || questions.length === 0 && !parentIsLoading) {
+  if ((!questions || questions.length === 0) && !parentIsLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-950 p-4 text-center">
         <XCircle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">No Questions Available</h2>
         <p className="text-md text-muted-foreground">This exam has no questions. Please contact your instructor.</p>
@@ -275,7 +271,7 @@ export function ExamTakingInterface({
   
    if (!currentQuestion && questions && questions.length > 0 && !parentIsLoading) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-950 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-lg text-muted-foreground">Loading question...</p>
       </div>
@@ -284,10 +280,10 @@ export function ExamTakingInterface({
   
   const examDurationForTimer = examDetails.duration ?? 0;
   const examTitleForTimer = examDetails.title ?? "Exam";
-  const questionProgress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
+  const questionProgress = questions.length > 0 ? ((Object.keys(answers).length) / questions.length) * 100 : 0;
 
   return (
-    <div className="flex flex-col h-screen bg-muted/30 text-foreground">
+    <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-900 text-foreground">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
           key={`${examDetails.exam_id}-${examDetails.duration}`}
@@ -297,62 +293,38 @@ export function ExamTakingInterface({
         />
       )}
       
-      {/* Header Section */}
-      <header className="sticky top-0 left-0 right-0 z-40 bg-card shadow-sm py-3 px-4 md:px-6 border-b border-border mt-[2.5rem] md:mt-[2.5rem]"> {/* Adjusted margin-top for timer */}
-        <div className="container mx-auto flex flex-col md:flex-row items-center justify-between gap-y-2 md:gap-x-4">
-          <div className="flex-1 min-w-0 text-center md:text-left">
-            <h1 className="text-lg md:text-xl font-semibold text-foreground truncate flex items-center gap-2 justify-center md:justify-start">
-              <BookOpen className="h-5 w-5 shrink-0 text-primary" /> 
-              <span className="truncate" title={examDetails.title}>
-                {examDetails.title}
-              </span>
-              {isDemoMode && <span className="ml-2 text-xs font-medium px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-300 whitespace-nowrap">(DEMO)</span>}
-            </h1>
-            <div className="flex items-center justify-center md:justify-start gap-x-2 gap-y-1 text-xs text-muted-foreground mt-1 flex-wrap">
-              {studentName && (
-                <span className="flex items-center gap-1 whitespace-nowrap"><UserCircle className="h-3 w-3" /> {studentName}</span>
-              )}
-              {studentRollNumber && (
-                <span className="flex items-center gap-1 whitespace-nowrap"><Hash className="h-3 w-3" /> ID: {studentRollNumber}</span>
-              )}
-            </div>
-          </div>
-          <div className="text-xs font-medium text-muted-foreground w-full md:w-auto text-center md:text-right mt-1 md:mt-0 whitespace-nowrap">
-            Question {currentQuestionIndex + 1} of {questions.length || 0}
-          </div>
-        </div>
-        {questions.length > 0 && <Progress value={questionProgress} className="mt-2 h-1.5 rounded-full bg-primary/20" />}
-      </header>
-
-      {/* Main Exam Area */}
-      <div className="flex-grow flex overflow-hidden p-4 md:p-6 gap-4 md:gap-6">
-        {/* Question Navigation Panel (Right Side) */}
-        <aside className="w-1/4 md:w-1/5 lg:w-[200px] modern-card p-3 shadow-md flex flex-col rounded-md bg-card border-border">
-          <h3 className="text-sm font-semibold mb-3 text-foreground border-b border-border pb-2 text-center">
-            Questions
-          </h3>
-          <ScrollArea className="flex-grow pr-1 -mr-1">
-            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 gap-1.5">
+      <div className="flex flex-1 pt-[52px] overflow-hidden"> {/* pt-[52px] for ExamTimerWarning height */}
+        {/* Left Panel: Question Navigation */}
+        <aside className="w-64 bg-white dark:bg-gray-800/30 p-4 flex flex-col shadow-md border-r border-border">
+          <h2 className="text-lg font-semibold mb-3 text-primary border-b pb-2">Questions</h2>
+          <ScrollArea className="flex-grow pr-2 -mr-2">
+            <div className="space-y-1.5">
               {questions.map((q, index) => {
                 const isAnswered = !!answers[q.id];
                 const isCurrent = index === currentQuestionIndex;
                 return (
                   <Button
-                    key={q.id || index} // Fallback to index if q.id is somehow undefined
+                    key={q.id}
                     variant={isCurrent ? "default" : (isAnswered ? "secondary" : "outline")}
                     size="sm"
                     className={cn(
-                      "aspect-square h-auto text-xs p-0 justify-center items-center font-medium rounded-md shadow-xs transition-all duration-150",
+                      "w-full justify-start text-left h-auto py-1.5 px-2 font-medium rounded-md shadow-xs transition-all duration-150",
                       "border-border/70 hover:border-primary focus:ring-1 focus:ring-primary focus:z-10",
-                      isCurrent && "bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-primary ring-offset-1 ring-offset-background scale-105",
-                      isAnswered && !isCurrent && "bg-green-100 dark:bg-green-700/30 border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-700/40",
+                      isCurrent && "bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-primary ring-offset-1 ring-offset-background",
+                      isAnswered && !isCurrent && "bg-blue-100 dark:bg-blue-700/30 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-700/40",
                       !isAnswered && !isCurrent && "bg-card hover:bg-muted/70 text-muted-foreground hover:text-foreground",
                       (!allowBacktracking && index < currentQuestionIndex) && "opacity-60 cursor-not-allowed hover:bg-inherit"
                     )}
                     onClick={() => handleQuestionNavigation(index)}
                     disabled={(!allowBacktracking && index < currentQuestionIndex) || isSubmitting}
                   >
-                    {index + 1}
+                    <span className={cn("mr-2 w-5 h-5 rounded-full flex items-center justify-center text-xs", 
+                      isCurrent ? "bg-primary-foreground text-primary" : isAnswered ? "bg-blue-500 text-white" : "bg-muted-foreground/20 text-muted-foreground"
+                    )}>
+                      {index + 1}
+                    </span>
+                    <span className="truncate text-xs">Q{index + 1}</span>
+                     {isAnswered && !isCurrent && <Check className="ml-auto h-4 w-4 text-blue-600" />}
                   </Button>
                 );
               })}
@@ -361,16 +333,36 @@ export function ExamTakingInterface({
           </ScrollArea>
         </aside>
 
-        {/* Main Question Content Area (Left Side) */}
-        <main className="flex-grow flex flex-col items-center justify-center overflow-y-auto rounded-md">
-          <Card className="w-full modern-card shadow-md flex flex-col flex-grow rounded-md bg-card border-border">
-            <CardHeader className="p-4 md:p-5 border-b border-border">
-              {currentQuestion && <h2 className="text-md md:text-lg font-medium text-foreground leading-snug">{currentQuestion.text}</h2>}
+        {/* Right Panel: Main Question Content */}
+        <main className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto">
+          {/* Header for main content area */}
+           <header className="mb-4 pb-3 border-b border-border">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div>
+                <h1 className="text-xl md:text-2xl font-semibold text-foreground truncate" title={examDetails.title}>
+                  {examDetails.title}
+                </h1>
+                <div className="text-xs text-muted-foreground mt-1 space-x-3">
+                  {studentName && (
+                    <span className="inline-flex items-center gap-1"><UserCircle className="h-3.5 w-3.5" /> {studentName}</span>
+                  )}
+                  {studentRollNumber && (
+                    <span className="inline-flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> {studentRollNumber}</span>
+                  )}
+                </div>
+              </div>
+              {isDemoMode && <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">DEMO MODE</Badge>}
+            </div>
+          </header>
+          
+          <Card className="w-full modern-card shadow-lg flex flex-col flex-grow rounded-lg bg-card border-border">
+            <CardHeader className="p-4 md:p-6 border-b border-border">
+              {currentQuestion && <h2 className="text-lg md:text-xl font-medium text-foreground leading-relaxed">{currentQuestion.text}</h2>}
               {!currentQuestion && questions.length > 0 && (
                   <h2 className="text-md text-muted-foreground">Loading question text...</h2>
               )}
             </CardHeader>
-            <CardContent className="p-4 md:p-5 space-y-3 flex-grow overflow-y-auto">
+            <CardContent className="p-4 md:p-6 space-y-4 flex-grow overflow-y-auto">
               {currentQuestion?.options ? (
                 <RadioGroup
                   value={answers[currentQuestion.id] || ''}
@@ -380,11 +372,11 @@ export function ExamTakingInterface({
                 >
                   {currentQuestion.options.map((option, optIndex) => (
                     <div 
-                      key={option.id || optIndex} // Fallback to index if option.id undefined
+                      key={option.id}
                       className={cn(
-                        "flex items-center space-x-3 p-3 border rounded-md transition-all duration-150 ease-in-out cursor-pointer",
-                        "hover:bg-primary/5 hover:border-primary/50 dark:hover:bg-primary/10",
-                        answers[currentQuestion.id] === option.id && "bg-primary/10 border-primary ring-1 ring-primary/70 shadow-sm",
+                        "flex items-center space-x-3 p-3.5 border rounded-lg transition-all duration-150 ease-in-out cursor-pointer bg-background hover:shadow-md",
+                        "hover:bg-primary/5 hover:border-primary/60 dark:hover:bg-primary/10",
+                        answers[currentQuestion.id] === option.id && "bg-primary/10 border-primary ring-2 ring-primary/80 shadow-lg",
                         isSubmitting && "cursor-not-allowed opacity-70"
                       )}
                       onClick={() => !isSubmitting && memoizedOnRadioValueChange(option.id)}
@@ -392,7 +384,7 @@ export function ExamTakingInterface({
                       <RadioGroupItem 
                         value={option.id} 
                         id={`${currentQuestion.id}-option-${option.id}`} 
-                        className="h-4 w-4 border-muted-foreground text-primary focus:ring-primary disabled:opacity-50" 
+                        className="h-4 w-4 border-muted-foreground text-primary focus:ring-primary disabled:opacity-50 shrink-0" 
                         disabled={isSubmitting}
                       />
                       <Label htmlFor={`${currentQuestion.id}-option-${option.id}`} className={cn("text-sm md:text-base flex-1 py-0.5 text-foreground", isSubmitting ? "cursor-not-allowed" : "cursor-pointer")}>{option.text}</Label>
@@ -413,25 +405,31 @@ export function ExamTakingInterface({
                   </Alert>
               )}
             </CardContent>
-            <CardFooter className="flex justify-between border-t border-border p-3 md:p-4 bg-muted/50 rounded-b-md sticky bottom-0">
-              <Button
-                variant="outline"
-                onClick={handlePreviousQuestion}
-                disabled={currentQuestionIndex === 0 || !allowBacktracking || !currentQuestion || isSubmitting}
-                className="py-2 px-4 text-sm rounded-md shadow-sm border-border hover:bg-accent/20"
-              >
-                <ArrowLeft className="mr-1.5 h-4 w-4" /> Previous
-              </Button>
-              {currentQuestionIndex < questions.length - 1 ? (
-                <Button onClick={handleNextQuestion} disabled={!currentQuestion || isSubmitting} className="btn-primary-solid py-2 px-4 text-sm rounded-md">
-                  Next <ArrowRight className="ml-1.5 h-4 w-4" />
+            <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-border p-3 md:p-4 bg-muted/30 rounded-b-lg">
+              <div className="flex items-center w-full sm:w-auto">
+                <Progress value={questionProgress} className="flex-1 h-2 mr-3" />
+                <span className="text-xs text-muted-foreground whitespace-nowrap">{Object.keys(answers).length} / {questions.length} Answered</span>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handlePreviousQuestion}
+                  disabled={currentQuestionIndex === 0 || !allowBacktracking || !currentQuestion || isSubmitting}
+                  className="py-2 px-4 text-sm rounded-md shadow-sm border-border hover:bg-accent/20"
+                >
+                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Previous
                 </Button>
-              ) : (
-                <Button onClick={handleInternalSubmitExam} disabled={isSubmitting || !currentQuestion} className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 text-sm rounded-md shadow-sm">
-                  {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ListChecks className="mr-1.5 h-4 w-4" />}
-                  Submit {isDemoMode ? "Demo " : ""}Exam
-                </Button>
-              )}
+                {currentQuestionIndex < questions.length - 1 ? (
+                  <Button onClick={handleNextQuestion} disabled={!currentQuestion || isSubmitting} className="btn-primary-solid py-2 px-4 text-sm rounded-md">
+                    Next <ArrowRight className="ml-1.5 h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button onClick={handleInternalSubmitExam} disabled={isSubmitting || !currentQuestion} className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 text-sm rounded-md shadow-sm">
+                    {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ListChecks className="mr-1.5 h-4 w-4" />}
+                    Submit {isDemoMode ? "Demo " : ""}Exam
+                  </Button>
+                )}
+              </div>
             </CardFooter>
           </Card>
         </main>
@@ -439,3 +437,4 @@ export function ExamTakingInterface({
     </div>
   );
 }
+
