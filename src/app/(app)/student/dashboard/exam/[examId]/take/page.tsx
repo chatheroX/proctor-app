@@ -23,7 +23,7 @@ export default function TakeExamPage() {
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // For loading exam data
   const [error, setError] = useState<string | null>(null);
   const [examStarted, setExamStarted] = useState(false);
 
@@ -32,7 +32,8 @@ export default function TakeExamPage() {
   const fetchExamData = useCallback(async () => {
     if (!examId || !supabase || !studentUserId) {
       if (!examId) setError("Exam ID is missing.");
-      if (!studentUserId) setError("Student not authenticated for fetch.");
+      else if (!studentUserId) setError("Student not authenticated for fetch.");
+      else setError("Supabase client not available.");
       setIsLoading(false);
       return;
     }
@@ -66,17 +67,17 @@ export default function TakeExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, studentUserId]);
+  }, [examId, supabase, studentUserId]); // setError, setExamDetails, setQuestions, setIsLoading are stable
 
   useEffect(() => {
-    if (examId && studentUserId) {
+    if (examId && studentUserId && !examDetails && isLoading) { // Only fetch if needed and params are ready
         fetchExamData();
-    } else if (!isLoading) {
+    } else if (!isLoading && (!examId || !studentUserId)) {
         if (!examId) setError("Exam ID is missing for fetch.");
-        else setError("Student authentication details missing for fetch.");
-        setIsLoading(false);
+        else if(!studentUserId) setError("Student authentication details missing for fetch.");
+        // setIsLoading(false); // Already false
     }
-  }, [examId, studentUserId, fetchExamData, isLoading]);
+  }, [examId, studentUserId, fetchExamData, isLoading, examDetails]); // Added examDetails & isLoading to dependencies
 
   const handleStartExam = useCallback(() => {
     if (error && !examDetails) {
@@ -87,31 +88,34 @@ export default function TakeExamPage() {
         toast({ title: "Cannot Start", description: `Exam is ${examDetails?.status.toLowerCase()}.`, variant: "destructive" });
         return;
     }
-    if(questions.length === 0 && !isLoading && examDetails) {
+    if(examDetails && (questions === null || questions.length === 0) && !isLoading) {
         toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
         return;
     }
     if (!isLoading && !error && examDetails) {
         setExamStarted(true);
     }
-  }, [examDetails, questions.length, isLoading, error, toast]);
+  }, [questions, isLoading, error, examDetails, toast]); // setExamStarted is stable
 
   const handleAnswerChangeLocal = useCallback((questionId: string, optionId: string) => {
     console.log(`Student Answer for QID ${questionId} saved locally (simulated): OptionID ${optionId}`);
+    // Here you would implement local storage saving
   }, []);
 
   const handleSubmitExamActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
     if (!studentUserId) {
-        toast({title: "Error", description: "Student not authenticated.", variant: "destructive"});
+        toast({title: "Error", description: "Student not authenticated for submission.", variant: "destructive"});
         return;
     }
     console.log('Submitting answers to backend:', answers);
     console.log('Flagged Events to backend:', flaggedEvents);
 
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // TODO: Implement actual submission to Supabase 'ExamSubmissionsX' table
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
 
     toast({ title: "Exam Submitted!", description: "Your responses have been recorded (simulation)." });
-  }, [studentUserId, toast]);
+    router.push('/student/dashboard/exam-history');
+  }, [studentUserId, toast, router]);
 
   const handleTimeUpActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
     if (!studentUserId) {
@@ -120,11 +124,14 @@ export default function TakeExamPage() {
     }
     console.log("Time is up. Auto-submitting answers:", answers);
     console.log("Time is up. Auto-submitting flagged events:", flaggedEvents);
-     await new Promise(resolve => setTimeout(resolve, 1500));
+    // TODO: Implement actual auto-submission to Supabase 'ExamSubmissionsX' table
+     await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
      toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up (simulation)." });
-  }, [studentUserId, toast]);
+     router.push('/student/dashboard/exam-history');
+  }, [studentUserId, toast, router]);
 
-  if (isLoading && !examStarted && !examDetails) {
+
+  if (isLoading && !examDetails && !examStarted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -132,27 +139,14 @@ export default function TakeExamPage() {
       </div>
     );
   }
-
-  if (error && !examDetails && !isLoading) {
+  
+  if (!isLoading && !examDetails && !examStarted) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Error loading exam</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">{error}</p>
-         <Button onClick={() => router.push('/student/dashboard')} className="mt-4">
-            Back to Dashboard
-        </Button>
-      </div>
-    );
-  }
-  
-  if (!examDetails && !isLoading) { // If loading is done but examDetails is still null
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Exam Data Not Available</p>
+        <p className="text-lg text-destructive text-center mb-2">{error ? "Error Loading Exam" : "Exam Data Not Available"}</p>
         <p className="text-sm text-muted-foreground text-center mb-4">{error || "Could not load exam details."}</p>
-        <Button onClick={() => router.push('/student/dashboard')} className="mt-4">
+         <Button onClick={() => router.push('/student/dashboard')} className="mt-4">
             Back to Dashboard
         </Button>
       </div>
@@ -162,7 +156,7 @@ export default function TakeExamPage() {
   return (
     <ExamTakingInterface
       examDetails={examDetails}
-      questions={questions}
+      questions={questions || []} // Ensure questions is not null
       isLoading={isLoading && !examDetails}
       error={error}
       examStarted={examStarted}
@@ -175,4 +169,5 @@ export default function TakeExamPage() {
     />
   );
 }
-    
+
+  

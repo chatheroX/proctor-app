@@ -38,7 +38,7 @@ export function ExamTakingInterface({
   onStartExam,
   onAnswerChange,
   onSubmitExam,
-  onTimeUp: parentOnTimeUp,
+  onTimeUp: parentOnTimeUpProp, // Renamed to avoid confusion with internal onTimeUp
   isDemoMode = false,
   userIdForActivityMonitor,
 }: ExamTakingInterfaceProps) {
@@ -50,14 +50,27 @@ export function ExamTakingInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
 
-  const parentOnTimeUpRef = useRef(parentOnTimeUp);
+  // Store the latest version of parentOnTimeUpProp in a ref to avoid making it a dependency of handleInternalTimeUp's useCallback
+  const parentOnTimeUpRef = useRef(parentOnTimeUpProp);
+  useEffect(() => {
+    parentOnTimeUpRef.current = parentOnTimeUpProp;
+  }, [parentOnTimeUpProp]);
 
   // MEMOIZED VALUES (derived from props or state)
   const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
-  const currentQuestion = useMemo(() => questions[currentQuestionIndex], [questions, currentQuestionIndex]);
-  const currentQuestionId = useMemo(() => currentQuestion?.id, [currentQuestion]);
+  const currentQuestion = useMemo(() => questions?.[currentQuestionIndex], [questions, currentQuestionIndex]);
   const examIdForMonitor = useMemo(() => examDetails?.exam_id || 'unknown_exam', [examDetails?.exam_id]);
   const activityMonitorEnabled = useMemo(() => examStarted && !examFinished, [examStarted, examFinished]);
+  
+  const cantStartReason = useMemo(() => {
+    if (examDetails?.status !== 'Published' && examDetails?.status !== 'Ongoing' && !isDemoMode && examDetails !== null) {
+      return `Exam is ${examDetails.status?.toLowerCase()}.`;
+    }
+    if (examDetails && !questions?.length && !isLoading) { // Check after isLoading is false
+      return "This exam has no questions.";
+    }
+    return null;
+  }, [examDetails, questions, isLoading, isDemoMode]);
 
   // CALLBACKS
   const handleFlagEvent = useCallback((event: FlaggedEvent) => {
@@ -78,18 +91,18 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast, setFlaggedEvents]);
+  }, [isDemoMode, toast]); // setFlaggedEvents is stable
 
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange, setAnswers]);
+  }, [onAnswerChange]); // setAnswers is stable
 
   const handleNextQuestion = useCallback(() => {
-    if (currentQuestionIndex < questions.length - 1) {
+    if (currentQuestionIndex < (questions?.length || 0) - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions.length, setCurrentQuestionIndex]);
+  }, [currentQuestionIndex, questions]); // setCurrentQuestionIndex is stable
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -97,34 +110,30 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]);
+  }, [allowBacktracking, currentQuestionIndex, toast]); // setCurrentQuestionIndex is stable
 
   const handleInternalSubmitExam = useCallback(async () => {
     setIsSubmitting(true);
     await onSubmitExam(answers, flaggedEvents);
     setExamFinished(true);
-  }, [onSubmitExam, answers, flaggedEvents, setIsSubmitting, setExamFinished]);
-  
+  }, [onSubmitExam, answers, flaggedEvents]); // setIsSubmitting, setExamFinished are stable
+
   const handleInternalTimeUp = useCallback(async () => {
     if (!isDemoMode) {
         toast({ title: "Time's Up!", description: "Auto-submitting your exam.", variant: "destructive" });
     } else {
         toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended." });
     }
-    await parentOnTimeUpRef.current(answers, flaggedEvents);
+    await parentOnTimeUpRef.current(answers, flaggedEvents); // Use the ref here
     setExamFinished(true);
-  }, [answers, flaggedEvents, isDemoMode, toast, setExamFinished]);
+  }, [answers, flaggedEvents, isDemoMode, toast]); // parentOnTimeUpRef is stable, setExamFinished stable
 
+  const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
     if (currentQuestionId) {
       handleInternalAnswerChange(currentQuestionId, optionId);
     }
   }, [currentQuestionId, handleInternalAnswerChange]);
-
-  // EFFECTS
-  useEffect(() => {
-    parentOnTimeUpRef.current = parentOnTimeUp;
-  }, [parentOnTimeUp]);
 
   // CUSTOM HOOKS (must be called after all built-in hooks if they also use hooks)
   useActivityMonitor({ // This hook must call its internal hooks unconditionally
@@ -158,15 +167,11 @@ export function ExamTakingInterface({
       </div>
     );
   }
-
+  
   if (!examStarted) {
-    const examNotReadyError = error && examDetails;
+    const examNotReadyError = error && examDetails; // If there's an error and we have exam details, it means error during load
     const isUnpublishedDemo = isDemoMode && examDetails?.status !== 'Published' && examDetails?.status !== 'Ongoing';
-    const cantStartReason = 
-      (examDetails?.status !== 'Published' && examDetails?.status !== 'Ongoing' && !isDemoMode && examDetails !== null) 
-      ? `Exam is ${examDetails.status?.toLowerCase()}.` 
-      : null;
-
+    
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-lg shadow-xl">
@@ -196,7 +201,7 @@ export function ExamTakingInterface({
               onClick={onStartExam}
               className="w-full"
               size="lg"
-              disabled={isLoading || !questions || questions.length === 0 || !!examNotReadyError || !!cantStartReason } >
+              disabled={isLoading || !examDetails || !!examNotReadyError || !!cantStartReason } >
               {isLoading ? <Loader2 className="animate-spin mr-2" /> : null}
               Start {isDemoMode ? "Demo " : ""}Exam
             </Button>
@@ -220,7 +225,7 @@ export function ExamTakingInterface({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Number of questions answered: {Object.keys(answers).length} / {questions.length}</p>
+            <p className="text-sm text-muted-foreground">Number of questions answered: {Object.keys(answers).length} / {questions?.length || 0}</p>
             {flaggedEvents.length > 0 && (
               <Alert
                 variant={isDemoMode ? "default" : "destructive"}
@@ -247,7 +252,7 @@ export function ExamTakingInterface({
     );
   }
 
-  if (questions.length === 0 && examStarted && !isLoading) {
+  if (questions && questions.length === 0 && examStarted && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -260,7 +265,7 @@ export function ExamTakingInterface({
     );
   }
 
-   if (!currentQuestion && examStarted && !isLoading && questions.length > 0) { // Added questions.length > 0
+   if (!currentQuestion && examStarted && !isLoading && questions && questions.length > 0) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -273,7 +278,7 @@ export function ExamTakingInterface({
     <div className="flex flex-col min-h-screen bg-muted">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          key={examDetails?.exam_id || 'timer'}
+          key={examDetails?.exam_id || 'timer-' + Date.now()} // Added key to ensure re-mount if examId changes
           totalDurationSeconds={(examDetails.duration || 0) * 60}
           onTimeUp={handleInternalTimeUp}
           examTitle={examDetails.title + (isDemoMode ? " (Demo)" : "")}
@@ -337,3 +342,5 @@ export function ExamTakingInterface({
     </div>
   );
 }
+
+  

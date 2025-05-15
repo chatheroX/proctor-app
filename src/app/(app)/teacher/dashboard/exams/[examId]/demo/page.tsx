@@ -22,7 +22,7 @@ export default function TeacherDemoExamPage() {
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // For loading exam data
   const [error, setError] = useState<string | null>(null);
   const [examStarted, setExamStarted] = useState(false);
 
@@ -30,10 +30,10 @@ export default function TeacherDemoExamPage() {
   const teacherUserRole = teacherUser?.role;
 
   const fetchExamData = useCallback(async () => {
-    // Ensure this callback is only called when its dependencies are stable and defined
     if (!examId || !supabase || !teacherUserId || teacherUserRole !== 'teacher') {
       if (!examId) setError("Exam ID is missing.");
-      if (!teacherUserId || teacherUserRole !== 'teacher') setError("Access denied or user data unavailable.");
+      else if (!teacherUserId || teacherUserRole !== 'teacher') setError("Access denied or user data unavailable for demo.");
+      else setError("Supabase client not available for demo.");
       setIsLoading(false);
       return;
     }
@@ -48,7 +48,7 @@ export default function TeacherDemoExamPage() {
         .single();
 
       if (fetchError) throw fetchError;
-      if (!data) throw new Error("Exam not found.");
+      if (!data) throw new Error("Exam not found for demo.");
 
       if (data.teacher_id !== teacherUserId) {
         setError("Access denied. You can only demo exams you have created.");
@@ -67,32 +67,31 @@ export default function TeacherDemoExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, teacherUserId, teacherUserRole]);
+  }, [examId, supabase, teacherUserId, teacherUserRole]); // setError, setExamDetails, setQuestions, setIsLoading are stable
 
   useEffect(() => {
-    // Only fetch if critical IDs are available
-    if (examId && teacherUserId && teacherUserRole === 'teacher') {
+    if (examId && teacherUserId && teacherUserRole === 'teacher' && !examDetails && isLoading) { // Only fetch if needed and params are ready
       fetchExamData();
-    } else if (!isLoading) { // If not loading and critical IDs are missing, set error or handle
+    } else if (!isLoading && (!examId || !teacherUserId || teacherUserRole !== 'teacher')) {
         if (!examId) setError("Exam ID is missing for fetch.");
-        else setError("Teacher authentication details missing for fetch.");
-        setIsLoading(false);
+        else setError("Teacher authentication details missing for fetch or incorrect role.");
+        // setIsLoading(false); // Already false
     }
-  }, [examId, teacherUserId, teacherUserRole, fetchExamData, isLoading]);
+  }, [examId, teacherUserId, teacherUserRole, fetchExamData, isLoading, examDetails]); // Added examDetails & isLoading to dependencies
 
   const handleStartDemoExam = useCallback(() => {
     if (error && !examDetails) {
         toast({ title: "Cannot Start Demo", description: error || "An error occurred.", variant: "destructive" });
         return;
     }
-    if (questions.length === 0 && !isLoading && examDetails) {
+    if (examDetails && (questions === null || questions.length === 0) && !isLoading) {
         toast({ title: "No Questions", description: "This exam has no questions to demo.", variant: "destructive" });
         return;
     }
-    if (!isLoading && !error && examDetails) { // Ensure examDetails is loaded
+    if (!isLoading && !error && examDetails) {
         setExamStarted(true);
     }
-  }, [questions.length, isLoading, error, examDetails, toast]);
+  }, [questions, isLoading, error, examDetails, toast]); // setExamStarted is stable
 
   const handleDemoAnswerChange = useCallback((questionId: string, optionId: string) => {
     console.log(`Demo Answer for QID ${questionId}: OptionID ${optionId}`);
@@ -103,14 +102,16 @@ export default function TeacherDemoExamPage() {
     console.log('Demo Answers:', answers);
     console.log('Demo Flagged Events (Informational):', flaggedEvents);
     toast({ title: "Demo Exam Finished!", description: "This was a simulation. No data was saved." });
-  }, [toast]);
+    router.push(`/teacher/dashboard/exams/${examId}/details`);
+  }, [toast, router, examId]);
 
   const handleDemoTimeUp = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
     console.log("Demo exam time is up. Answers:", answers, "Flagged Events:", flaggedEvents);
     toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended. No data was saved." });
-  }, [toast]);
+    router.push(`/teacher/dashboard/exams/${examId}/details`);
+  }, [toast, router, examId]);
 
-  if (isLoading && !examStarted && !examDetails) {
+  if (isLoading && !examDetails && !examStarted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -119,38 +120,23 @@ export default function TeacherDemoExamPage() {
     );
   }
 
-  if (error && !examDetails && !isLoading) {
+  if (!isLoading && !examDetails && !examStarted) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Error Loading Demo Exam</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">{error}</p>
+        <p className="text-lg text-destructive text-center mb-2">{error ? "Error Loading Demo Exam" : "Exam Data Not Available"}</p>
+        <p className="text-sm text-muted-foreground text-center mb-4">{error || "Could not load exam details for the demo."}</p>
          <Button onClick={() => router.push(`/teacher/dashboard/exams/${examId}/details`)} className="mt-4">
             Back to Exam Details
         </Button>
       </div>
     );
   }
-  
-  // Prevent rendering ExamTakingInterface if examDetails is null (e.g., access denied)
-  if (!examDetails && !isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Exam Data Not Available</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">{error || "Could not load exam details."}</p>
-        <Button onClick={() => router.push(`/teacher/dashboard/exams/${examId}/details`)} className="mt-4">
-            Back to Exam Details
-        </Button>
-      </div>
-    );
-  }
-
 
   return (
     <ExamTakingInterface
       examDetails={examDetails}
-      questions={questions}
+      questions={questions || []} // Ensure questions is not null
       isLoading={isLoading && !examDetails}
       error={error}
       examStarted={examStarted}
@@ -163,4 +149,5 @@ export default function TeacherDemoExamPage() {
     />
   );
 }
-    
+
+  
