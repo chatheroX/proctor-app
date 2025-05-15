@@ -1,8 +1,7 @@
 
 'use client';
 
-import type { FormEvent } from 'react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -39,10 +38,11 @@ export function ExamTakingInterface({
   onStartExam,
   onAnswerChange,
   onSubmitExam,
-  onTimeUp,
+  onTimeUp: parentOnTimeUp,
   isDemoMode = false,
   userIdForActivityMonitor,
 }: ExamTakingInterfaceProps) {
+  // HOOKS MUST BE CALLED AT THE TOP LEVEL AND IN THE SAME ORDER
   const { toast } = useToast();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
@@ -50,8 +50,18 @@ export function ExamTakingInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
 
-  const memoizedOnFlagEvent = useCallback((event: FlaggedEvent) => {
-    setFlaggedEvents(prev => [...prev, event]);
+  const parentOnTimeUpRef = useRef(parentOnTimeUp);
+
+  // MEMOIZED VALUES (derived from props or state)
+  const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
+  const currentQuestion = useMemo(() => questions[currentQuestionIndex], [questions, currentQuestionIndex]);
+  const currentQuestionId = useMemo(() => currentQuestion?.id, [currentQuestion]);
+  const examIdForMonitor = useMemo(() => examDetails?.exam_id || 'unknown_exam', [examDetails?.exam_id]);
+  const activityMonitorEnabled = useMemo(() => examStarted && !examFinished, [examStarted, examFinished]);
+
+  // CALLBACKS
+  const handleFlagEvent = useCallback((event: FlaggedEvent) => {
+    setFlaggedEvents((prev) => [...prev, event]);
     if (!isDemoMode) {
       console.warn('Activity Flagged:', event);
       toast({
@@ -68,54 +78,42 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast]);
-
-  useActivityMonitor({
-    studentId: userIdForActivityMonitor,
-    examId: examDetails?.exam_id || 'unknown_exam',
-    enabled: examStarted && !examFinished,
-    onFlagEvent: memoizedOnFlagEvent,
-  });
+  }, [isDemoMode, toast, setFlaggedEvents]);
 
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: optionId }));
+    setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange]);
+  }, [onAnswerChange, setAnswers]);
 
   const handleNextQuestion = useCallback(() => {
     if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions.length]);
-
-  const allowBacktracking = useMemo(() => examDetails?.allow_backtracking, [examDetails?.allow_backtracking]);
+  }, [currentQuestionIndex, questions.length, setCurrentQuestionIndex]);
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
+      setCurrentQuestionIndex((prev) => prev - 1);
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast]);
+  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]);
 
   const handleInternalSubmitExam = useCallback(async () => {
     setIsSubmitting(true);
     await onSubmitExam(answers, flaggedEvents);
     setExamFinished(true);
-  }, [onSubmitExam, answers, flaggedEvents]);
-
+  }, [onSubmitExam, answers, flaggedEvents, setIsSubmitting, setExamFinished]);
+  
   const handleInternalTimeUp = useCallback(async () => {
     if (!isDemoMode) {
         toast({ title: "Time's Up!", description: "Auto-submitting your exam.", variant: "destructive" });
     } else {
         toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended." });
     }
-    await onTimeUp(answers, flaggedEvents);
+    await parentOnTimeUpRef.current(answers, flaggedEvents);
     setExamFinished(true);
-  }, [onTimeUp, answers, flaggedEvents, isDemoMode, toast]);
-
-  const currentQuestion = questions[currentQuestionIndex];
-  const currentQuestionId = currentQuestion?.id;
+  }, [answers, flaggedEvents, isDemoMode, toast, setExamFinished]);
 
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
     if (currentQuestionId) {
@@ -123,6 +121,21 @@ export function ExamTakingInterface({
     }
   }, [currentQuestionId, handleInternalAnswerChange]);
 
+  // EFFECTS
+  useEffect(() => {
+    parentOnTimeUpRef.current = parentOnTimeUp;
+  }, [parentOnTimeUp]);
+
+  // CUSTOM HOOKS (must be called after all built-in hooks if they also use hooks)
+  useActivityMonitor({ // This hook must call its internal hooks unconditionally
+    studentId: userIdForActivityMonitor,
+    examId: examIdForMonitor,
+    enabled: activityMonitorEnabled,
+    onFlagEvent: handleFlagEvent,
+  });
+  
+  // Conditional rendering logic (early returns) starts below.
+  // All hook calls must be above this line.
 
   if (isLoading && !examStarted) {
     return (
@@ -183,7 +196,7 @@ export function ExamTakingInterface({
               onClick={onStartExam}
               className="w-full"
               size="lg"
-              disabled={isLoading || questions.length === 0 || !!examNotReadyError || !!cantStartReason } >
+              disabled={isLoading || !questions || questions.length === 0 || !!examNotReadyError || !!cantStartReason } >
               {isLoading ? <Loader2 className="animate-spin mr-2" /> : null}
               Start {isDemoMode ? "Demo " : ""}Exam
             </Button>
@@ -247,7 +260,7 @@ export function ExamTakingInterface({
     );
   }
 
-   if (!currentQuestion && examStarted && !isLoading) { // Check !isLoading too
+   if (!currentQuestion && examStarted && !isLoading && questions.length > 0) { // Added questions.length > 0
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -260,6 +273,7 @@ export function ExamTakingInterface({
     <div className="flex flex-col min-h-screen bg-muted">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
+          key={examDetails?.exam_id || 'timer'}
           totalDurationSeconds={(examDetails.duration || 0) * 60}
           onTimeUp={handleInternalTimeUp}
           examTitle={examDetails.title + (isDemoMode ? " (Demo)" : "")}
@@ -270,9 +284,12 @@ export function ExamTakingInterface({
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-xl md:text-2xl">{examDetails?.title || 'Exam'} {isDemoMode && "(Demo)"}</CardTitle>
-              <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {questions.length}</span>
+              {questions && questions.length > 0 && <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {questions.length}</span>}
             </div>
-            <CardDescription className="pt-2 text-lg">{currentQuestion?.text}</CardDescription>
+            {currentQuestion && <CardDescription className="pt-2 text-lg">{currentQuestion.text}</CardDescription>}
+            {!currentQuestion && examStarted && !isLoading && questions && questions.length > 0 && (
+                <CardDescription className="pt-2 text-lg text-muted-foreground">Loading question text...</CardDescription>
+            )}
           </CardHeader>
           <CardContent>
             {currentQuestion && currentQuestion.options && (
@@ -289,16 +306,22 @@ export function ExamTakingInterface({
                 ))}
               </RadioGroup>
             )}
+             {!currentQuestion && questions && questions.length > 0 && examStarted && !isLoading && (
+                <div className="text-center py-4">
+                    <Loader2 className="h-8 w-8 text-primary animate-spin mx-auto" />
+                    <p className="text-muted-foreground mt-2">Loading options...</p>
+                </div>
+            )}
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-6">
             <Button
               variant="outline"
               onClick={handlePreviousQuestion}
-              disabled={currentQuestionIndex === 0 || !allowBacktracking}
+              disabled={currentQuestionIndex === 0 || !allowBacktracking || !currentQuestion}
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Previous
             </Button>
-            {currentQuestionIndex < questions.length - 1 ? (
+            {currentQuestionIndex < (questions?.length || 0) - 1 ? (
               <Button onClick={handleNextQuestion} disabled={!currentQuestion}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -314,4 +337,3 @@ export function ExamTakingInterface({
     </div>
   );
 }
-    

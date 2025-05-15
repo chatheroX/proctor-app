@@ -30,16 +30,13 @@ export default function TakeExamPage() {
   const studentUserId = studentUser?.user_id;
 
   const fetchExamData = useCallback(async () => {
-    if (!examId) {
-      setError("Exam ID is missing.");
+    if (!examId || !supabase || !studentUserId) {
+      if (!examId) setError("Exam ID is missing.");
+      if (!studentUserId) setError("Student not authenticated for fetch.");
       setIsLoading(false);
       return;
     }
-    if (!studentUserId) {
-      setError("Student not authenticated.");
-      setIsLoading(false);
-      return;
-    }
+    
     setIsLoading(true);
     setError(null);
     try {
@@ -72,23 +69,31 @@ export default function TakeExamPage() {
   }, [examId, supabase, studentUserId]);
 
   useEffect(() => {
-    fetchExamData();
-  }, [fetchExamData]);
+    if (examId && studentUserId) {
+        fetchExamData();
+    } else if (!isLoading) {
+        if (!examId) setError("Exam ID is missing for fetch.");
+        else setError("Student authentication details missing for fetch.");
+        setIsLoading(false);
+    }
+  }, [examId, studentUserId, fetchExamData, isLoading]);
 
   const handleStartExam = useCallback(() => {
+    if (error && !examDetails) {
+        toast({ title: "Cannot Start", description: error || "An error occurred.", variant: "destructive" });
+        return;
+    }
     if (examDetails?.status !== 'Published' && examDetails?.status !== 'Ongoing') {
         toast({ title: "Cannot Start", description: `Exam is ${examDetails?.status.toLowerCase()}.`, variant: "destructive" });
         return;
     }
-    if(questions.length === 0 && !isLoading) {
+    if(questions.length === 0 && !isLoading && examDetails) {
         toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
         return;
     }
-    if(error && examDetails === null) {
-        toast({ title: "Cannot Start", description: error || "An error occurred.", variant: "destructive" });
-        return;
+    if (!isLoading && !error && examDetails) {
+        setExamStarted(true);
     }
-    setExamStarted(true);
   }, [examDetails, questions.length, isLoading, error, toast]);
 
   const handleAnswerChangeLocal = useCallback((questionId: string, optionId: string) => {
@@ -119,7 +124,7 @@ export default function TakeExamPage() {
      toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up (simulation)." });
   }, [studentUserId, toast]);
 
-  if (isLoading && !examStarted) {
+  if (isLoading && !examStarted && !examDetails) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -140,12 +145,25 @@ export default function TakeExamPage() {
       </div>
     );
   }
+  
+  if (!examDetails && !isLoading) { // If loading is done but examDetails is still null
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
+        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+        <p className="text-lg text-destructive text-center mb-2">Exam Data Not Available</p>
+        <p className="text-sm text-muted-foreground text-center mb-4">{error || "Could not load exam details."}</p>
+        <Button onClick={() => router.push('/student/dashboard')} className="mt-4">
+            Back to Dashboard
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions}
-      isLoading={isLoading}
+      isLoading={isLoading && !examDetails}
       error={error}
       examStarted={examStarted}
       onStartExam={handleStartExam}
