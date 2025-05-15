@@ -1,4 +1,5 @@
-import React from 'react'; // Added this line
+
+import React from 'react';
 import { AppHeader } from '@/components/shared/header';
 import { AppFooter } from '@/components/shared/footer';
 import { ThreeScenePlaceholder } from '@/components/landing/three-scene-placeholder';
@@ -32,7 +33,7 @@ const features = [
 
 export default function LandingPage() {
   return (
-    // Add Framer Motion wrapper here for page transitions if desired
+    // TODO: Add Framer Motion wrapper here for page transitions if desired
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-background via-muted/30 to-background">
       <AppHeader />
       <main className="flex-grow">
@@ -46,7 +47,7 @@ export default function LandingPage() {
           <div className="container px-4 md:px-6 relative">
             <div className="grid gap-12 md:grid-cols-2 md:items-center">
               <div className="space-y-8">
-                {/* Add Framer Motion to h1 and p for staggered entrance */}
+                {/* TODO: Add Framer Motion to h1 and p for staggered entrance */}
                 <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl md:text-7xl !leading-tight">
                   The Future of <span className="text-primary block">Secure Online</span> Proctoring
                 </h1>
@@ -54,7 +55,7 @@ export default function LandingPage() {
                   ProctorPrep offers a robust, modern platform for conducting secure online exams, trusted by educators and students alike.
                 </p>
                 <div className="flex flex-col gap-4 sm:flex-row">
-                  {/* Add Framer Motion to buttons for hover/tap effects */}
+                  {/* TODO: Add Framer Motion to buttons for hover/tap effects */}
                   <Button size="lg" className="shadow-lg hover:shadow-primary/40 transition-shadow duration-300" asChild>
                     <Link href="/auth?action=register&role=teacher">
                       Get Started as Teacher <ArrowRight className="ml-2 h-5 w-5" />
@@ -68,7 +69,7 @@ export default function LandingPage() {
                 </div>
               </div>
               <div className="relative">
-                 {/* Add Framer Motion to ThreeScenePlaceholder for subtle animation */}
+                 {/* TODO: Add Framer Motion to ThreeScenePlaceholder for subtle animation */}
                 <ThreeScenePlaceholder />
               </div>
             </div>
@@ -86,7 +87,7 @@ export default function LandingPage() {
             </div>
             <div className="grid gap-8 md:gap-10 sm:grid-cols-2 lg:grid-cols-4">
               {features.map((feature, index) => (
-                 // Add Framer Motion to Card for staggered reveal or hover effects
+                 // TODO: Add Framer Motion to Card for staggered reveal or hover effects
                 <Card key={index} className="glass-card p-2 hover:shadow-primary/30 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
                   <CardHeader className="items-center text-center pt-6 pb-4">
                     {React.cloneElement(feature.icon, { className: "h-12 w-12 text-primary" })}
@@ -104,7 +105,7 @@ export default function LandingPage() {
         {/* Call to Action Section */}
         <section className="py-16 md:py-24 bg-gradient-to-b from-background via-muted to-background">
           <div className="container px-4 md:px-6 text-center">
-             {/* Add Framer Motion for reveal */}
+             {/* TODO: Add Framer Motion for reveal */}
             <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
               Ready to Elevate Your Online Exams?
             </h2>

@@ -1,21 +1,27 @@
+
+'use client'; // Added 'use client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Edit3, History, UserCircle, ArrowRight, ShieldAlert } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 
 export default function StudentOverviewPage() {
+  const { user } = useAuth(); // Get user from context
+
   return (
-    // Add Framer Motion wrapper for staggered item reveal
+    // TODO: Add Framer Motion wrapper for staggered item reveal
     <div className="space-y-8 w-full">
       <div className="p-6 rounded-xl bg-gradient-to-r from-primary/80 to-accent/70 text-primary-foreground shadow-xl">
-        <h1 className="text-4xl font-bold drop-shadow-md">Welcome, Student!</h1>
+        {/* TODO: Add Framer Motion text animation */}
+        <h1 className="text-4xl font-bold drop-shadow-md">Welcome, {user?.name || 'Student'}!</h1>
         <p className="text-lg opacity-90 mt-2 drop-shadow-sm">
           Manage your exams, view your history, and keep your profile up to date.
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Add Framer Motion for hover scale/lift effects */}
+        {/* TODO: Add Framer Motion for hover scale/lift effects */}
         <Card className="glass-card hover:shadow-primary/20 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-3 text-xl font-semibold">
@@ -84,8 +90,3 @@ export default function StudentOverviewPage() {
     </div>
   );
 }
-
-// Metadata should be handled by generateMetadata if dynamic or removed if static and 'use client'
-// export const metadata = {
-//   title: 'Student Dashboard | ProctorPrep',
-// };

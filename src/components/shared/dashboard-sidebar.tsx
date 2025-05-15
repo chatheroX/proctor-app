@@ -29,51 +29,61 @@ interface SidebarElementsProps {
   userRoleDashboard: 'student' | 'teacher';
   user: CustomUser | null; 
   signOut: () => Promise<void>; 
-  authLoading: boolean; 
+  authLoading: boolean;
+  className?: string; // Added className prop
 }
 
-export function SidebarElements({ navItems, userRoleDashboard, user, signOut, authLoading }: SidebarElementsProps) {
+export function SidebarElements({ navItems, userRoleDashboard, user, signOut, authLoading, className }: SidebarElementsProps) {
   const pathname = usePathname();
 
   return (
-    <Sidebar collapsible="icon" className="border-r bg-sidebar text-sidebar-foreground">
-      <SidebarHeader className="p-4">
+    // Sidebar now has glassmorphic effect from parent SidebarProvider or its own passed className
+    <Sidebar 
+        collapsible="icon" 
+        className={className} // Apply passed className for effects like backdrop-blur
+    >
+      <SidebarHeader className="p-4 border-b border-sidebar-border/30">
         <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
             <ShieldCheck className="h-7 w-7 text-primary" />
             <span className="font-semibold text-lg text-sidebar-foreground">ProctorPrep</span>
           </Link>
-          <SidebarTrigger />
+          <SidebarTrigger className="text-sidebar-foreground/70 hover:text-sidebar-foreground" />
         </div>
       </SidebarHeader>
       <SidebarContent className="p-2 flex-grow">
         {user && (
-          <div className="px-2 py-3 mb-2 border-b border-sidebar-border group-data-[collapsible=icon]:hidden">
-            <div className="flex items-center gap-2">
-              <UserCircle2 className="h-7 w-7 text-sidebar-foreground/80"/>
+          <div className="px-2 py-3 mb-2 border-b border-sidebar-border/20 group-data-[collapsible=icon]:hidden">
+            <div className="flex items-center gap-3">
+              <UserCircle2 className="h-8 w-8 text-sidebar-primary"/>
               <div>
                 <p className="text-sm font-medium text-sidebar-foreground truncate" title={user.name || user.email}>
                   {user.name || user.email}
                 </p>
-                <p className="text-xs text-sidebar-foreground/60 capitalize">
+                <p className="text-xs text-sidebar-foreground/70 capitalize">
                   Role: {user.role || 'N/A'}
                 </p>
               </div>
             </div>
-            <div className="mt-2 flex items-center gap-1 text-xs text-sidebar-foreground/50" title={user.user_id}>
-                <Hash className="h-3 w-3"/> 
-                <span className="truncate">User ID: {user.user_id}</span>
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-sidebar-foreground/60" title={user.user_id}>
+                <Hash className="h-3.5 w-3.5"/> 
+                <span className="truncate">ID: {user.user_id}</span>
             </div>
           </div>
         )}
         <SidebarMenu>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
+              {/* TODO: Add Framer Motion for item hover/selection animation */}
               <SidebarMenuButton
                 asChild
                 isActive={pathname.startsWith(item.href)}
-                tooltip={{ children: item.label, className: "group-data-[collapsible=icon]:block hidden"}}
+                tooltip={{ 
+                    children: item.label, 
+                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50"
+                }}
                 disabled={item.disabled}
+                className="data-[active=true]:bg-sidebar-primary/20 data-[active=true]:text-sidebar-primary hover:bg-sidebar-accent/70 focus:bg-sidebar-accent/70"
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
@@ -84,13 +94,17 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 border-t border-sidebar-border/30">
          <SidebarMenu>
           <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
                 isActive={pathname.startsWith(`/${userRoleDashboard}/dashboard/settings`)} 
-                tooltip={{ children: "Settings", className: "group-data-[collapsible=icon]:block hidden"}}
+                tooltip={{ 
+                    children: "Settings", 
+                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50"
+                }}
+                className="hover:bg-sidebar-accent/70 focus:bg-sidebar-accent/70"
               >
                 <Link href={`/${userRoleDashboard}/dashboard/settings`}>
                   <Settings className="h-5 w-5" />
@@ -105,8 +119,11 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                     await signOut();
                   }}
                   variant="outline"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/50"
-                  tooltip={{ children: "Logout", className: "group-data-[collapsible=icon]:block hidden"}}
+                  className="text-destructive hover:bg-destructive/20 hover:text-destructive border-destructive/50 focus:bg-destructive/20"
+                  tooltip={{ 
+                    children: "Logout", 
+                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50"
+                   }}
                   disabled={authLoading}
               >
                 {authLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}

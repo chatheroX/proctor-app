@@ -74,7 +74,7 @@ export default function StudentDashboardLayout({
         className="bg-card/20 dark:bg-card/30 backdrop-blur-xl border-r border-white/10 dark:border-black/20 shadow-2xl"
       />
       <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 bg-transparent min-w-0"> 
-        {/* Add Framer Motion Page Wrapper here for content animations */}
+        {/* TODO: Add Framer Motion Page Wrapper here for content animations */}
         {children}
       </main>
     </SidebarProvider>

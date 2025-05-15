@@ -19,15 +19,14 @@ type AuthAction = 'login' | 'register';
 const AUTH_ROUTE = '/auth';
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE;
 
 
 export function AuthForm() {
-  const pathname = usePathname(); // Moved to top
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isLoading: authContextLoading, signIn, signUp } = useAuth();
   const { toast } = useToast();
+  const { user, isLoading: authContextLoading, signIn, signUp } = useAuth();
 
   const initialAction = (searchParams.get('action') as AuthAction) || 'login';
   
@@ -36,28 +35,28 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role'] | ''>(''); // Role is string 'student' or 'teacher'
+  const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // For form submission loading state
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const newActionFromParams = (searchParams.get('action') as AuthAction) || 'login';
     if (newActionFromParams !== action) {
       setAction(newActionFromParams);
-      // Reset fields when action changes via URL to avoid stale data in other tab
       setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
     }
   }, [searchParams, action]);
 
-
-  // This effect redirects already logged-in users away from /auth
+  // Redirects already logged-in users away from /auth
+  // This effect now primarily relies on AuthContext's state
   useEffect(() => {
     // console.log(`[AuthForm Effect] Running. Path: ${pathname}, authContextLoading: ${authContextLoading}, User: ${JSON.stringify(user)}`);
     if (!authContextLoading && user && pathname === AUTH_ROUTE) {
       const targetDashboard = user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
-      // console.log(`[AuthForm Effect] User IS authenticated on /auth page. Redirecting to: ${targetDashboard}`);
-      router.replace(targetDashboard);
+      // console.log(`[AuthForm Effect] User IS authenticated on /auth page. Redirecting (via AuthContext) to: ${targetDashboard}`);
+      // The actual redirect is handled by AuthContext, this effect is more of a guard or for logging
+      // router.replace(targetDashboard); // This might be redundant if AuthContext handles it
     }
   }, [user, authContextLoading, router, pathname]);
 
@@ -76,7 +75,6 @@ export function AuthForm() {
     }
 
     let result: { success: boolean; error?: string; user?: CustomUser | null };
-    let targetDashboard = DEFAULT_DASHBOARD_ROUTE;
     
     if (action === 'register') {
       if (!trimmedFullName) {
@@ -99,20 +97,18 @@ export function AuthForm() {
         setIsSubmitting(false);
         return;
       }
-      // console.log('[AuthForm] Attempting to register with email:', trimmedEmail, "Role:", role);
       result = await signUp(trimmedEmail, password, trimmedFullName, role as 'student' | 'teacher');
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        // Redirection is primarily handled by AuthContext's useEffect after user state updates
+        // Redirection is now primarily handled by AuthContext's useEffect
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
     } else { // Login
-      // console.log('[AuthForm] Attempting to sign in with email:', trimmedEmail);
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        // Redirection is primarily handled by AuthContext's useEffect
+        // Redirection is now primarily handled by AuthContext's useEffect
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
@@ -121,10 +117,11 @@ export function AuthForm() {
   };
   
   // Show main page loader if AuthContext is still resolving initial user state AND we are on /auth page
-  if (authContextLoading && user === null && pathname === AUTH_ROUTE) {
-    // console.log("[AuthForm] AuthContext loading initial state for /auth, showing page loader.");
+  // and user state is not yet determined to be null (explicitly unauthenticated).
+  if (authContextLoading && pathname === AUTH_ROUTE && user === null) { // Check user === null for initial load before cookie check
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
+        {/* TODO: Add Framer Motion loader animation */}
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
@@ -133,41 +130,34 @@ export function AuthForm() {
   // If user IS authenticated (by AuthContext) and on /auth page, show "Finalizing..."
   // AuthContext's useEffect is responsible for the actual redirect.
   if (user && !authContextLoading && pathname === AUTH_ROUTE) {
-    // console.log("[AuthForm] User IS authenticated on /auth page. AuthContext should redirect. User:", user.email);
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12">
-        <p className="mb-2 text-lg">Finalizing session & redirecting to dashboard...</p>
+        {/* TODO: Add Framer Motion text animation */}
+        <p className="mb-2 text-lg font-medium text-foreground">Finalizing session & redirecting...</p>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="mt-2 text-sm text-muted-foreground">User: {user.email}, Role: {user.role}</p>
       </div>
     );
   }
-  
-  // If explicitly not loading, and no user, and on /auth page, render the form.
-  // This handles the case after initial load where user is determined to be unauthenticated.
-  // if (!authContextLoading && !user && pathname === AUTH_ROUTE) {
-    // console.log("[AuthForm] Ready to render form. authContextLoading:", authContextLoading, "user:", user);
-  // }
 
   return (
-    // Add Framer Motion to this container for entrance animation
+    // TODO: Add Framer Motion container entrance animation
     <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 px-4 bg-gradient-to-br from-primary/10 via-background to-accent/10">
       <Card className="w-full max-w-md glass-card shadow-2xl border-primary/20">
         <Tabs value={action} onValueChange={(value) => {
           setAction(value as AuthAction);
-          // Clear fields when switching tabs for better UX
           setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
         }} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-primary/10 p-1">
-            <TabsTrigger value="login" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md rounded-md py-2">Login</TabsTrigger>
-            <TabsTrigger value="register" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md rounded-md py-2">Register</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 bg-primary/10 p-1 rounded-lg">
+            <TabsTrigger value="login" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md rounded-md py-2.5 text-sm font-medium">Login</TabsTrigger>
+            <TabsTrigger value="register" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md rounded-md py-2.5 text-sm font-medium">Register</TabsTrigger>
           </TabsList>
-          {/* Add Framer Motion to TabsContent for tab switch animation */}
+          {/* TODO: Add Framer Motion to TabsContent for tab switch animation */}
           <form onSubmit={handleAuth}>
             <TabsContent value="login">
-              <CardHeader className="text-center">
+              <CardHeader className="text-center pt-8 pb-4">
                 <CardTitle className="text-3xl font-bold text-primary">Welcome Back!</CardTitle>
-                <CardDescription className="text-muted-foreground pt-1">Securely access your ProctorPrep account.</CardDescription>
+                <CardDescription className="text-muted-foreground pt-1 text-base">Securely access your ProctorPrep account.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6 p-6">
                 <div className="space-y-2">
@@ -188,7 +178,7 @@ export function AuthForm() {
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex flex-col p-6 pt-2">
+              <CardFooter className="flex flex-col p-6 pt-2 pb-8">
                 <Button type="submit" className="w-full text-lg py-3 rounded-lg shadow-md hover:shadow-primary/40" disabled={isSubmitting || authContextLoading}>
                   {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   {isSubmitting ? 'Logging in...' : 'Login'}
@@ -203,9 +193,9 @@ export function AuthForm() {
               </CardFooter>
             </TabsContent>
             <TabsContent value="register">
-              <CardHeader className="text-center">
+              <CardHeader className="text-center pt-8 pb-4">
                 <CardTitle className="text-3xl font-bold text-primary">Create Your Account</CardTitle>
-                <CardDescription className="text-muted-foreground pt-1">Join ProctorPrep today. It&apos;s quick and easy.</CardDescription>
+                <CardDescription className="text-muted-foreground pt-1 text-base">Join ProctorPrep today. It&apos;s quick and easy.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5 p-6">
                 <div className="space-y-2">
@@ -258,7 +248,7 @@ export function AuthForm() {
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex flex-col p-6 pt-2">
+              <CardFooter className="flex flex-col p-6 pt-2 pb-8">
                 <Button type="submit" className="w-full text-lg py-3 rounded-lg shadow-md hover:shadow-primary/40" disabled={isSubmitting || authContextLoading}>
                   {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   {isSubmitting ? 'Registering...' : 'Create Account'}
