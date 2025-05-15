@@ -8,7 +8,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CheckCircle, XCircle, Loader2, ExternalLink, RefreshCw, ShieldAlert } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext'; // Assuming you have user context for studentId
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast'; // Make sure this path is correct
 
 interface CheckStatus {
   name: string;
@@ -25,7 +26,8 @@ const initialChecks: CheckStatus[] = [
 
 export default function SebRedirectPage({ params }: { params: { examId: string } }) {
   const { examId } = params;
-  const { user: studentUser } = useAuth(); // Get student info
+  const { user: studentUser } = useAuth();
+  const { toast } = useToast();
 
   const [checks, setChecks] = useState<CheckStatus[]>(initialChecks);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -35,10 +37,13 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
 
   const launchSebExam = useCallback((sebLink: string) => {
     if (sebLink) {
+      // Attempt to open in a new window/tab. This is standard SEB behavior.
+      // Note: True SEB enforcement and encrypted links typically require SEB Server or server-side logic.
+      // The `sebConfig` here is conceptual for client-side generation.
       const newWindow = window.open(sebLink, '_blank', 'noopener,noreferrer');
       if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-        // Pop-up Blocker likely
-        setError("Could not open the exam link automatically. Please ensure pop-ups are allowed for this site, then click the 'Launch Exam' button.");
+        const popupError = "Could not open the exam link automatically. Please ensure pop-ups are allowed for this site, then click the 'Launch Exam' button.";
+        setError(popupError);
         toast({
             title: "Pop-up Blocked?",
             description: "Could not open exam link. Please disable pop-up blocker or use the manual launch button.",
@@ -47,7 +52,7 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
         });
       }
     }
-  }, []);
+  }, [toast]);
 
 
   useEffect(() => {
@@ -55,49 +60,56 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
       if (!studentUser?.user_id) {
         setError("Student information not available. Cannot generate SEB link.");
         console.error("SEB Redirect: Student user_id not found in auth context.");
+        setChecks(prev => prev.map(c => ({ ...c, status: 'failed', details: 'Authentication Error' })));
+        setOverallProgress(100); // Mark as complete even on auth error to show messages
         return;
       }
 
       for (let i = 0; i < checks.length; i++) {
         setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
         await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); // Simulate check duration
-        
+
+        // Simulate success/failure (for demo purposes)
+        // In a real scenario, these checks would involve actual SEB API calls or browser feature detection.
         const isSuccess = Math.random() > 0.1; // 90% success rate for demo
         setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
         setOverallProgress(((i + 1) / checks.length) * 100);
         if (!isSuccess) {
-          setError("One or more system checks failed. Cannot proceed.");
-          return; 
+          setError("One or more system checks failed. Cannot proceed with the exam.");
+          return;
         }
       }
-      
+
       // All checks passed if we reach here
-      const studentId = studentUser.user_id; 
-      const sebConfig = { 
-        allowReload: true, 
-        allowSpellCheck: false, 
-        browserExamKey: Math.random().toString(36).substring(2, 15),
+      const studentId = studentUser.user_id;
+      // Conceptual SEB config. Real SEB config involves more complex settings & often server-side generation.
+      // The "encryption" (btoa) here is basic Base64 encoding, not true cryptographic encryption.
+      // True encryption requires server-side handling and possibly SEB Server.
+      const sebConfig = {
+        allowReload: true,
+        allowSpellCheck: false,
+        browserExamKey: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
         startURL: `${window.location.origin}/student/dashboard/exam/${examId}/take?studentId=${studentId}&examId=${examId}`,
-        // other SEB specific settings
+        // Add other SEB-specific settings as needed
+        // Example: sendBrowserExamKey=true, showTaskBar=false, allowWlan=true etc.
       };
-      const encryptedConfig = btoa(JSON.stringify(sebConfig)); // Simple base64 for demo
-      const sebLink = `seb://${window.location.host}/student/dashboard/exam/${examId}/take?studentId=${studentId}&sebConfig=${encryptedConfig}`;
-      
+      const encodedConfig = btoa(JSON.stringify(sebConfig)); // Base64 encode for demonstration
+      const sebLink = `seb://${window.location.host}/student/dashboard/exam/${examId}/take?studentId=${studentId}&sebConfig=${encodedConfig}`;
+
       setCurrentSebLink(sebLink);
       setAllChecksPassed(true); // Set this after currentSebLink is set
-
     };
 
     performChecks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId, studentUser?.user_id]); // studentUser.user_id is the key dependency
+  }, [examId, studentUser?.user_id]);
 
   // Effect to auto-launch when allChecksPassed and currentSebLink are ready
   useEffect(() => {
-    if (allChecksPassed && currentSebLink) {
+    if (allChecksPassed && currentSebLink && !error) { // Only launch if no error so far
       launchSebExam(currentSebLink);
     }
-  }, [allChecksPassed, currentSebLink, launchSebExam]);
+  }, [allChecksPassed, currentSebLink, launchSebExam, error]);
 
 
   const getStatusIcon = (status: CheckStatus['status']) => {
@@ -107,12 +119,6 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
     if (status === 'failed') return <XCircle className="h-5 w-5 text-destructive" />;
     return null;
   };
-  
-  // Added useToast import, but it's not used in the SebRedirectPage.
-  // If toast notifications are needed here, it should be imported and used.
-  // For now, I am assuming `toast` is a global or context provided function if it's used in launchSebExam.
-  // Correcting to import from '@/hooks/use-toast' if intended for local use.
-  const { toast } = (() => { try { return require('@/hooks/use-toast'); } catch (e) { return { toast: (...args: any[]) => console.log("Toast (fallback):", ...args) }; } })();
 
 
   if (error && !allChecksPassed) { // Show general error if checks failed or studentId was missing
@@ -184,23 +190,24 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
             </Alert>
           )}
 
-          {allChecksPassed && (
+          {allChecksPassed && !error && ( // Show launch button only if all checks passed and no error
             <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/30">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <AlertTitle className="text-green-700 font-semibold">System Ready! Launching Exam...</AlertTitle>
               <AlertDescription className="text-green-600/80">
-                Your system is compatible. The exam should launch in Safe Exam Browser automatically.
-                If it doesn't, please ensure pop-ups are allowed and use the button below.
+                Your system is compatible. The exam should launch in Safe Exam Browser automatically in a new tab/window.
+                If it doesn&apos;t, please ensure pop-ups are allowed and use the button below.
                 <br />
-                <strong>SEB Launch Link:</strong> 
+                <strong>SEB Launch Link (conceptual):</strong>
                 <code className="text-xs break-all block mt-1 p-2 bg-green-100 rounded-md shadow-sm">{currentSebLink}</code>
                 <p className="mt-2 text-xs">
-                  <strong>Important:</strong> This link should be opened by Safe Exam Browser.
+                  <strong>Important:</strong> This link is intended to be opened by Safe Exam Browser.
                   Keyboard and other restrictions will be active inside SEB.
+                  Actual SEB link encryption and configuration require server-side logic.
                 </p>
               </AlertDescription>
-              <Button 
-                className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white py-3 text-base" 
+              <Button
+                className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white py-3 text-base"
                 onClick={() => launchSebExam(currentSebLink)}
                 disabled={!currentSebLink}
               >
@@ -219,8 +226,4 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
   );
 }
 
-// Ensure useToast is correctly imported if used
-// const { toast } = useToast(); // This should be at the top if used, or imported where needed
-// For the launchSebExam, I used a fallback to console.log if useToast is not set up,
-// but for proper usage, it should be imported from '@/hooks/use-toast'.
-// I have added a try-catch for the import to avoid breaking if not present.
+    

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock, ClockIcon, CheckCircleIcon, PlayCircleIcon } from 'lucide-react'; // Removed ArchiveIcon
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock, ClockIcon, CheckCircleIcon, PlayCircleIcon, MonitorPlay } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -25,13 +25,12 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Exam, ExamStatus } from '@/types/supabase';
 import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
-import { getEffectiveExamStatus } from './[examId]/details/page'; 
+import { getEffectiveExamStatus } from './[examId]/details/page';
 
 interface CategorizedExams {
   ongoing: Exam[];
   upcoming: Exam[];
   completed: Exam[];
-  // Drafts category removed
 }
 
 export default function ManageExamsPage() {
@@ -45,7 +44,7 @@ export default function ManageExamsPage() {
   const { toast } = useToast();
 
   const fetchAndCategorizeExams = useCallback(async () => {
-    if (!user) {
+    if (!user || !user.user_id) {
       setIsLoading(false);
       setCategorizedExams({ ongoing: [], upcoming: [], completed: [] });
       return;
@@ -64,19 +63,13 @@ export default function ManageExamsPage() {
       const newCategorizedExams: CategorizedExams = { ongoing: [], upcoming: [], completed: [] };
 
       examsData.forEach(exam => {
-        // Ensure start_time and end_time are valid before calling getEffectiveExamStatus
-        // If not, it might be an old 'Draft' or an exam with incomplete scheduling.
-        // For display purposes, we might treat such exams as 'Published' if their DB status is 'Published'
-        // or handle them as needing attention.
-        // For now, getEffectiveExamStatus should handle null start/end times for 'Published' exams gracefully.
-        const effectiveStatus = getEffectiveExamStatus(exam); 
-        
+        const effectiveStatus = getEffectiveExamStatus(exam);
+
         if (effectiveStatus === 'Ongoing') newCategorizedExams.ongoing.push(exam);
-        else if (effectiveStatus === 'Published') newCategorizedExams.upcoming.push(exam);
+        else if (effectiveStatus === 'Published') newCategorizedExams.upcoming.push(exam); // 'Published' here means upcoming
         else if (effectiveStatus === 'Completed') newCategorizedExams.completed.push(exam);
-        // No 'Draft' category
       });
-      
+
       setCategorizedExams(newCategorizedExams);
 
     } catch (error: any) {
@@ -91,7 +84,7 @@ export default function ManageExamsPage() {
     if (user) {
       fetchAndCategorizeExams();
     } else {
-      setIsLoading(false); // Not logged in, stop loading
+      setIsLoading(false);
       setCategorizedExams({ ongoing: [], upcoming: [], completed: [] });
     }
   }, [user, fetchAndCategorizeExams]);
@@ -99,7 +92,7 @@ export default function ManageExamsPage() {
 
   const handleDeleteExam = async () => {
     if (!examToDelete) return;
-    setIsDeleting(true); 
+    setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('ExamX')
@@ -108,7 +101,7 @@ export default function ManageExamsPage() {
 
       if (error) throw error;
       toast({ title: "Exam Deleted", description: `Exam "${examToDelete.title}" has been deleted.` });
-      fetchAndCategorizeExams(); 
+      fetchAndCategorizeExams();
       setExamToDelete(null);
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to delete exam: ${error.message}`, variant: "destructive" });
@@ -130,23 +123,22 @@ export default function ManageExamsPage() {
       toast({ description: "Failed to copy code.", variant: "destructive" });
     });
   };
-  
+
   const getStatusBadgeVariant = (status: ExamStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
       case 'Published': return 'default'; // Upcoming
-      case 'Ongoing': return 'destructive'; 
-      case 'Completed': return 'outline'; 
-      default: // Should not happen with Draft removed, but as fallback
-        return 'secondary';
+      case 'Ongoing': return 'destructive';
+      case 'Completed': return 'outline';
+      default: return 'secondary';
     }
   };
-  
+
   const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
       case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // Upcoming
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
       case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
-      default: return ''; 
+      default: return '';
     }
   }
 
@@ -165,7 +157,7 @@ export default function ManageExamsPage() {
     if (exams.length === 0) {
       return (
         <div className="py-4 text-center text-muted-foreground">
-          No {categoryTitle.toLowerCase()}.
+          No {categoryTitle.toLowerCase().replace(' exams', '')} exams.
         </div>
       );
     }
@@ -188,7 +180,7 @@ export default function ManageExamsPage() {
             <TableRow key={exam.exam_id}>
               <TableCell className="font-medium">{exam.title}</TableCell>
               <TableCell>
-                 <Badge 
+                 <Badge
                   variant={getStatusBadgeVariant(exam.status)} // Display DB status
                   className={getStatusBadgeClass(exam.status)}
                 >
@@ -220,6 +212,11 @@ export default function ManageExamsPage() {
                     <DropdownMenuItem asChild>
                       <Link href={`/teacher/dashboard/exams/${exam.exam_id}/details`}><Eye className="mr-2 h-4 w-4" /> View Details</Link>
                     </DropdownMenuItem>
+                    {getEffectiveExamStatus(exam) === 'Ongoing' && (
+                      <DropdownMenuItem asChild>
+                        <Link href={`/teacher/dashboard/exams/${exam.exam_id}/monitor`}><MonitorPlay className="mr-2 h-4 w-4" /> Monitor Exam</Link>
+                      </DropdownMenuItem>
+                    )}
                      <DropdownMenuItem asChild>
                       <Link href={`/teacher/dashboard/results/${exam.exam_id}`}><Users2 className="mr-2 h-4 w-4" /> View Results</Link>
                     </DropdownMenuItem>
@@ -239,12 +236,11 @@ export default function ManageExamsPage() {
       </Table>
     );
   };
-  
+
   const examCategories = [
     { title: "Ongoing Exams", data: categorizedExams.ongoing, icon: <PlayCircleIcon className="h-5 w-5 text-yellow-500" />, defaultOpen: true },
     { title: "Upcoming Exams", data: categorizedExams.upcoming, icon: <ClockIcon className="h-5 w-5 text-blue-500" />, defaultOpen: true },
     { title: "Completed Exams", data: categorizedExams.completed, icon: <CheckCircleIcon className="h-5 w-5 text-green-500" /> },
-    // Drafts category removed
   ];
 
 
@@ -283,7 +279,7 @@ export default function ManageExamsPage() {
             </div>
           ) : (
             <Accordion type="multiple" defaultValue={examCategories.filter(c=>c.defaultOpen).map(c => c.title)} className="w-full">
-              {examCategories.map(category => category.data.length > 0 || category.title === "Ongoing Exams" || category.title === "Upcoming Exams" || category.title === "Completed Exams" ? ( // Always show main categories even if empty initially
+              {examCategories.map(category => ( // Always show all categories
                 <AccordionItem value={category.title} key={category.title}>
                   <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                     <div className="flex items-center gap-2">
@@ -294,7 +290,7 @@ export default function ManageExamsPage() {
                     {renderExamTable(category.data, category.title)}
                   </AccordionContent>
                 </AccordionItem>
-              ) : null)}
+              ))}
             </Accordion>
           )}
         </CardContent>
@@ -321,3 +317,5 @@ export default function ManageExamsPage() {
     </div>
   );
 }
+
+    

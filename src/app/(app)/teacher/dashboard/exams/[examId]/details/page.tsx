@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare, CalendarClock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare, CalendarClock, AlertCircle, MonitorPlay } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -26,39 +26,44 @@ import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
 
 // Helper function to determine effective status
 export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatus => {
-  if (!exam || !exam.status || !exam.start_time || !exam.end_time) {
-    // If essential data is missing, it can't be 'Ongoing' or 'Completed' based on time.
-    // If status is 'Published' but times are missing, it's just 'Published' (likely misconfigured).
-    // If status is missing, default to 'Published' if it's a valid exam object, otherwise handle as error or default.
-    // For this context, if an exam exists but lacks scheduling and isn't 'Completed', we treat it as 'Published'.
-    return exam?.status === 'Completed' ? 'Completed' : 'Published';
+  if (!exam || !exam.status) {
+    return 'Published'; // Default if essential data is missing
   }
 
-  const now = new Date();
-  const startTime = parseISO(exam.start_time);
-  const endTime = parseISO(exam.end_time);
-
-  if (!isValid(startTime) || !isValid(endTime)) {
-    // Invalid dates mean it cannot be 'Ongoing' or 'Completed' based on time.
-    return exam.status === 'Completed' ? 'Completed' : 'Published';
-  }
-
-  // Status from DB takes precedence if it's 'Completed'.
+  // If already Completed in DB, it's Completed.
   if (exam.status === 'Completed') return 'Completed';
 
-  // If current time is past end_time, it's 'Completed' regardless of DB status (unless DB is 'Draft').
-  if (isAfter(now, endTime)) return 'Completed';
-  
-  // If current time is between start and end, it's 'Ongoing'.
-  // This applies if DB status is 'Published' or already 'Ongoing'.
-  if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing';
-  
-  // If current time is before start_time, and DB status is 'Published', it's 'Published' (upcoming).
-  if (isBefore(now, startTime) && exam.status === 'Published') return 'Published';
+  // If Published and has valid start/end times, determine if Upcoming, Ongoing, or past End (Completed)
+  if (exam.status === 'Published') {
+    if (!exam.start_time || !exam.end_time) {
+      // Published but no schedule, treat as 'Published' (potentially misconfigured but not yet started/ended by time)
+      return 'Published';
+    }
+    const now = new Date();
+    const startTime = parseISO(exam.start_time);
+    const endTime = parseISO(exam.end_time);
 
-  // Fallback to the database status if none of the above time-based conditions for 'Ongoing' or 'Completed' are met.
-  // This covers cases where it's 'Published' but not yet started, or if status is 'Ongoing' but somehow times are outside.
-  return exam.status; 
+    if (!isValid(startTime) || !isValid(endTime)) {
+      return 'Published'; // Invalid dates, treat as Published
+    }
+
+    if (isAfter(now, endTime)) return 'Completed';
+    if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing';
+    if (isBefore(now, startTime)) return 'Published'; // Upcoming
+  }
+  
+  // If DB status is 'Ongoing', check if end_time has passed
+  if (exam.status === 'Ongoing') {
+    if (exam.end_time) {
+      const now = new Date();
+      const endTime = parseISO(exam.end_time);
+      if (isValid(endTime) && isAfter(now, endTime)) return 'Completed';
+    }
+    return 'Ongoing'; // Still ongoing if end_time not passed or not set
+  }
+
+  // Fallback to the database status if none of the above conditions are met.
+  return exam.status;
 };
 
 
@@ -70,7 +75,7 @@ export default function ExamDetailsPage() {
   const examId = params.examId as string;
 
   const [exam, setExam] = useState<Exam | null>(null);
-  const [effectiveStatus, setEffectiveStatus] = useState<ExamStatus>('Published'); // Default to Published
+  const [effectiveStatus, setEffectiveStatus] = useState<ExamStatus>('Published');
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -94,12 +99,11 @@ export default function ExamDetailsPage() {
       if (data) {
         setEffectiveStatus(getEffectiveExamStatus(data));
       } else {
-        setEffectiveStatus('Published'); // Or handle as error if exam must exist
+        notFound(); // Exam not found
       }
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to fetch exam details: ${error.message}`, variant: "destructive" });
-      setExam(null);
-      setEffectiveStatus('Published'); // Default on error
+      setExam(null); // Keep exam null on error
     } finally {
       setIsLoading(false);
     }
@@ -108,6 +112,24 @@ export default function ExamDetailsPage() {
   useEffect(() => {
     fetchExamDetails();
   }, [fetchExamDetails]);
+
+  // Recalculate effective status periodically or on focus, as time passes
+  useEffect(() => {
+    if (exam) {
+      const interval = setInterval(() => {
+        setEffectiveStatus(getEffectiveExamStatus(exam));
+      }, 60000); // Check every minute
+      
+      const handleFocus = () => setEffectiveStatus(getEffectiveExamStatus(exam));
+      window.addEventListener('focus', handleFocus);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', handleFocus);
+      };
+    }
+  }, [exam]);
+
 
   const copyExamCode = () => {
     if (exam?.exam_code) {
@@ -137,20 +159,19 @@ export default function ExamDetailsPage() {
       setShowDeleteDialog(false);
     }
   };
-  
+
   const getStatusBadgeVariant = (status: ExamStatus) => {
     switch (status) {
-      case 'Published': return 'default'; 
-      case 'Ongoing': return 'destructive'; 
-      case 'Completed': return 'outline'; 
-      default:
-        return 'secondary'; 
+      case 'Published': return 'default';
+      case 'Ongoing': return 'destructive';
+      case 'Completed': return 'outline';
+      default: return 'secondary';
     }
   };
 
   const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
-      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // Upcoming or simply published
+      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // Upcoming
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
       case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
       default: return '';
@@ -162,7 +183,7 @@ export default function ExamDetailsPage() {
     try {
       const date = parseISO(isoString);
       if (!isValid(date)) return 'Invalid Date';
-      return format(date, "MMM d, yyyy, hh:mm a"); 
+      return format(date, "MMM d, yyyy, hh:mm a");
     } catch (error) {
       console.error("Error formatting date:", error);
       return "Invalid Date";
@@ -212,7 +233,7 @@ export default function ExamDetailsPage() {
               variant={getStatusBadgeVariant(effectiveStatus)}
               className={`text-sm px-3 py-1 ${getStatusBadgeClass(effectiveStatus)}`}
             >
-              Effective Status: {effectiveStatus}
+              Status: {effectiveStatus}
             </Badge>
           </div>
         </CardHeader>
@@ -280,8 +301,17 @@ export default function ExamDetailsPage() {
               <PlaySquare className="mr-2 h-4 w-4" /> Take Demo Test
             </Link>
           </Button>
-          <Button variant="outline" disabled>
-            <Users2 className="mr-2 h-4 w-4" /> View Results (Soon)
+          {effectiveStatus === 'Ongoing' && (
+             <Button variant="secondary" asChild>
+              <Link href={`/teacher/dashboard/exams/${exam.exam_id}/monitor`}>
+                <MonitorPlay className="mr-2 h-4 w-4" /> Monitor Exam
+              </Link>
+            </Button>
+          )}
+          <Button variant="outline" asChild disabled={effectiveStatus !== 'Completed'}>
+            <Link href={`/teacher/dashboard/results/${exam.exam_id}`}>
+                <Users2 className="mr-2 h-4 w-4" /> View Results
+            </Link>
           </Button>
           <Button variant="outline" onClick={copyExamCode} disabled={!isShareable}>
             <Share2 className="mr-2 h-4 w-4" /> Share Exam Code
@@ -314,3 +344,5 @@ export default function ExamDetailsPage() {
     </div>
   );
 }
+
+    
