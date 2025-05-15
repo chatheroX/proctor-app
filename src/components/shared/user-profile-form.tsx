@@ -10,51 +10,57 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Mail, Lock, Camera, Save, Loader2, Hash, Briefcase, Wand2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CustomUser } from '@/types/supabase';
+import { useAuth } from '@/contexts/AuthContext'; // For potentially getting current user details if needed
 
 const DICEBEAR_STYLES = ['micah', 'adventurer', 'bottts-neutral', 'pixel-art-neutral'];
 const DICEBEAR_TECH_KEYWORDS = ['coder', 'debugger', 'techie', 'pixelninja', 'cswizard', 'binary', 'script', 'stack', 'keyboard', 'neonbyte', 'glitch', 'algorithm', 'syntax', 'kernel'];
 
 interface UserProfileFormProps {
-  user: CustomUser;
-  onSave: (data: { name: string; password?: string; avatar_url?: string }) => Promise<void>; // Removed currentEmail
+  user: CustomUser; // The user object passed as a prop
+  onSave: (data: { name: string; password?: string; avatar_url?: string }) => Promise<void>;
 }
 
 const generateEnhancedDiceBearUrl = (style: string, role: CustomUser['role'], userId: string): string => {
   const randomKeyword = DICEBEAR_TECH_KEYWORDS[Math.floor(Math.random() * DICEBEAR_TECH_KEYWORDS.length)];
   const userRoleStr = role || 'user';
-  const uniqueSuffix = Date.now().toString(36).slice(-6);
+  const uniqueSuffix = Date.now().toString(36).slice(-6) + Math.random().toString(36).substring(2, 6); // Increased randomness
   const seed = `${randomKeyword}-${userRoleStr}-${userId}-${uniqueSuffix}`;
   return `https://api.dicebear.com/8.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
 };
 
 
-export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
-  const [name, setName] = useState(user.name || '');
+export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps) {
+  // Initialize state from propUser, providing defaults for potentially null fields
+  const [name, setName] = useState(propUser.name || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
-  const [currentAvatarUrl, setCurrentAvatarUrl] = useState(user.avatar_url || '');
+  // currentAvatarUrl holds the URL that is currently saved/canonical for the user
+  const [currentAvatarUrl, setCurrentAvatarUrl] = useState(propUser.avatar_url || '');
+  // newAvatarPreviewUrl holds a URL that has been generated but not yet saved
   const [newAvatarPreviewUrl, setNewAvatarPreviewUrl] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
+  // Effect to sync local state if propUser changes (e.g., after a save and context update)
   useEffect(() => {
-    setName(user.name || '');
-    setCurrentAvatarUrl(user.avatar_url || ''); 
-    setNewAvatarPreviewUrl(null); 
-  }, [user]);
+    setName(propUser.name || '');
+    setCurrentAvatarUrl(propUser.avatar_url || ''); // Update currentAvatarUrl from prop
+    setNewAvatarPreviewUrl(null); // Clear preview when user prop changes
+    console.log("[UserProfileForm] useEffect sync, propUser updated:", propUser.name, propUser.avatar_url);
+  }, [propUser]);
 
   const handleGenerateNewAvatar = useCallback(() => {
-    if (!user?.user_id || !user?.role) {
+    if (!propUser?.user_id || !propUser?.role) {
       toast({ title: "Error", description: "User details missing for avatar generation.", variant: "destructive" });
       return;
     }
     const randomStyle = DICEBEAR_STYLES[Math.floor(Math.random() * DICEBEAR_STYLES.length)];
-    const newUrl = generateEnhancedDiceBearUrl(randomStyle, user.role, user.user_id);
-    setNewAvatarPreviewUrl(newUrl);
+    const newUrl = generateEnhancedDiceBearUrl(randomStyle, propUser.role, propUser.user_id);
+    setNewAvatarPreviewUrl(newUrl); // Set the preview URL
     toast({ description: "New avatar preview generated. Click 'Save Changes' to apply."});
-  }, [user?.user_id, user?.role, toast]);
+  }, [propUser?.user_id, propUser?.role, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,21 +74,19 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     }
     setIsSaving(true);
     try {
+      // If a new avatar was previewed, use that. Otherwise, use the current (possibly unchanged) avatar URL.
       const avatarToSave = newAvatarPreviewUrl || currentAvatarUrl;
 
       await onSave({
-        name: name.trim() || user.name || "User", // Provide a default if name is somehow empty
+        name: name.trim() || propUser.name || "User",
         password: password || undefined,
         avatar_url: avatarToSave || undefined,
       });
+      // Parent's onSave should trigger AuthContext update, which in turn updates propUser.
+      // The useEffect above will then sync local state (setCurrentAvatarUrl and clear newAvatarPreviewUrl).
       setPassword('');
       setConfirmPassword('');
-      if (newAvatarPreviewUrl) {
-        // The parent page's onSave should trigger AuthContext update, which in turn updates user prop.
-        // This effect will then set newAvatarPreviewUrl to null.
-        // No need to setCurrentAvatarUrl(newAvatarPreviewUrl) here; rely on prop update.
-      }
-      // Success toast is handled by parent page
+      // Toast for success/failure is handled by the parent page calling onSave.
     } catch (error: any) {
       toast({ title: "Error Saving Profile", description: error.message || "Failed to update profile. Please try again.", variant: "destructive" });
     } finally {
@@ -90,6 +94,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
     }
   };
 
+  // The avatar URL to actually display in the <img> tag
   const displayAvatarUrl = newAvatarPreviewUrl || currentAvatarUrl;
 
   return (
@@ -104,7 +109,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
             <Avatar className="h-28 w-28 border-4 border-primary/30 shadow-lg rounded-full bg-muted">
               <AvatarImage src={displayAvatarUrl || undefined} alt={name || 'User'} className="rounded-full" />
               <AvatarFallback className="text-3xl text-muted-foreground font-semibold rounded-full">
-                {(name || user.email || 'U').substring(0, 2).toUpperCase()}
+                {(name || propUser.email || 'U').substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             
@@ -139,14 +144,14 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               <Label htmlFor="user_id">Roll Number / User ID</Label>
               <div className="relative">
                 <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input id="user_id" value={user.user_id || 'N/A'} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
+                <Input id="user_id" value={propUser.user_id || 'N/A'} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email Address (Login)</Label>
                <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input id="email" type="email" value={user.email || 'N/A'} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
+                <Input id="email" type="email" value={propUser.email || 'N/A'} readOnly className="pl-10 bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -160,7 +165,7 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
               <Label htmlFor="role">Role</Label>
               <div className="relative">
                 <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                <Input id="role" value={user.role || 'N/A'} readOnly className="pl-10 capitalize bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
+                <Input id="role" value={propUser.role || 'N/A'} readOnly className="pl-10 capitalize bg-muted/60 cursor-not-allowed border-border/40 text-sm modern-input" />
               </div>
             </div>
           </div>

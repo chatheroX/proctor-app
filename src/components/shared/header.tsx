@@ -4,13 +4,13 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ShieldCheck, UserPlus, LogIn, LogOut, LayoutDashboard, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext'; // Corrected import path
+import { useAuth } from '@/contexts/AuthContext'; 
 
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
 
 export function AppHeader() {
-  const { user, signOut, isLoading } = useAuth(); // isLoading from context
+  const { user, signOut, isLoading } = useAuth();
   const isAuthenticated = !!user;
 
   const dashboardRoute = user?.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
@@ -23,11 +23,11 @@ export function AppHeader() {
           <span className="font-semibold text-xl text-foreground group-hover:text-primary/90 transition-colors">ProctorPrep</span>
         </Link>
         <nav className="flex items-center space-x-2 md:space-x-3">
-          {isLoading && !isAuthenticated ? ( // Show loader if context is loading AND user is not yet known
+          {isLoading && !user ? ( // Show loader if context is loading AND user is not yet known (null)
              <div className="p-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
              </div>
-          ) : isAuthenticated ? (
+          ) : isAuthenticated && user ? ( // User is known and authenticated
             <>
               <Button variant="ghost" asChild className="text-sm font-medium text-foreground hover:bg-accent/50 hover:text-accent-foreground px-3 py-1.5 rounded-md">
                 <Link href={dashboardRoute}>
@@ -37,14 +37,14 @@ export function AppHeader() {
               <Button 
                 variant="outline" 
                 onClick={signOut} 
-                disabled={isLoading} // Disable if context is generally loading an auth operation
+                disabled={isLoading} // Disable only if an auth operation is actively in progress
                 className="text-sm font-medium border-border/70 hover:bg-destructive/10 hover:border-destructive/50 hover:text-destructive px-3 py-1.5 rounded-md"
               >
                 {isLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogOut className="mr-1.5 h-4 w-4" />}
                  Logout
               </Button>
             </>
-          ) : (
+          ) : ( // User is not authenticated (and isLoading is false)
             <>
               <Button variant="ghost" asChild className="text-sm font-medium text-foreground hover:bg-accent/50 hover:text-accent-foreground px-3 py-1.5 rounded-md">
                 <Link href="/auth?action=login">

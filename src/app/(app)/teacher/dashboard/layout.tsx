@@ -25,16 +25,16 @@ export default function TeacherDashboardLayout({
     await signOut();
   }, [signOut]);
 
-  if (authLoading) {
+  if (authLoading) { // Primary loading state check
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-         <p className="ml-3 text-muted-foreground">Loading session...</p>
+         <p className="ml-3 text-muted-foreground">Loading teacher session...</p>
       </div>
     );
   }
   
-  if (!user) { // isLoading is false, and user is null
+  if (!user) { // Auth loading is false, but no user
     return (
         <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
             <Card className="p-6 modern-card text-center shadow-xl">
@@ -62,7 +62,7 @@ export default function TeacherDashboardLayout({
                     <CardTitle className="text-xl text-foreground">Access Denied</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">Your role ({user.role || 'Unknown'}) does not permit access to the teacher dashboard.</p>
+                    <p className="text-sm text-muted-foreground">Your role ({user.role || 'Unknown'}) does not permit access to this dashboard.</p>
                 </CardContent>
             </Card>
         </div>
@@ -79,7 +79,7 @@ export default function TeacherDashboardLayout({
         userRoleDashboard="teacher"
         user={user}
         signOut={handleSignOut}
-        authLoading={authLoading}
+        authLoading={authLoading} // Pass this down
       />
       <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 bg-transparent min-w-0"> 
         {children}

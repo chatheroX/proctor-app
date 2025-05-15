@@ -18,7 +18,6 @@ export default function TeacherProfilePage() {
       toast({ title: "Error", description: "You must be logged in to update your profile.", variant: "destructive" });
       return;
     }
-    // Ensure email is not passed to updateUserProfile as it's not updatable with custom auth
     const result = await updateUserProfile({
         name: data.name,
         password: data.password,
@@ -39,7 +38,7 @@ export default function TeacherProfilePage() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading && !user) { // Show loader if auth is loading and user isn't available yet
     return (
       <div className="flex justify-center items-center h-full py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -48,7 +47,7 @@ export default function TeacherProfilePage() {
     );
   }
 
-  if (!user) {
+  if (!user) { // If auth is done loading, and still no user
      return (
         <div className="flex h-full items-center justify-center p-4">
             <Card className="p-6 modern-card text-center shadow-xl">
@@ -63,14 +62,12 @@ export default function TeacherProfilePage() {
         </div>
     );
   }
-  // No need to cast if CustomUser type is correctly defined and user state matches it
-  const profileData: CustomUser = user;
-
+  
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-foreground">My Profile</h1>
       <UserProfileForm
-        user={profileData} // Pass the CustomUser object directly
+        user={user} 
         onSave={handleSaveProfile}
       />
     </div>
