@@ -19,15 +19,13 @@ type AuthAction = 'login' | 'register';
 const AUTH_ROUTE = '/auth';
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE;
-
 
 export function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { toast } = useToast();
   const { user, isLoading: authContextLoading, signIn, signUp } = useAuth();
-  const pathname = usePathname();
 
   const initialAction = (searchParams.get('action') as AuthAction) || 'login';
   
@@ -36,7 +34,7 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role'] | ''>(''); // Explicitly allow empty string for initial
+  const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); 
@@ -48,7 +46,6 @@ export function AuthForm() {
       setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
     }
   }, [searchParams, action]);
-
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +61,6 @@ export function AuthForm() {
     }
 
     let result: { success: boolean; error?: string; user?: CustomUser | null };
-    let targetDashboard = DEFAULT_DASHBOARD_ROUTE;
     
     if (action === 'register') {
       if (!trimmedFullName) {
@@ -72,7 +68,7 @@ export function AuthForm() {
         setIsSubmitting(false);
         return;
       }
-      const selectedRole = role as CustomUser['role']; // Assert CustomUser['role'] as it's validated
+      const selectedRole = role as CustomUser['role'];
       if (!selectedRole) {
         toast({ title: "Error", description: "Please select a role (Student or Teacher).", variant: "destructive" });
         setIsSubmitting(false);
@@ -88,172 +84,166 @@ export function AuthForm() {
         setIsSubmitting(false);
         return;
       }
-      console.log('Attempting to register with email:', trimmedEmail, 'name:', trimmedFullName, 'role:', selectedRole);
+      console.log('[AuthForm] Attempting to register with email:', trimmedEmail, 'name:', trimmedFullName, 'role:', selectedRole);
       result = await signUp(trimmedEmail, password, trimmedFullName, selectedRole);
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        targetDashboard = result.user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
-        // Redirection is now primarily handled by AuthContext's useEffect
+        // Redirection is handled by AuthContext
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
     } else { // Login
+      console.log('[AuthForm] Attempting sign in for:', trimmedEmail);
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        targetDashboard = result.user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
-        // Redirection is now primarily handled by AuthContext's useEffect
+        // Redirection is handled by AuthContext
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
     }
     setIsSubmitting(false);
-    // If successful, AuthContext useEffect will handle navigation
   };
   
-  // Main page loader: Show if AuthContext is still resolving initial user state AND we are on /auth page AND user is not yet known (null)
+  // Loader for when AuthContext is initializing and we are on /auth page
   if (authContextLoading && pathname === AUTH_ROUTE && user === null) { 
+    console.log('[AuthForm] AuthContext loading, user is null, on /auth. Showing full page loader.');
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-primary/10 via-background to-accent/10">
-        {/* TODO: Add Framer Motion loader animation */}
+      <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] py-12 bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
 
-  // If user IS authenticated (by AuthContext) and on /auth page, show "Finalizing..."
-  // AuthContext's useEffect is responsible for the actual redirect.
+  // Message if user is already authenticated and lands on /auth page (AuthContext should redirect quickly)
   if (user && !authContextLoading && pathname === AUTH_ROUTE) {
+    console.log('[AuthForm] User authenticated, on /auth. AuthContext should redirect. Showing finalizing message.');
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-primary/10 via-background to-accent/10">
-        {/* TODO: Add Framer Motion text animation */}
-        <Card className="p-8 rounded-xl shadow-2xl glass-card text-center">
-          <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary mb-4"/>
-          <p className="text-lg font-medium text-foreground">Finalizing session & redirecting...</p>
-          <p className="mt-2 text-sm text-muted-foreground">User: {user.email}, Role: {user.role}</p>
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] py-12 bg-background">
+        <Card className="p-6 rounded-lg shadow-md bg-card text-center modern-card">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-3"/>
+          <p className="text-md font-medium text-foreground">Finalizing session & redirecting to dashboard...</p>
+          <p className="mt-1 text-xs text-muted-foreground">User: {user.email}</p>
         </Card>
       </div>
     );
   }
 
   return (
-    // TODO: Add Framer Motion container entrance animation
-    <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 px-4 bg-gradient-to-br from-primary/10 via-background to-accent/10">
-      <Card className="w-full max-w-md glass-card shadow-2xl border-primary/20">
-        {/* TODO: Add Framer Motion entrance animation for the card */}
+    <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] py-12 px-4 bg-background">
+      <Card className="w-full max-w-md modern-card shadow-lg border-border/50">
         <Tabs value={action} onValueChange={(value) => {
           setAction(value as AuthAction);
           setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
         }} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-primary/5 p-1.5 rounded-lg m-2">
-            <TabsTrigger value="login" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-[hsl(var(--accent-gradient-end))] data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg rounded-md py-2.5 text-sm font-medium transition-all">Login</TabsTrigger>
-            <TabsTrigger value="register" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-[hsl(var(--accent-gradient-end))] data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg rounded-md py-2.5 text-sm font-medium transition-all">Register</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 bg-muted p-1 rounded-md m-4">
+            <TabsTrigger value="login" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-[0.3rem] py-2 text-sm font-medium transition-all">Login</TabsTrigger>
+            <TabsTrigger value="register" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-[0.3rem] py-2 text-sm font-medium transition-all">Register</TabsTrigger>
           </TabsList>
-          {/* TODO: Add Framer Motion to TabsContent for tab switch animation */}
           <form onSubmit={handleAuth}>
             <TabsContent value="login">
-              <CardHeader className="text-center pt-8 pb-4">
-                <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-[hsl(var(--accent-gradient-end))]">Welcome Back!</CardTitle>
-                <CardDescription className="text-muted-foreground pt-1 text-base">Securely access your ProctorPrep account.</CardDescription>
+              <CardHeader className="text-center pt-6 pb-3">
+                <CardTitle className="text-2xl font-semibold text-foreground">Welcome Back!</CardTitle>
+                <CardDescription className="text-muted-foreground pt-1 text-sm">Access your ProctorPrep account.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6 p-6">
-                <div className="space-y-2">
+              <CardContent className="space-y-4 p-6">
+                <div className="space-y-1.5">
                   <Label htmlFor="login-email">Email Address</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="login-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-12 py-3 text-base rounded-lg border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="email" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="login-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10 py-2.5 text-sm rounded-md border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="email" />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="login-password">Password</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-12 pr-12 py-3 text-base rounded-lg border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="current-password" />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="current-password" />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex flex-col p-6 pt-2 pb-8">
-                <Button type="submit" className="btn-gradient w-full text-lg py-3 rounded-lg" disabled={isSubmitting || authContextLoading}>
-                  {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+              <CardFooter className="flex flex-col p-6 pt-2 pb-6">
+                <Button type="submit" className="btn-primary-solid w-full text-sm py-2.5 rounded-md" disabled={isSubmitting || authContextLoading}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {isSubmitting ? 'Logging in...' : 'Login'}
-                  {!isSubmitting && <ArrowRight className="ml-2 h-5 w-5"/>}
+                  {!isSubmitting && <ArrowRight className="ml-1.5 h-4 w-4"/>}
                 </Button>
-                <p className="mt-6 text-center text-sm text-muted-foreground">
+                <p className="mt-4 text-center text-xs text-muted-foreground">
                   Don&apos;t have an account?{' '}
-                  <button type="button" className="font-semibold text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(''); }}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('register'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole(''); }}>
                     Register here
                   </button>
                 </p>
               </CardFooter>
             </TabsContent>
             <TabsContent value="register">
-              <CardHeader className="text-center pt-8 pb-4">
-                <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-[hsl(var(--accent-gradient-end))]">Create Your Account</CardTitle>
-                <CardDescription className="text-muted-foreground pt-1 text-base">Join ProctorPrep today. It&apos;s quick and easy.</CardDescription>
+              <CardHeader className="text-center pt-6 pb-3">
+                <CardTitle className="text-2xl font-semibold text-foreground">Create Account</CardTitle>
+                <CardDescription className="text-muted-foreground pt-1 text-sm">Join ProctorPrep. It&apos;s quick and easy.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-5 p-6">
-                <div className="space-y-2">
+              <CardContent className="space-y-3.5 p-6">
+                <div className="space-y-1.5">
                   <Label htmlFor="register-fullname">Full Name</Label>
                   <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="register-fullname" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="pl-12 py-3 text-base rounded-lg border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="name" />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="register-fullname" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="pl-10 py-2.5 text-sm rounded-md border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="name" />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="register-email">Email Address</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="register-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-12 py-3 text-base rounded-lg border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="email" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="register-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10 py-2.5 text-sm rounded-md border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="email" />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="register-password">Password</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="register-password" type={showPassword ? 'text' : 'password'} placeholder="•••••••• (min. 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-12 pr-12 py-3 text-base rounded-lg border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="new-password" />
-                     <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="register-password" type={showPassword ? 'text' : 'password'} placeholder="•••••••• (min. 6 characters)" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="new-password" />
+                     <Button type="button" variant="ghost" size="icon" className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="confirm-password">Confirm Password</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pl-12 pr-12 py-3 text-base rounded-lg border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="new-password" />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>
-                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border focus:border-primary focus:ring-primary bg-background/70" autoComplete="new-password" />
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="register-role">Register as</Label>
                   <div className="relative">
-                     <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground z-10" />
+                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                     <Select value={role || ''} onValueChange={(value) => setRole(value as CustomUser['role'])} required>
-                      <SelectTrigger id="register-role" className="pl-12 py-3 text-base rounded-lg border-border focus:border-primary focus:ring-primary bg-background/70">
+                      <SelectTrigger id="register-role" className="pl-10 py-2.5 text-sm rounded-md border-border focus:border-primary focus:ring-primary bg-background/70">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
-                      <SelectContent className="bg-popover/80 backdrop-blur-md border-border shadow-xl rounded-lg">
-                        <SelectItem value="student" className="py-2.5 hover:bg-primary/10">Student</SelectItem>
-                        <SelectItem value="teacher" className="py-2.5 hover:bg-primary/10">Teacher</SelectItem>
+                      <SelectContent className="bg-popover border-border shadow-md rounded-md">
+                        <SelectItem value="student" className="py-2 text-sm hover:bg-primary/10">Student</SelectItem>
+                        <SelectItem value="teacher" className="py-2 text-sm hover:bg-primary/10">Teacher</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex flex-col p-6 pt-2 pb-8">
-                <Button type="submit" className="btn-gradient w-full text-lg py-3 rounded-lg" disabled={isSubmitting || authContextLoading}>
-                  {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+              <CardFooter className="flex flex-col p-6 pt-2 pb-6">
+                <Button type="submit" className="btn-primary-solid w-full text-sm py-2.5 rounded-md" disabled={isSubmitting || authContextLoading}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {isSubmitting ? 'Registering...' : 'Create Account'}
-                   {!isSubmitting && <ArrowRight className="ml-2 h-5 w-5"/>}
+                   {!isSubmitting && <ArrowRight className="ml-1.5 h-4 w-4"/>}
                 </Button>
-                <p className="mt-6 text-center text-sm text-muted-foreground">
+                <p className="mt-4 text-center text-xs text-muted-foreground">
                   Already have an account?{' '}
-                  <button type="button" className="font-semibold text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');}}>
+                  <button type="button" className="font-medium text-primary hover:underline" onClick={() => { setAction('login'); setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');}}>
                     Login here
                   </button>
                 </p>

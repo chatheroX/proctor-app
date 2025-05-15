@@ -9,54 +9,59 @@ body {
 
 @layer base {
   :root {
-    /* New Theme: Modern & Sleek with Glassmorphism */
-    --background: 220 20% 98%; /* Light, slightly cool off-white */
-    --foreground: 220 15% 25%; /* Darker grey for text for better contrast */
+    /* New Light Theme: Inspired by examam.io - Neutral White + Blue Accent */
+    --background: 220 20% 98%; /* Very light grey, almost white */
+    --foreground: 220 15% 25%; /* Dark grey for text */
 
-    --card: 220 30% 100%; /* Base for cards, will be made semi-transparent for glass */
+    --card: 0 0% 100%; /* White for cards */
     --card-foreground: 220 15% 20%;
 
-    --popover: 220 25% 99%;
+    --popover: 0 0% 100%;
     --popover-foreground: 220 15% 20%;
 
-    /* Primary color (e.g., for icons, active states, gradient start) */
-    --primary: 210 75% 60%; /* Vibrant Blue */
-    --primary-foreground: 0 0% 100%; 
+    /* Primary color: Blue accent */
+    --primary: 217 91% 60%; /* A vibrant, clear blue */
+    --primary-foreground: 0 0% 100%; /* White text on blue buttons */
 
-    /* Accent color for gradients or secondary highlights */
-    --accent-gradient-end: 260 80% 65%; /* Vibrant Purple/Magenta */
+    /* Accent color for gradients or secondary highlights - can be a lighter shade of primary or complementary */
+    --accent-gradient-end: 217 80% 70%; /* Lighter blue for gradients */
 
-    --secondary: 220 15% 92%; /* Lighter grey for secondary elements */
+    --secondary: 220 15% 93.5%; /* Slightly darker light grey for secondary elements */
     --secondary-foreground: 220 15% 30%;
 
-    --muted: 220 15% 95%; 
-    --muted-foreground: 220 10% 50%;
+    --muted: 220 15% 96.5%; /* Lighter grey for muted elements */
+    --muted-foreground: 220 10% 45%; /* Softer muted text */
 
-    --accent: 180 65% 55%; /* Teal/Cyan for general accents */
+    --accent: 217 91% 60%; /* Blue accent for general accents, same as primary for consistency */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 60%;
+    --destructive: 0 70% 60%; /* Standard destructive red */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 20% 90%; /* Softer border */
-    --input: 220 20% 96%;
-    --ring: 210 75% 60%; /* Primary color for rings */
+    --border: 220 15% 90%; /* Light grey border */
+    --input: 220 15% 93%; /* Input background */
+    --ring: 217 91% 60%; /* Blue for focus rings */
     
-    --radius: 0.75rem; /* Consistent rounded corners */
+    --radius: 0.5rem; /* Consistent rounded corners (8px) */
 
     /* Sidebar specific theme variables */
-    --sidebar-background: 220 15% 12%; /* Darker base for contrast with glass */
-    --sidebar-foreground: 220 10% 85%;
-    --sidebar-primary: 210 75% 65%; 
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 22%;
-    --sidebar-accent-foreground: 220 10% 90%;
-    --sidebar-border: 220 15% 25%; /* For subtle borders within sidebar */
-    --sidebar-ring: 210 75% 65%;
-    --sidebar-glow-color: hsl(var(--primary) / 0.3); /* For hover glow */
+    --sidebar-background: 220 20% 97%; /* Slightly off-white, matching overall background or slightly darker */
+    --sidebar-foreground: 220 15% 35%;
+    --sidebar-primary: 217 91% 60%; /* Blue for active items/icons */
+    --sidebar-primary-foreground: 0 0% 100%; /* White for text on active items */
+    --sidebar-accent: 220 15% 92%; /* Hover background for sidebar items */
+    --sidebar-accent-foreground: 220 15% 25%; /* Hover text color */
+    --sidebar-border: 220 15% 88%; 
+    --sidebar-ring: 217 91% 65%;
+    --sidebar-group-text: 220 10% 55%; /* For "MAIN", "TOOLS" text */
   }
 
   .dark {
+    /* For consistency, we'll keep the light theme variables for dark mode for now
+       as per the request for a "light mode theme".
+       A full dark theme would require a separate palette.
+       If a dark theme is desired later, these variables would be changed.
+    */
     --background: 220 15% 10%; 
     --foreground: 220 10% 92%;
 
@@ -66,10 +71,10 @@ body {
     --popover: 220 15% 12%;
     --popover-foreground: 220 10% 92%;
 
-    --primary: 210 70% 65%; /* Slightly lighter primary for dark mode */
+    --primary: 217 80% 65%; /* Slightly lighter blue for dark mode */
     --primary-foreground: 0 0% 100%;
 
-    --accent-gradient-end: 260 75% 70%; /* Adjusted for dark mode */
+    --accent-gradient-end: 217 70% 70%;
 
     --secondary: 220 15% 20%; 
     --secondary-foreground: 220 10% 85%;
@@ -77,7 +82,7 @@ body {
     --muted: 220 15% 18%;
     --muted-foreground: 220 10% 60%;
 
-    --accent: 180 60% 60%; 
+    --accent: 217 80% 65%; 
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 65% 55%;
@@ -85,18 +90,17 @@ body {
 
     --border: 220 15% 28%; 
     --input: 220 15% 17%;
-    --ring: 210 70% 65%;
+    --ring: 217 80% 65%;
     
-    /* Sidebar dark theme variables */
-    --sidebar-background: 220 15% 8%; 
+    --sidebar-background: 220 15% 12%; 
     --sidebar-foreground: 220 10% 88%;
-    --sidebar-primary: 210 70% 65%;
+    --sidebar-primary: 217 80% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent: 220 15% 22%;
     --sidebar-accent-foreground: 220 10% 90%;
-    --sidebar-border: 220 15% 20%;
-    --sidebar-ring: 210 70% 70%;
-    --sidebar-glow-color: hsl(var(--primary) / 0.4);
+    --sidebar-border: 220 15% 25%;
+    --sidebar-ring: 217 70% 70%;
+    --sidebar-group-text: 220 10% 65%;
   }
 }
 
@@ -106,8 +110,6 @@ body {
   }
   body {
     @apply bg-background text-foreground;
-    /* Soft gradient background for the entire app */
-    @apply bg-gradient-to-br from-background via-muted to-background;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -117,25 +119,31 @@ body {
   }
 }
 
-/* Glassmorphism utility for cards */
-.glass-card {
-  @apply bg-card/70 dark:bg-card/75 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-lg dark:shadow-black/20 rounded-2xl;
-  /* Softer shadow: shadow-lg, more defined: shadow-xl */
+/* Modern Card Style (replaces glass-card) */
+.modern-card {
+  @apply bg-card text-card-foreground rounded-lg border border-border shadow-sm transition-shadow hover:shadow-md;
+  /* Softer shadow: shadow-sm, slightly more on hover: shadow-md */
 }
 
-/* Gradient button style (apply this class to buttons) */
-.btn-gradient {
-  @apply bg-gradient-to-r from-primary to-[hsl(var(--accent-gradient-end))] text-primary-foreground hover:opacity-90 transition-opacity shadow-md hover:shadow-lg;
+/* Primary button style (examam.io inspired - solid blue) */
+.btn-primary-solid {
+  @apply bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary;
+  /* Add other button base styles like padding, font-weight if needed, or rely on Button component's defaults */
 }
 
-/* Sidebar specific glow effect for menu items on hover/focus */
-/* This might need to target specific classes or data-attributes from the sidebar component */
-[data-sidebar="menu-button"]:hover:not([data-active="true"]),
-[data-sidebar="menu-button"]:focus-visible:not([data-active="true"]) {
-  box-shadow: 0 0 15px 3px var(--sidebar-glow-color), 0 0 25px 5px var(--sidebar-glow-color) inset;
-  /* transform: scale(1.02); */ /* Optional: slight scale on hover */
-  transition: box-shadow 0.3s ease-out, transform 0.3s ease-out;
-}
+/* Sidebar specific styling for active items - inspired by examam.io */
 [data-sidebar="menu-button"][data-active="true"] {
-   box-shadow: 0 0 10px 2px var(--sidebar-glow-color), 0 0 15px 3px var(--sidebar-glow-color) inset;
+   @apply bg-primary text-primary-foreground hover:bg-primary/90;
 }
+[data-sidebar="menu-button"]:not([data-active="true"]):hover {
+  @apply bg-sidebar-accent text-sidebar-accent-foreground;
+}
+
+/* Ensure body uses light mode by default if html.dark is not present */
+html:not(.dark) {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+

@@ -3,8 +3,9 @@
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, UserCircle, BookOpenCheck, Brain, BarChart3, Loader2 } from 'lucide-react';
+import { LayoutDashboard, UserCircle, BookOpenCheck, Brain, BarChart3, Loader2, Settings, AlertTriangle } from 'lucide-react';
 import { useCallback, ReactNode } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const teacherNavItems: NavItem[] = [
   { href: '/teacher/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
@@ -25,36 +26,42 @@ export default function TeacherDashboardLayout({
     await signOut();
   }, [signOut]);
 
-  if (authLoading && !user) {
+  if (authLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-primary/10 via-background to-accent/10">
-        {/* TODO: Add Framer Motion loader animation */}
+      <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
   
-  if (!authLoading && !user) {
+  if (!user) { // Should be caught by middleware, but as a fallback
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-primary/10 via-background to-accent/10">
-            {/* TODO: Add Framer Motion for card reveal */}
-            <div className="p-8 rounded-xl shadow-2xl bg-card/80 backdrop-blur-md text-center glass-card">
-                <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary mb-4"/>
-                <p className="text-lg font-medium text-foreground">Session not found.</p>
+        <div className="flex h-screen w-full items-center justify-center bg-background p-4">
+            <Card className="p-6 modern-card text-center">
+              <CardHeader>
+                <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-3"/>
+                <CardTitle className="text-xl">Session Not Found</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <p className="text-sm text-muted-foreground">Redirecting to login...</p>
-            </div>
+              </CardContent>
+            </Card>
         </div>
     );
   }
   
-  if (user && user.role !== 'teacher') {
+  if (user.role !== 'teacher') {
      return (
-        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-destructive/10 via-background to-background">
-             <div className="p-8 rounded-xl shadow-2xl bg-card/80 backdrop-blur-md text-center glass-card">
-                <Loader2 className="mx-auto h-10 w-10 animate-spin text-destructive mb-4"/>
-                <p className="text-lg font-medium text-destructive">Access Denied.</p>
-                <p className="text-sm text-muted-foreground">Your role ({user.role}) does not permit access here.</p>
-            </div>
+        <div className="flex h-screen w-full items-center justify-center bg-background p-4">
+             <Card className="p-6 modern-card text-center">
+                 <CardHeader>
+                    <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-3"/>
+                    <CardTitle className="text-xl">Access Denied</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground">Your role ({user.role}) does not permit access here.</p>
+                </CardContent>
+            </Card>
         </div>
     );
   }
@@ -62,7 +69,7 @@ export default function TeacherDashboardLayout({
   return (
     <SidebarProvider 
         defaultOpen 
-        className="bg-gradient-to-br from-primary/5 via-muted/10 to-accent/5 dark:from-primary/10 dark:via-background dark:to-accent/10 min-h-screen"
+        className="bg-background min-h-screen" // Use plain background
     > 
       <SidebarElements
         navItems={teacherNavItems}
@@ -70,9 +77,9 @@ export default function TeacherDashboardLayout({
         user={user}
         signOut={handleSignOut}
         authLoading={authLoading}
-        className="bg-card/50 dark:bg-card/60 backdrop-blur-xl border-r border-white/10 dark:border-black/20 shadow-2xl" // Vertical glass effect
+        className="bg-sidebar-background border-r border-sidebar-border shadow-sm" 
       />
-      <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 bg-transparent min-w-0"> 
+      <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 bg-muted/30 min-w-0"> 
         {/* TODO: Add Framer Motion Page Wrapper here for content animations */}
         {children}
       </main>
