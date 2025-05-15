@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge"; // Added this import
 import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen, Check, XCircle, ThumbsUp, ClockIcon, LogOut, HelpCircle, MessageSquare, Menu, Bookmark, Palette, FileTextIcon, GripVertical, Type, UploadCloud, Minus } from 'lucide-react';
 import { ExamTimerWarning } from '@/components/student/exam-timer-warning';
 import { useActivityMonitor, type FlaggedEvent } from '@/hooks/use-activity-monitor';
@@ -22,9 +23,9 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean; // isLoading for exam data by parent
-  error: string | null; // error during exam data fetch by parent
-  examStarted: boolean; // Prop to indicate if exam is active
+  isLoading: boolean;
+  error: string | null;
+  examStarted: boolean;
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -40,7 +41,7 @@ export function ExamTakingInterface({
   initialAnswers,
   isLoading: parentIsLoading,
   error: examLoadingError,
-  examStarted, // This prop is now key
+  examStarted,
   onAnswerChange,
   onSubmitExam: parentOnSubmitExam,
   onTimeUp: parentOnTimeUp,
@@ -56,11 +57,12 @@ export function ExamTakingInterface({
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
   const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
   const [visitedQuestions, setVisitedQuestions] = useState<Record<string, boolean>>({});
+
   const [examFinished, setExamFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
   const [internalError, setInternalError] = useState<string | null>(null);
-
+  
   const onSubmitExamRef = useRef(parentOnSubmitExam);
   const onTimeUpRef = useRef(parentOnTimeUp);
 
@@ -71,11 +73,7 @@ export function ExamTakingInterface({
   useEffect(() => {
     onTimeUpRef.current = parentOnTimeUp;
   }, [parentOnTimeUp]);
-
-  useEffect(() => {
-     setAnswers(initialAnswers || {});
-  }, [initialAnswers]);
-
+  
   // Mark current question as visited
   useEffect(() => {
     if (questions && questions.length > 0 && questions[currentQuestionIndex]) {
@@ -191,9 +189,24 @@ export function ExamTakingInterface({
     }
   }, [currentQuestionId, handleInternalAnswerChange]);
 
+  const getQuestionStatusClass = useCallback((qId: string, index: number) => {
+    const isCurrent = index === currentQuestionIndex;
+    const isAns = !!answers[qId];
+    const isMarked = !!markedForReview[qId];
+    const isVis = !!visitedQuestions[qId];
+
+    if (isCurrent) return "bg-primary text-primary-foreground ring-2 ring-primary-foreground/50";
+    if (isAns && isMarked) return "bg-purple-500 text-white relative after:content-[''] after:absolute after:top-1 after:right-1 after:w-2 after:h-2 after:bg-green-400 after:rounded-full";
+    if (isMarked) return "bg-purple-500 text-white";
+    if (isAns) return "bg-green-500 text-white";
+    if (!isAns && isVis) return "bg-red-500 text-white";
+    return "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300";
+  }, [currentQuestionIndex, answers, markedForReview, visitedQuestions]);
+
+
   if (parentIsLoading && !examDetails) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-950 p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-lg text-muted-foreground">Loading exam interface...</p>
       </div>
@@ -202,7 +215,7 @@ export function ExamTakingInterface({
 
   if (examLoadingError && !examDetails) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-950 p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4 text-center">
         <ServerCrash className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">Error Loading Exam</h2>
         <p className="text-md text-muted-foreground mb-6 max-w-md">{examLoadingError}</p>
@@ -213,10 +226,10 @@ export function ExamTakingInterface({
   
   if (!examDetails || !examStarted) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-950 p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">Exam Session Error</h2>
-        <p className="text-md text-muted-foreground mb-6 max-w-md">Exam session not properly initiated or critical details are missing.</p>
+        <p className="text-md text-muted-foreground mb-6 max-w-md">Exam session not properly initiated or critical details are missing. ExamDetails: {examDetails ? 'Exists' : 'Missing'}, ExamStarted: {examStarted ? 'True' : 'False'}</p>
          <Button onClick={() => window.close()} className="mt-4 btn-primary-solid">Close Tab</Button>
       </div>
     );
@@ -224,8 +237,8 @@ export function ExamTakingInterface({
 
   if (examFinished) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-950 p-4 text-center">
-        <Card className="w-full max-w-md modern-card shadow-lg p-6">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4 text-center">
+        <Card className="w-full max-w-md modern-card shadow-lg p-6 bg-card">
           <CardHeader className="pb-4">
             <ThumbsUp className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-foreground">{isDemoMode ? "Demo " : ""}Exam {internalError ? "Submission Attempted" : "Submitted"}!</h2>
@@ -260,11 +273,9 @@ export function ExamTakingInterface({
              <Button onClick={() => {
               if (typeof window !== 'undefined') {
                 window.close(); 
-                if (!window.closed) { 
-                    if (!isDemoMode) router.push('/student/dashboard/exam-history');
-                    else if (isDemoMode && examDetails?.exam_id) router.push(`/teacher/dashboard/exams/${examDetails.exam_id}/details`);
-                    else router.push('/'); 
-                }
+                if (!window.closed && !isDemoMode) router.push('/student/dashboard/exam-history');
+                else if (!window.closed && isDemoMode && examDetails?.exam_id) router.push(`/teacher/dashboard/exams/${examDetails.exam_id}/details`);
+                else if (!window.closed) router.push('/'); 
               }
             }} className="btn-primary-solid w-full py-2 text-sm rounded-md">
               Close Tab
@@ -277,7 +288,7 @@ export function ExamTakingInterface({
 
   if ((!questions || questions.length === 0) && !parentIsLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-950 p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4 text-center">
         <XCircle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">No Questions Available</h2>
         <p className="text-md text-muted-foreground">This exam has no questions. Please contact your instructor.</p>
@@ -287,7 +298,7 @@ export function ExamTakingInterface({
   
    if (!currentQuestion && questions && questions.length > 0 && !parentIsLoading) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-950 p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-lg text-muted-foreground">Loading question...</p>
       </div>
@@ -297,23 +308,8 @@ export function ExamTakingInterface({
   const examDurationForTimer = examDetails.duration ?? 0;
   const examTitleForTimer = examDetails.title ?? "Exam";
 
-  const getQuestionStatusClass = (q: Question, index: number) => {
-    const isCurrent = index === currentQuestionIndex;
-    const isAnswered = !!answers[q.id];
-    const isMarked = !!markedForReview[q.id];
-    const isVisited = !!visitedQuestions[q.id];
-
-    if (isCurrent) return "bg-primary text-primary-foreground";
-    if (isAnswered && isMarked) return "bg-purple-500 text-white relative after:content-[''] after:absolute after:top-1 after:right-1 after:w-2 after:h-2 after:bg-green-400 after:rounded-full";
-    if (isMarked) return "bg-purple-500 text-white";
-    if (isAnswered) return "bg-green-500 text-white";
-    if (!isAnswered && isVisited) return "bg-red-500 text-white"; // Not answered but visited
-    return "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"; // Not visited
-  };
-
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-800 text-foreground overflow-hidden">
-      {/* Timer Warning will be fixed on top */}
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 text-foreground overflow-hidden">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
           key={`${examDetails.exam_id}-${examDetails.duration}`}
@@ -323,15 +319,14 @@ export function ExamTakingInterface({
         />
       )}
 
-      {/* Top Header Bar - below the timer warning */}
-      <header className="h-16 bg-white dark:bg-gray-900 shadow-md flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-[52px] z-40 border-b border-gray-200 dark:border-gray-700"> {/* Adjusted sticky top */}
+      {/* Top Header Bar */}
+      <header className="h-16 bg-white dark:bg-gray-900 shadow-md flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-0 z-40 border-b border-gray-200 dark:border-gray-700 mt-[52px]"> {/* Adjusted for timer warning */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="md:hidden">
+          <Button variant="ghost" size="icon" className="md:hidden"> {/* Placeholder for mobile panel toggle */}
             <Menu className="h-6 w-6" />
-            <span className="sr-only">Toggle Question Panel</span>
           </Button>
           <h1 className="text-lg font-semibold text-gray-800 dark:text-white truncate">
-            {examDetails?.title || "Exam"}
+            All Questions
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -344,23 +339,29 @@ export function ExamTakingInterface({
               <SelectItem value="section-b">Section B - Chemistry</SelectItem>
             </SelectContent>
           </Select>
-          {/* Timer and End Test button are part of ExamTimerWarning */}
+          {/* Timer and End Test button are part of ExamTimerWarning or main page logic */}
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden pt-0"> {/* pt-0 as header is sticky */}
+      <div className="flex flex-1 overflow-hidden">
         {/* Left Panel: Question Navigation */}
-        <aside className="w-72 bg-white dark:bg-gray-900/70 border-r border-gray-200 dark:border-gray-700 flex-col p-4 space-y-4 hidden md:flex shadow-lg">
-          <h2 className="text-md font-semibold text-gray-700 dark:text-gray-200 border-b pb-2 dark:border-gray-700">All Questions</h2>
+        <aside className="w-72 bg-white dark:bg-gray-900/80 border-r border-gray-200 dark:border-gray-700 flex flex-col p-4 space-y-4 shadow-lg">
+          <div className="text-center py-2 border-b dark:border-gray-700">
+            <h2 className="text-md font-semibold text-gray-700 dark:text-gray-200">
+                {studentName || 'Student'}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">ID: {studentRollNumber || 'N/A'}</p>
+          </div>
+          
           <ScrollArea className="flex-grow">
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2 p-1">
               {questions.map((q, index) => (
                 <Button
                   key={q.id}
                   variant="outline"
                   className={cn(
-                    "h-10 w-10 rounded-full text-sm font-medium flex items-center justify-center transition-all duration-150 ease-in-out focus:ring-2 focus:ring-primary focus:z-10",
-                    getQuestionStatusClass(q, index),
+                    "h-9 w-9 rounded-full text-xs font-medium flex items-center justify-center transition-all duration-150 ease-in-out focus:ring-2 focus:ring-offset-1 focus:ring-primary focus:z-10 shadow-sm",
+                    getQuestionStatusClass(q.id, index),
                     (!allowBacktracking && index < currentQuestionIndex) && "opacity-60 cursor-not-allowed"
                   )}
                   onClick={() => handleQuestionNavigation(index)}
@@ -371,19 +372,25 @@ export function ExamTakingInterface({
               ))}
             </div>
           </ScrollArea>
-          <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700 space-y-2 text-xs text-gray-600 dark:text-gray-400">
+
+          <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700 space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500"></span> Answered</div>
-            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> Not Answered</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> Not Answered (Visited)</div>
             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-200 border border-gray-400"></span> Not Visited</div>
             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-purple-500"></span> Marked for Review</div>
             <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-purple-500 relative after:content-[''] after:absolute after:top-px after:right-px after:w-1.5 after:h-1.5 after:bg-green-400 after:rounded-full"></span> Answered & Marked
             </div>
           </div>
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-primary cursor-pointer">
             <UserCircle className="w-5 h-5" />
             <span>Profile</span>
           </div>
+           <div className="flex justify-around pt-2">
+                <Button variant="ghost" size="icon" className="text-gray-500 hover:text-primary"><GripVertical className="h-5 w-5"/></Button>
+                <Button variant="ghost" size="icon" className="text-gray-500 hover:text-primary"><Palette className="h-5 w-5"/></Button>
+                <Button variant="ghost" size="icon" className="text-gray-500 hover:text-primary"><Type className="h-5 w-5"/></Button>
+           </div>
         </aside>
 
         {/* Main Content Area */}
@@ -394,8 +401,8 @@ export function ExamTakingInterface({
                 <div>
                   <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Q.{currentQuestionIndex + 1}</h2>
                   <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-xs bg-gray-100 dark:bg-gray-700">Subjective question</Badge>
-                    <Badge variant="outline" className="text-xs bg-gray-100 dark:bg-gray-700">4 Mark</Badge>
+                    <Badge variant="outline" className="text-xs bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600">Subjective question</Badge>
+                    <Badge variant="outline" className="text-xs bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600">4 Mark</Badge>
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={toggleMarkForReview} title="Mark for Review" className="text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary">
@@ -407,7 +414,6 @@ export function ExamTakingInterface({
                 <CardContent className="p-6 space-y-4">
                   <p className="text-md md:text-lg text-gray-700 dark:text-gray-200 leading-relaxed">{currentQuestion.text}</p>
                   
-                  {/* Placeholder for question image */}
                   <div className="my-4 p-4 border border-dashed border-gray-300 dark:border-gray-600 rounded-md text-center text-gray-400 dark:text-gray-500">
                     <FileTextIcon className="mx-auto h-10 w-10 mb-2" />
                     <p className="text-sm">Question image would appear here if available.</p>
@@ -441,8 +447,6 @@ export function ExamTakingInterface({
                       </Label>
                     ))}
                   </RadioGroup>
-
-                   {/* Placeholder for subjective answer & upload */}
                   <div className="mt-6 p-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
                     <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Your Answer (Subjective - Placeholder)</Label>
                     <Textarea placeholder="Write your answer here..." className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600" rows={4} />
@@ -465,12 +469,11 @@ export function ExamTakingInterface({
                 </CardContent>
               </Card>
               
-              {/* Bottom Navigation within Main Content */}
               <div className="mt-auto pt-4 flex justify-between items-center sticky bottom-0 bg-slate-50 dark:bg-gray-800 pb-4 px-1 z-10 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2">
                     <Button variant="outline" className="text-gray-500 hover:text-primary"><Minus className="h-4 w-4"/></Button>
-                    <Button variant="outline" className="text-gray-500 hover:text-primary"><Type className="h-4 w-4"/></Button>
-                    <Button variant="outline" className="text-gray-500 hover:text-primary"><GripVertical className="h-4 w-4"/></Button>
+                    <Button variant="outline" className="text-gray-500 hover:text-primary"><HelpCircle className="h-4 w-4"/></Button>
+                    <Button variant="outline" className="text-gray-500 hover:text-primary"><MessageSquare className="h-4 w-4"/></Button>
                 </div>
                 <div className="flex gap-3">
                   <Button
@@ -504,3 +507,4 @@ export function ExamTakingInterface({
     </div>
   );
 }
+
