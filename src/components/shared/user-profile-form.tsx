@@ -1,45 +1,65 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Mail, Lock, Camera, Save, Loader2, Hash, Briefcase } from 'lucide-react'; // Changed Fingerprint to Hash
+import { User, Mail, Lock, Camera, Save, Loader2, Hash, Briefcase, Wand2, RefreshCw } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import type { CustomUser } from '@/types/supabase';
 
 interface UserProfileFormProps {
   user: CustomUser;
-  onSave: (data: { name: string; currentEmail: string; password?: string; avatarFile?: File }) => Promise<void>;
+  onSave: (data: { name: string; currentEmail: string; password?: string; avatar_url?: string }) => Promise<void>;
 }
+
+const diceBearStyles = [
+  { value: 'micah', label: 'Micah (Cartoonish)' },
+  { value: 'adventurer', label: 'Adventurer (Pixel)' },
+  { value: 'bottts-neutral', label: 'Bottts (Robots)' },
+  { value: 'pixel-art-neutral', label: 'Pixel Art (Neutral)' },
+];
 
 export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
   const [name, setName] = useState(user.name || '');
-  const [email, setEmail] = useState(user.email); 
+  const [email, setEmail] = useState(user.email);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(undefined); 
-  const [isLoading, setIsLoading] = useState(false);
+  
+  const [currentAvatarUrl, setCurrentAvatarUrl] = useState(user.avatar_url || '');
+  const [newAvatarPreviewUrl, setNewAvatarPreviewUrl] = useState<string | null>(null);
+  const [selectedDiceBearStyle, setSelectedDiceBearStyle] = useState(diceBearStyles[0].value);
+
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     setName(user.name || '');
     setEmail(user.email);
-    const initial = (user.name || user.email || 'U').substring(0, 2).toUpperCase();
-    // Use user_id for placeholder if name/email are short or missing
-    const placeholderText = user.name?.substring(0,2) || user.email.substring(0,2) || user.user_id.substring(0,2) || 'U';
-    setAvatarPreview(`https://placehold.co/100x100.png?text=${placeholderText.toUpperCase()}`);
+    setCurrentAvatarUrl(user.avatar_url || '');
+    setNewAvatarPreviewUrl(null); // Reset preview on user change
   }, [user]);
 
+  const handleGenerateNewAvatar = useCallback(() => {
+    if (!user?.user_id || !user?.role) {
+      toast({ title: "Error", description: "User details missing for avatar generation.", variant: "destructive" });
+      return;
+    }
+    const seed = `${user.role}-${user.user_id}-${selectedDiceBearStyle}-${Date.now()}`;
+    const newUrl = `https://api.dicebear.com/8.x/${selectedDiceBearStyle}/svg?seed=${seed}`;
+    setNewAvatarPreviewUrl(newUrl);
+    toast({ description: "New avatar preview generated. Click 'Save Changes' to apply."});
+  }, [user?.user_id, user?.role, selectedDiceBearStyle, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (email !== user.email) {
         toast({title: "Info", description: "Email (your login ID) cannot be changed.", variant: "default"});
-        setEmail(user.email); 
+        setEmail(user.email);
         return;
     }
 
@@ -51,48 +71,75 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
       toast({ title: "Error", description: "New passwords do not match.", variant: "destructive" });
       return;
     }
-    setIsLoading(true);
+    setIsSaving(true);
     try {
-      await onSave({ 
-        name: name, 
-        currentEmail: user.email, 
-        password: password || undefined, 
+      await onSave({
+        name: name,
+        currentEmail: user.email,
+        password: password || undefined,
+        avatar_url: newAvatarPreviewUrl || currentAvatarUrl || undefined,
       });
-      setPassword(''); 
+      setPassword('');
       setConfirmPassword('');
+      if (newAvatarPreviewUrl) {
+        setCurrentAvatarUrl(newAvatarPreviewUrl); // Persist preview as current on successful save
+        setNewAvatarPreviewUrl(null); // Clear preview
+      }
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to update profile. Please try again.", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
+  const displayAvatarUrl = newAvatarPreviewUrl || currentAvatarUrl;
+
   return (
-    <Card className="w-full max-w-2xl mx-auto shadow-lg">
+    <Card className="w-full max-w-2xl mx-auto modern-card">
       <form onSubmit={handleSubmit}>
         <CardHeader>
           <CardTitle className="text-2xl">Edit Profile</CardTitle>
-          <CardDescription>Update your personal information. User ID and Email are your unique identifiers.</CardDescription>
+          <CardDescription>Update your personal information and avatar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src={avatarPreview} alt={name || 'User'} data-ai-hint="person portrait" />
-              <AvatarFallback>{(user.name || user.email || 'U').substring(0, 2).toUpperCase()}</AvatarFallback>
+            <Avatar className="h-24 w-24 border-2 border-primary/30 shadow-md">
+              <AvatarImage src={displayAvatarUrl || undefined} alt={name || 'User'} />
+              <AvatarFallback className="text-2xl bg-muted text-muted-foreground">
+                {(user.name || user.email || 'U').substring(0, 2).toUpperCase()}
+              </AvatarFallback>
             </Avatar>
+            <div className="w-full max-w-sm space-y-3 p-4 border rounded-md bg-background/50">
+                <Label htmlFor="diceBearStyle" className="text-sm font-medium">Change Avatar Style (DiceBear)</Label>
+                 <div className="flex items-center gap-2">
+                    <Select value={selectedDiceBearStyle} onValueChange={setSelectedDiceBearStyle}>
+                        <SelectTrigger id="diceBearStyle" className="flex-grow">
+                            <SelectValue placeholder="Select style" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {diceBearStyles.map(style => (
+                            <SelectItem key={style.value} value={style.value}>{style.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button type="button" variant="outline" size="icon" onClick={handleGenerateNewAvatar} title="Generate New Avatar Preview">
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
+                 </div>
+                 <p className="text-xs text-muted-foreground">Select a style and click refresh to preview. Save changes to apply.</p>
+            </div>
             <div className="relative">
               <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('avatarUpload')?.click()} disabled>
-                <Camera className="mr-2 h-4 w-4" /> Change Photo (Disabled)
+                <Camera className="mr-2 h-4 w-4" /> Upload Custom Photo (Soon)
               </Button>
-              <Input 
-                id="avatarUpload" 
-                type="file" 
-                className="hidden" 
-                accept="image/*" 
+              <Input
+                id="avatarUpload"
+                type="file"
+                className="hidden"
+                accept="image/*"
                 disabled
               />
             </div>
-             <p className="text-xs text-muted-foreground">Avatar functionality not supported with current setup.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -141,9 +188,9 @@ export function UserProfileForm({ user, onSave }: UserProfileFormProps) {
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="ml-auto" disabled={isLoading}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {isLoading ? 'Saving...' : 'Save Changes'}
+          <Button type="submit" className="ml-auto btn-primary-solid" disabled={isSaving}>
+            {isSaving ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+            {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </CardFooter>
       </form>

@@ -14,10 +14,9 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
-  SidebarSeparator
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button'; // Added this import
-import { ShieldCheck, LogOut, Settings, Loader2, UserCircle2, Fingerprint, Hash, GripVertical } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ShieldCheck, LogOut, Settings, Loader2, Hash, GripVertical } from 'lucide-react'; // Removed UserCircle2, Fingerprint
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -28,7 +27,7 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   disabled?: boolean;
-  group?: 'MAIN' | 'TOOLS' | 'OTHER'; // For grouping like examam.io
+  group?: 'MAIN' | 'TOOLS' | 'OTHER';
 }
 
 interface SidebarElementsProps {
@@ -44,12 +43,10 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
   const pathname = usePathname();
 
   const mainNavItems = navItems.filter(item => !item.group || item.group === 'MAIN');
-  const toolsNavItems = navItems.filter(item => item.group === 'TOOLS'); // Example, adjust if needed
-  const otherNavItems = navItems.filter(item => item.group === 'OTHER'); // Example
 
   const renderNavGroup = (items: NavItem[], groupLabel?: string) => {
     if (items.length === 0 && !groupLabel) return null;
-    if (items.length === 0 && groupLabel) { // Render label even if group is empty for structure
+    if (items.length === 0 && groupLabel) {
       return (
         <SidebarGroup className="pt-2 pb-1 px-2 group-data-[collapsible=icon]:hidden">
             <SidebarGroupLabel className="text-xs font-semibold uppercase text-sidebar-group-text tracking-wider">
@@ -79,7 +76,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                     className: "group-data-[collapsible=icon]:block hidden bg-popover text-popover-foreground border-border shadow-sm rounded-sm"
                 }}
                 disabled={item.disabled}
-                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
+                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
                 data-sidebar="menu-button"
               >
                 <Link href={item.href} className="gap-2.5">
@@ -114,9 +111,6 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
       <SidebarContent className="p-0 flex-grow flex flex-col">
         <div className="py-3 flex-grow">
             {renderNavGroup(mainNavItems, "Main")}
-            {/* Add other groups if you define them in navItems */}
-            {/* {renderNavGroup(toolsNavItems, 'TOOLS')} */}
-            {/* {renderNavGroup(otherNavItems, 'OTHER')} */}
         </div>
 
         <div className="mt-auto p-2 border-t border-sidebar-border/60">
@@ -147,7 +141,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
             <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-2 overflow-hidden group-data-[collapsible=icon]:hidden">
                     <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.avatar_url || undefined} alt={user.name || user.email || 'User'} data-ai-hint="person letter" />
+                        <AvatarImage src={user.avatar_url || undefined} alt={user.name || user.email || 'User'} />
                         <AvatarFallback className="text-xs bg-muted text-muted-foreground">
                             {(user.name || user.email || 'U').substring(0, 2).toUpperCase()}
                         </AvatarFallback>

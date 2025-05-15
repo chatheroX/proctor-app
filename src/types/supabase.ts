@@ -26,6 +26,7 @@ export interface ProctorXTableType {
   pass: string;  // Plaintext password (SECURITY RISK - FOR TESTING ONLY)
   name: string;  // User's full name
   role: 'student' | 'teacher'; // User's role
+  avatar_url: string | null; // URL for the user's avatar
   created_at?: string;
 }
 
@@ -36,8 +37,8 @@ export interface Database {
     Tables: {
       proctorX: {
         Row: ProctorXTableType;
-        Insert: Omit<ProctorXTableType, 'created_at'>;
-        Update: Partial<Omit<ProctorXTableType, 'created_at' | 'user_id' | 'email' | 'role'>>; // Can only update name, pass
+        Insert: Omit<ProctorXTableType, 'created_at' | 'user_id'> & { user_id?: string }; // user_id is app-generated
+        Update: Partial<Omit<ProctorXTableType, 'created_at' | 'user_id' | 'email'>>;
       };
       ExamX: {
         Row: {
@@ -64,9 +65,9 @@ export interface Database {
           allow_backtracking?: boolean;
           questions?: Question[] | null;
           exam_code: string;
-          status?: ExamStatus; // Defaults to 'Published' in form
-          start_time: string | null; // Made non-optional if status is Published
-          end_time: string | null;   // Made non-optional if status is Published
+          status?: ExamStatus; // Defaults to 'Published'
+          start_time: string; // Made non-optional if status is Published
+          end_time: string;   // Made non-optional if status is Published
           created_at?: string;
           updated_at?: string;
         };
@@ -76,8 +77,7 @@ export interface Database {
           duration: number;
           allow_backtracking: boolean;
           questions: Question[] | null;
-          // exam_code: string; // Typically not updatable after creation
-          status: ExamStatus; // Status can be updated (e.g. by system)
+          status: ExamStatus;
           start_time: string | null;
           end_time: string | null;
           updated_at: string;
@@ -135,6 +135,7 @@ export type CustomUser = {
   email: string;
   name: string | null;
   role: 'student' | 'teacher' | null;
+  avatar_url: string | null;
 };
 
 export type ProctorXTable = Database['public']['Tables']['proctorX'];
@@ -153,8 +154,8 @@ export type FlaggedEventType =
   | 'fullscreen_exited'
   | 'blur'
   | 'focus'
-  | 'copy_attempt' // Example new event
-  | 'paste_attempt'; // Example new event
+  | 'copy_attempt'
+  | 'paste_attempt';
 
 export interface FlaggedEvent {
   type: FlaggedEventType;
@@ -163,5 +164,3 @@ export interface FlaggedEvent {
   examId: string;
   details?: string;
 }
-
-    
