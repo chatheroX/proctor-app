@@ -22,7 +22,7 @@ export default function TeacherDemoExamPage() {
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // For loading exam data
+  const [isLoading, setIsLoading] = useState(true); 
   const [error, setError] = useState<string | null>(null);
   const [examStarted, setExamStarted] = useState(false);
 
@@ -30,7 +30,7 @@ export default function TeacherDemoExamPage() {
   const teacherUserRole = teacherUser?.role;
 
   const fetchExamData = useCallback(async () => {
-    console.log('[TeacherDemoExamPage] fetchExamData called.');
+    console.log('[TeacherDemoExamPage] fetchExamData called. examId:', examId, 'teacherUserId:', teacherUserId);
     if (!examId || !supabase || !teacherUserId || teacherUserRole !== 'teacher') {
       if (!examId) setError("Exam ID is missing.");
       else if (!teacherUserId || teacherUserRole !== 'teacher') setError("Access denied or user data unavailable for demo.");
@@ -60,38 +60,38 @@ export default function TeacherDemoExamPage() {
       }
 
       setExamDetails(data as Exam);
-      setQuestions(data.questions || []); // Ensure questions is at least an empty array
+      setQuestions(data.questions || []); 
       console.log('[TeacherDemoExamPage] Fetched exam details:', data, 'Questions:', data.questions || []);
     } catch (e: any) {
       console.error("[TeacherDemoExamPage] Failed to fetch exam data for demo:", e);
       setError(e.message || "Failed to load exam data for demo.");
-      setQuestions([]);
+      setQuestions([]); // Ensure questions is an empty array on error
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, teacherUserId, teacherUserRole, setIsLoading, setError, setExamDetails, setQuestions]);
+  }, [examId, supabase, teacherUserId, teacherUserRole]);
 
   useEffect(() => {
-    // Ensures that fetch only runs when necessary parameters are available and not already loading/loaded.
-    if (examId && teacherUserId && teacherUserRole === 'teacher' && !authLoading) { // Ensure auth is not loading
-      if (!examDetails && !error) { // Fetch only if no details and no prior error
+    if (examId && teacherUserId && teacherUserRole === 'teacher' && !authLoading) { 
+      if (!examDetails && !error && isLoading) { // Fetch only if not already fetched/errored and currently in loading state
         console.log('[TeacherDemoExamPage] useEffect triggering fetchExamData.');
         fetchExamData();
       }
     } else if (!authLoading && (!examId || !teacherUserId || teacherUserRole !== 'teacher')) {
         if (!examId) setError("Exam ID is missing for fetch.");
         else setError("Teacher authentication details missing for fetch or incorrect role.");
+        if (isLoading) setIsLoading(false); // Stop loading if critical params missing
     }
-  }, [examId, teacherUserId, teacherUserRole, authLoading, examDetails, error, fetchExamData]);
+  }, [examId, teacherUserId, teacherUserRole, authLoading, examDetails, error, fetchExamData, isLoading]);
 
 
   const handleStartDemoExam = useCallback(() => {
     console.log('[TeacherDemoExamPage] handleStartDemoExam called.');
     console.log({
-      parent_isLoading: isLoading,
+      parent_isLoading: isLoading, // page loading state
       parent_error: error,
       parent_examDetails_exists: !!examDetails,
-      parent_questions_length: questions ? questions.length : 'null',
+      parent_questions_length: questions ? questions.length : 'null/undefined',
     });
 
     if (error && !examDetails) {
@@ -99,13 +99,14 @@ export default function TeacherDemoExamPage() {
         console.log('[TeacherDemoExamPage] Aborting start: Error and no examDetails.');
         return;
     }
-    // Ensure questions is not null before checking length
+    
     if (examDetails && (!questions || questions.length === 0) && !isLoading) {
-        toast({ title: "No Questions", description: "This exam has no questions to demo.", variant: "destructive" });
         console.log('[TeacherDemoExamPage] Aborting start: No questions for demo.');
+        toast({ title: "No Questions", description: "This exam has no questions to demo. Please add questions first.", variant: "destructive" });
         return;
     }
-    if (!isLoading && !error && examDetails) {
+
+    if (!isLoading && !error && examDetails && questions && questions.length > 0) {
         console.log('[TeacherDemoExamPage] Starting exam: setExamStarted(true).');
         setExamStarted(true);
     } else {
@@ -113,8 +114,10 @@ export default function TeacherDemoExamPage() {
          if(isLoading) console.log("Reason: isLoading is true");
          if(error) console.log("Reason: error is present:", error);
          if(!examDetails) console.log("Reason: examDetails is null/undefined");
+         if(!questions || questions.length === 0) console.log("Reason: questions array is empty or null");
+         toast({ title: "Cannot Start Demo", description: "Exam data not fully loaded or missing questions.", variant: "default" });
     }
-  }, [questions, isLoading, error, examDetails, toast, setExamStarted]);
+  }, [questions, isLoading, error, examDetails, toast]);
 
   const handleDemoAnswerChange = useCallback((questionId: string, optionId: string) => {
     console.log(`Demo Answer for QID ${questionId}: OptionID ${optionId}`);
@@ -156,7 +159,8 @@ export default function TeacherDemoExamPage() {
     );
   }
 
-  // This loader shows when the exam data itself is loading or if there was an error before examDetails is set
+  // This loader shows when the exam data itself is loading (isLoading is true) AND examDetails is not yet set
+  // AND there's no pre-existing error from parameter validation.
   if (isLoading && !examDetails && !error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
@@ -167,6 +171,7 @@ export default function TeacherDemoExamPage() {
   }
 
   // This shows if there was an error during fetch AND examDetails is still null (or became null)
+  // This also covers errors from missing examId or auth issues before fetch attempt.
   if (error && !examDetails && !examStarted) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
@@ -180,13 +185,14 @@ export default function TeacherDemoExamPage() {
     );
   }
   
-  // If not loading, no error, but still no examDetails (e.g. examId invalid or access issue not caught as error)
+  // If not loading, no error, but still no examDetails (e.g., examId valid but data.teacher_id mismatch not caught as specific error)
+  // Or if fetch simply returned no data for a valid ID without throwing a specific error.
   if (!isLoading && !error && !examDetails && !examStarted) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Exam Data Not Available</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">Could not retrieve details for this exam demo.</p>
+        <p className="text-lg text-destructive text-center mb-2">Exam Data Not Available for Demo</p>
+        <p className="text-sm text-muted-foreground text-center mb-4">Could not retrieve details for this exam demo. It might not exist or access is restricted.</p>
          <Button onClick={() => router.push(`/teacher/dashboard/exams/${examId}/details`)} className="mt-4">
             Back to Exam Details
         </Button>
@@ -194,13 +200,12 @@ export default function TeacherDemoExamPage() {
     );
   }
 
-
   return (
     <ExamTakingInterface
       examDetails={examDetails}
-      questions={questions || []}
-      isLoading={isLoading && !examDetails} // isLoading for the interface is true if parent is loading AND details aren't set
-      error={error} // Pass down the error state
+      questions={questions || []} // Ensure questions is always an array
+      isLoading={isLoading && !examDetails} 
+      error={error} 
       examStarted={examStarted}
       onStartExam={handleStartDemoExam}
       onAnswerChange={handleDemoAnswerChange}
@@ -211,3 +216,5 @@ export default function TeacherDemoExamPage() {
     />
   );
 }
+
+    
