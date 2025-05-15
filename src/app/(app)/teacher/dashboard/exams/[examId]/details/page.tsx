@@ -25,31 +25,40 @@ import Link from 'next/link';
 import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
 
 // Helper function to determine effective status
-export const getEffectiveExamStatus = (exam: Exam): ExamStatus => {
-  if (!exam || !exam.status) return 'Draft'; // Default if exam or status is undefined
+export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatus => {
+  if (!exam || !exam.status || !exam.start_time || !exam.end_time) {
+    // If essential data is missing, it can't be 'Ongoing' or 'Completed' based on time.
+    // If status is 'Published' but times are missing, it's just 'Published' (likely misconfigured).
+    // If status is missing, default to 'Published' if it's a valid exam object, otherwise handle as error or default.
+    // For this context, if an exam exists but lacks scheduling and isn't 'Completed', we treat it as 'Published'.
+    return exam?.status === 'Completed' ? 'Completed' : 'Published';
+  }
 
   const now = new Date();
-  const startTime = exam.start_time ? parseISO(exam.start_time) : null;
-  const endTime = exam.end_time ? parseISO(exam.end_time) : null;
+  const startTime = parseISO(exam.start_time);
+  const endTime = parseISO(exam.end_time);
 
-  if (exam.status === 'Draft') return 'Draft';
+  if (!isValid(startTime) || !isValid(endTime)) {
+    // Invalid dates mean it cannot be 'Ongoing' or 'Completed' based on time.
+    return exam.status === 'Completed' ? 'Completed' : 'Published';
+  }
+
+  // Status from DB takes precedence if it's 'Completed'.
   if (exam.status === 'Completed') return 'Completed';
 
-  if (exam.status === 'Published') {
-    if (startTime && endTime && isValid(startTime) && isValid(endTime)) {
-      if (isAfter(now, endTime)) return 'Completed';
-      if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing';
-      if (isBefore(now, startTime)) return 'Published'; // Upcoming
-    }
-    return 'Published'; // If times are not set or invalid, but it's published.
-  }
+  // If current time is past end_time, it's 'Completed' regardless of DB status (unless DB is 'Draft').
+  if (isAfter(now, endTime)) return 'Completed';
   
-  if (exam.status === 'Ongoing') {
-     if (endTime && isValid(endTime) && isAfter(now, endTime)) return 'Completed';
-     return 'Ongoing';
-  }
+  // If current time is between start and end, it's 'Ongoing'.
+  // This applies if DB status is 'Published' or already 'Ongoing'.
+  if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing';
+  
+  // If current time is before start_time, and DB status is 'Published', it's 'Published' (upcoming).
+  if (isBefore(now, startTime) && exam.status === 'Published') return 'Published';
 
-  return exam.status; // Fallback
+  // Fallback to the database status if none of the above time-based conditions for 'Ongoing' or 'Completed' are met.
+  // This covers cases where it's 'Published' but not yet started, or if status is 'Ongoing' but somehow times are outside.
+  return exam.status; 
 };
 
 
@@ -61,7 +70,7 @@ export default function ExamDetailsPage() {
   const examId = params.examId as string;
 
   const [exam, setExam] = useState<Exam | null>(null);
-  const [effectiveStatus, setEffectiveStatus] = useState<ExamStatus>('Draft');
+  const [effectiveStatus, setEffectiveStatus] = useState<ExamStatus>('Published'); // Default to Published
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -84,10 +93,13 @@ export default function ExamDetailsPage() {
       setExam(data);
       if (data) {
         setEffectiveStatus(getEffectiveExamStatus(data));
+      } else {
+        setEffectiveStatus('Published'); // Or handle as error if exam must exist
       }
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to fetch exam details: ${error.message}`, variant: "destructive" });
       setExam(null);
+      setEffectiveStatus('Published'); // Default on error
     } finally {
       setIsLoading(false);
     }
@@ -128,18 +140,17 @@ export default function ExamDetailsPage() {
   
   const getStatusBadgeVariant = (status: ExamStatus) => {
     switch (status) {
-      case 'Published': return 'default'; // Blue
-      case 'Ongoing': return 'destructive'; // Yellow/Orange - using destructive for now
-      case 'Completed': return 'outline'; // Green
-      case 'Draft':
+      case 'Published': return 'default'; 
+      case 'Ongoing': return 'destructive'; 
+      case 'Completed': return 'outline'; 
       default:
-        return 'secondary'; // Grey
+        return 'secondary'; 
     }
   };
 
   const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
-      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white';
+      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // Upcoming or simply published
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
       case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
       default: return '';
@@ -151,7 +162,7 @@ export default function ExamDetailsPage() {
     try {
       const date = parseISO(isoString);
       if (!isValid(date)) return 'Invalid Date';
-      return format(date, "MMM d, yyyy, hh:mm a"); // e.g., Jun 1, 2024, 02:00 PM
+      return format(date, "MMM d, yyyy, hh:mm a"); 
     } catch (error) {
       console.error("Error formatting date:", error);
       return "Invalid Date";
@@ -181,7 +192,8 @@ export default function ExamDetailsPage() {
   }
 
   const questionsList = exam.questions || [];
-  const isJoinable = effectiveStatus === 'Ongoing' || (effectiveStatus === 'Published' && exam.start_time && exam.end_time && isAfter(new Date(), parseISO(exam.start_time)) && isBefore(new Date(), parseISO(exam.end_time)));
+  const isShareable = effectiveStatus === 'Ongoing' || effectiveStatus === 'Published';
+
 
   return (
     <div className="space-y-6">
@@ -200,7 +212,7 @@ export default function ExamDetailsPage() {
               variant={getStatusBadgeVariant(effectiveStatus)}
               className={`text-sm px-3 py-1 ${getStatusBadgeClass(effectiveStatus)}`}
             >
-              {effectiveStatus}
+              Effective Status: {effectiveStatus}
             </Badge>
           </div>
         </CardHeader>
@@ -271,7 +283,7 @@ export default function ExamDetailsPage() {
           <Button variant="outline" disabled>
             <Users2 className="mr-2 h-4 w-4" /> View Results (Soon)
           </Button>
-          <Button variant="outline" onClick={copyExamCode} disabled={!isJoinable && exam.status !== 'Published'}>
+          <Button variant="outline" onClick={copyExamCode} disabled={!isShareable}>
             <Share2 className="mr-2 h-4 w-4" /> Share Exam Code
           </Button>
           <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} disabled={isDeleting}>

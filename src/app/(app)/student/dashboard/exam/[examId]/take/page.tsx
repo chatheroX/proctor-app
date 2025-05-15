@@ -43,7 +43,7 @@ export default function TakeExamPage() {
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('*') // Fetch all details for effective status check
+        .select('*') 
         .eq('exam_id', examId)
         .single();
 
@@ -58,6 +58,14 @@ export default function TakeExamPage() {
          setIsLoading(false);
          return;
       }
+      
+      if (!data.questions || data.questions.length === 0) {
+        setError("This exam has no questions. Please contact your teacher.");
+        setExamDetails(data as Exam);
+        setQuestions([]);
+        setIsLoading(false);
+        return;
+      }
 
       setExamDetails(data as Exam);
       setQuestions(data.questions || []);
@@ -71,17 +79,18 @@ export default function TakeExamPage() {
   }, [examId, supabase, studentUserId]);
 
   useEffect(() => {
-    if (examId && studentUserId && !examDetails && isLoading) {
+    // Only fetch if examId and studentUserId are present, and we haven't fetched yet (isLoading is true)
+    if (examId && studentUserId && !examDetails && isLoading && !error) {
         fetchExamData();
     } else if (!isLoading && (!examId || !studentUserId)) {
         if (!examId) setError("Exam ID is missing for fetch.");
         else if(!studentUserId) setError("Student authentication details missing for fetch.");
     }
-  }, [examId, studentUserId, fetchExamData, isLoading, examDetails]);
+  }, [examId, studentUserId, fetchExamData, isLoading, examDetails, error]);
 
   const handleStartExam = useCallback(() => {
-    if (error && !examDetails) {
-        toast({ title: "Cannot Start", description: error || "An error occurred.", variant: "destructive" });
+    if (error && !examDetails) { // If there was an error loading the exam itself
+        toast({ title: "Cannot Start", description: error || "An error occurred while loading the exam.", variant: "destructive" });
         return;
     }
     if (examDetails) {
@@ -90,17 +99,18 @@ export default function TakeExamPage() {
             toast({ title: "Cannot Start", description: `Exam is ${effectiveStatus.toLowerCase()}.`, variant: "destructive" });
             return;
         }
+        if (!examDetails.questions || examDetails.questions.length === 0) {
+          toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
+          return;
+        }
     }
-    if(examDetails && (questions === null || questions.length === 0) && !isLoading) {
-        toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
-        return;
-    }
-    if (!isLoading && !error && examDetails) {
+    if(!isLoading && !error && examDetails && examDetails.questions && examDetails.questions.length > 0) {
         setExamStarted(true);
     }
-  }, [questions, isLoading, error, examDetails, toast]);
+  }, [isLoading, error, examDetails, toast]);
 
   const handleAnswerChangeLocal = useCallback((questionId: string, optionId: string) => {
+    // In a real app, this would save to local storage or a temporary state for auto-save
     console.log(`Student Answer for QID ${questionId} saved locally (simulated): OptionID ${optionId}`);
   }, []);
 
@@ -133,7 +143,7 @@ export default function TakeExamPage() {
   }, [studentUserId, toast, router]);
 
 
-  if (isLoading && !examDetails && !examStarted) {
+  if (isLoading && !examDetails && !error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -142,12 +152,13 @@ export default function TakeExamPage() {
     );
   }
   
-  if (!isLoading && !examDetails && !examStarted) {
+  // Error occurred, or examDetails is null after loading completed (without error explicitly from fetch)
+  if ((!isLoading && error && !examDetails) || (!isLoading && !error && !examDetails && !examStarted) ) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg text-destructive text-center mb-2">{error ? "Error Loading Exam" : "Exam Data Not Available"}</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">{error || "Could not load exam details."}</p>
+        <p className="text-sm text-muted-foreground text-center mb-4">{error || "Could not load exam details. It might not be available or an error occurred."}</p>
          <Button onClick={() => router.push('/student/dashboard')} className="mt-4">
             Back to Dashboard
         </Button>
@@ -155,12 +166,27 @@ export default function TakeExamPage() {
     );
   }
 
+  // Specific check for errors that might occur even if examDetails has some data (e.g. status changed after initial load)
+   if (!isLoading && error && examDetails && !examStarted) {
+     return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
+        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+        <p className="text-lg text-destructive text-center mb-2">Cannot Proceed with Exam</p>
+        <p className="text-sm text-muted-foreground text-center mb-4">{error}</p>
+         <Button onClick={() => router.push('/student/dashboard')} className="mt-4">
+            Back to Dashboard
+        </Button>
+      </div>
+    );
+  }
+
+
   return (
     <ExamTakingInterface
-      examDetails={examDetails}
-      questions={questions || []}
-      isLoading={isLoading && !examDetails}
-      error={error}
+      examDetails={examDetails} // examDetails can still be null here if !examStarted
+      questions={questions || []} // questions can be empty if examDetails is null or has no questions
+      isLoading={isLoading && !examDetails} // True if loading and examDetails not yet populated
+      error={error} // Error message, if any
       examStarted={examStarted}
       onStartExam={handleStartExam}
       onAnswerChange={handleAnswerChangeLocal}

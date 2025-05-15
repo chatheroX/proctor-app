@@ -7,10 +7,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam, ExamStatus } from '@/types/supabase';
+import type { Exam, ExamUpdate } from '@/types/supabase'; // Use ExamUpdate
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { parseISO } from 'date-fns';
+import { parseISO, isValid } from 'date-fns';
 
 export default function EditExamPage() {
   const params = useParams();
@@ -54,6 +54,9 @@ export default function EditExamPage() {
         }
         setInitialExamData(null);
       } else if (exam) {
+        const startTimeDate = exam.start_time && isValid(parseISO(exam.start_time)) ? parseISO(exam.start_time) : null;
+        const endTimeDate = exam.end_time && isValid(parseISO(exam.end_time)) ? parseISO(exam.end_time) : null;
+
         setInitialExamData({
           exam_id: exam.exam_id,
           title: exam.title,
@@ -62,9 +65,11 @@ export default function EditExamPage() {
           allowBacktracking: exam.allow_backtracking,
           questions: exam.questions || [],
           exam_code: exam.exam_code,
-          status: exam.status as ExamStatus,
-          startTime: exam.start_time ? parseISO(exam.start_time) : null,
-          endTime: exam.end_time ? parseISO(exam.end_time) : null,
+          // Status will always be 'Published' for editing via this form.
+          // Actual live status (Ongoing, Completed) is derived, not directly edited here.
+          status: 'Published', 
+          startTime: startTimeDate,
+          endTime: endTimeDate,
         });
       } else {
         setError("Exam not found.");
@@ -77,7 +82,7 @@ export default function EditExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, user, toast]); // Added toast to deps
+  }, [examId, supabase, user]);
 
   useEffect(() => {
     fetchExamToEdit();
@@ -87,17 +92,22 @@ export default function EditExamPage() {
     if (!user || !initialExamData?.exam_id) {
       return { success: false, error: "User not authenticated or exam ID missing." };
     }
+     if (!data.startTime || !data.endTime) {
+      return { success: false, error: "Start and end times are required for published exams."};
+    }
 
-    const updatedExamData: Partial<Exam> = {
+    // When updating, status might change programmatically elsewhere (e.g. to Ongoing/Completed)
+    // This form primarily updates content and Published settings.
+    const updatedExamData: ExamUpdate = {
       title: data.title,
       description: data.description || null,
       duration: data.duration,
       allow_backtracking: data.allowBacktracking,
       questions: data.questions,
-      status: data.status,
-      start_time: data.startTime ? data.startTime.toISOString() : null,
-      end_time: data.endTime ? data.endTime.toISOString() : null,
-      // exam_code is not updated here to prevent accidental changes
+      status: 'Published', // Keep as Published, actual status is dynamic
+      start_time: data.startTime.toISOString(),
+      end_time: data.endTime.toISOString(),
+      updated_at: new Date().toISOString(), // Manually set updated_at
     };
 
     try {
@@ -106,7 +116,7 @@ export default function EditExamPage() {
         .update(updatedExamData)
         .eq('exam_id', initialExamData.exam_id)
         .eq('teacher_id', user.user_id) 
-        .select()
+        .select('exam_id') // only select exam_id
         .single();
 
       if (updateError) {

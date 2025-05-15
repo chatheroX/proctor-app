@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam } from '@/types/supabase';
-import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page'; // Import the helper
+import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page'; 
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
@@ -21,7 +21,7 @@ export default function JoinExamPage() {
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!examCode.trim()) {
       toast({ title: "Error", description: "Please enter an exam code.", variant: "destructive" });
@@ -32,7 +32,7 @@ export default function JoinExamPage() {
     try {
       const { data: exam, error } = await supabase
         .from('ExamX')
-        .select('*') // Fetch all details to use getEffectiveExamStatus
+        .select('*') 
         .eq('exam_code', examCode.trim().toUpperCase())
         .single();
 
@@ -49,9 +49,16 @@ export default function JoinExamPage() {
       const effectiveStatus = getEffectiveExamStatus(exam as Exam);
 
       if (effectiveStatus !== 'Ongoing') {
-         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined.`, variant: "destructive" });
+         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined. Please check the schedule.`, variant: "destructive" });
          setIsLoading(false);
          return;
+      }
+      
+      // Check if exam has questions
+      if (!exam.questions || exam.questions.length === 0) {
+        toast({ title: "Exam Not Ready", description: "This exam currently has no questions. Please contact your teacher.", variant: "destructive" });
+        setIsLoading(false);
+        return;
       }
       
       router.push(`/student/dashboard/exam/${exam.exam_id}/seb-redirect`);
@@ -60,7 +67,7 @@ export default function JoinExamPage() {
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setIsLoading(false);
     }
-  };
+  }, [examCode, supabase, toast, router]);
 
   return (
     <div className="space-y-6">
