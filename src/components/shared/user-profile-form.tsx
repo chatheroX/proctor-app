@@ -7,48 +7,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Mail, Lock, Camera, Save, Loader2, Hash, Briefcase, Wand2, RefreshCw } from 'lucide-react';
+import { User, Mail, Lock, Save, Loader2, Hash, Briefcase, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CustomUser } from '@/types/supabase';
-import { useAuth } from '@/contexts/AuthContext'; // For potentially getting current user details if needed
-
-const DICEBEAR_STYLES = ['micah', 'adventurer', 'bottts-neutral', 'pixel-art-neutral'];
-const DICEBEAR_TECH_KEYWORDS = ['coder', 'debugger', 'techie', 'pixelninja', 'cswizard', 'binary', 'script', 'stack', 'keyboard', 'neonbyte', 'glitch', 'algorithm', 'syntax', 'kernel'];
+import { DICEBEAR_STYLES, DICEBEAR_TECH_KEYWORDS, generateEnhancedDiceBearAvatar } from '@/contexts/AuthContext'; // Assuming these are exported
 
 interface UserProfileFormProps {
-  user: CustomUser; // The user object passed as a prop
+  user: CustomUser;
   onSave: (data: { name: string; password?: string; avatar_url?: string }) => Promise<void>;
 }
 
-const generateEnhancedDiceBearUrl = (style: string, role: CustomUser['role'], userId: string): string => {
-  const randomKeyword = DICEBEAR_TECH_KEYWORDS[Math.floor(Math.random() * DICEBEAR_TECH_KEYWORDS.length)];
-  const userRoleStr = role || 'user';
-  const uniqueSuffix = Date.now().toString(36).slice(-6) + Math.random().toString(36).substring(2, 6); // Increased randomness
-  const seed = `${randomKeyword}-${userRoleStr}-${userId}-${uniqueSuffix}`;
-  return `https://api.dicebear.com/8.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
-};
-
-
 export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps) {
-  // Initialize state from propUser, providing defaults for potentially null fields
   const [name, setName] = useState(propUser.name || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
-  // currentAvatarUrl holds the URL that is currently saved/canonical for the user
   const [currentAvatarUrl, setCurrentAvatarUrl] = useState(propUser.avatar_url || '');
-  // newAvatarPreviewUrl holds a URL that has been generated but not yet saved
   const [newAvatarPreviewUrl, setNewAvatarPreviewUrl] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  // Effect to sync local state if propUser changes (e.g., after a save and context update)
   useEffect(() => {
     setName(propUser.name || '');
-    setCurrentAvatarUrl(propUser.avatar_url || ''); // Update currentAvatarUrl from prop
-    setNewAvatarPreviewUrl(null); // Clear preview when user prop changes
-    console.log("[UserProfileForm] useEffect sync, propUser updated:", propUser.name, propUser.avatar_url);
+    setCurrentAvatarUrl(propUser.avatar_url || '');
+    setNewAvatarPreviewUrl(null); 
   }, [propUser]);
 
   const handleGenerateNewAvatar = useCallback(() => {
@@ -57,8 +40,8 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
       return;
     }
     const randomStyle = DICEBEAR_STYLES[Math.floor(Math.random() * DICEBEAR_STYLES.length)];
-    const newUrl = generateEnhancedDiceBearUrl(randomStyle, propUser.role, propUser.user_id);
-    setNewAvatarPreviewUrl(newUrl); // Set the preview URL
+    const newUrl = generateEnhancedDiceBearAvatar(propUser.role, propUser.user_id, randomStyle, DICEBEAR_TECH_KEYWORDS);
+    setNewAvatarPreviewUrl(newUrl);
     toast({ description: "New avatar preview generated. Click 'Save Changes' to apply."});
   }, [propUser?.user_id, propUser?.role, toast]);
 
@@ -74,7 +57,6 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
     }
     setIsSaving(true);
     try {
-      // If a new avatar was previewed, use that. Otherwise, use the current (possibly unchanged) avatar URL.
       const avatarToSave = newAvatarPreviewUrl || currentAvatarUrl;
 
       await onSave({
@@ -82,11 +64,14 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
         password: password || undefined,
         avatar_url: avatarToSave || undefined,
       });
-      // Parent's onSave should trigger AuthContext update, which in turn updates propUser.
-      // The useEffect above will then sync local state (setCurrentAvatarUrl and clear newAvatarPreviewUrl).
+      
+      // After successful save, if a new avatar was previewed, make it the current one
+      if (newAvatarPreviewUrl) {
+        setCurrentAvatarUrl(newAvatarPreviewUrl);
+        setNewAvatarPreviewUrl(null); // Clear the preview
+      }
       setPassword('');
       setConfirmPassword('');
-      // Toast for success/failure is handled by the parent page calling onSave.
     } catch (error: any) {
       toast({ title: "Error Saving Profile", description: error.message || "Failed to update profile. Please try again.", variant: "destructive" });
     } finally {
@@ -94,7 +79,6 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
     }
   };
 
-  // The avatar URL to actually display in the <img> tag
   const displayAvatarUrl = newAvatarPreviewUrl || currentAvatarUrl;
 
   return (
@@ -105,37 +89,20 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
           <CardDescription className="text-muted-foreground/90">Update your personal information and avatar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8 pt-2 pb-6">
-          <div className="flex flex-col items-center space-y-6">
-            <Avatar className="h-28 w-28 border-4 border-primary/30 shadow-lg rounded-full bg-muted">
+          <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
+            <Avatar className="h-28 w-28 border-4 border-primary/30 shadow-lg rounded-full bg-muted shrink-0">
               <AvatarImage src={displayAvatarUrl || undefined} alt={name || 'User'} className="rounded-full" />
               <AvatarFallback className="text-3xl text-muted-foreground font-semibold rounded-full">
                 {(name || propUser.email || 'U').substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             
-            <div className="w-full max-w-xs space-y-2 p-4 border rounded-lg bg-card/50 dark:bg-card/80 backdrop-blur-sm shadow-sm border-border/30">
-                <Label htmlFor="refreshAvatar" className="text-sm font-medium text-foreground/90 flex items-center gap-2 justify-center">
-                    <Wand2 className="h-4 w-4 text-primary" />
-                    Avatar Options
-                </Label>
-                <Button id="refreshAvatar" type="button" variant="outline" onClick={handleGenerateNewAvatar} title="Generate New Avatar Preview" className="w-full border-border/50 hover:bg-primary/10 hover:border-primary/50 text-sm">
+            <div className="flex flex-col items-center md:items-start">
+                <Button id="refreshAvatar" type="button" variant="outline" onClick={handleGenerateNewAvatar} title="Generate New Avatar Preview" className="border-border/50 hover:bg-primary/10 hover:border-primary/50 text-sm">
                     <RefreshCw className="mr-2 h-4 w-4 text-primary" />
                     Refresh Avatar
                 </Button>
-                 <p className="text-xs text-muted-foreground/80 text-center pt-1">Click to generate a new random avatar.</p>
-            </div>
-
-            <div className="relative">
-              <Button type="button" variant="outline" size="sm" onClick={() => toast({description: "Custom photo upload coming soon!"})} disabled className="border-border/50 text-sm">
-                <Camera className="mr-2 h-4 w-4" /> Upload Custom Photo (Soon)
-              </Button>
-              <Input
-                id="avatarUpload"
-                type="file"
-                className="hidden"
-                accept="image/*"
-                disabled 
-              />
+                 <p className="text-xs text-muted-foreground/80 text-center md:text-left mt-2">Click to generate a new random avatar.</p>
             </div>
           </div>
 
@@ -194,3 +161,5 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
     </Card>
   );
 }
+
+    
