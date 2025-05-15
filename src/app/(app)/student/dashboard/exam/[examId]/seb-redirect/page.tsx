@@ -9,7 +9,7 @@ import { CheckCircle, XCircle, Loader2, ExternalLink, RefreshCw, ShieldAlert } f
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast'; // Make sure this path is correct
+import { useToast } from '@/hooks/use-toast';
 
 interface CheckStatus {
   name: string;
@@ -38,8 +38,6 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
   const launchSebExam = useCallback((sebLink: string) => {
     if (sebLink) {
       // Attempt to open in a new window/tab. This is standard SEB behavior.
-      // Note: True SEB enforcement and encrypted links typically require SEB Server or server-side logic.
-      // The `sebConfig` here is conceptual for client-side generation.
       const newWindow = window.open(sebLink, '_blank', 'noopener,noreferrer');
       if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
         const popupError = "Could not open the exam link automatically. Please ensure pop-ups are allowed for this site, then click the 'Launch Exam' button.";
@@ -61,17 +59,15 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
         setError("Student information not available. Cannot generate SEB link.");
         console.error("SEB Redirect: Student user_id not found in auth context.");
         setChecks(prev => prev.map(c => ({ ...c, status: 'failed', details: 'Authentication Error' })));
-        setOverallProgress(100); // Mark as complete even on auth error to show messages
+        setOverallProgress(100);
         return;
       }
 
       for (let i = 0; i < checks.length; i++) {
         setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
-        await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); // Simulate check duration
+        await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); 
 
-        // Simulate success/failure (for demo purposes)
-        // In a real scenario, these checks would involve actual SEB API calls or browser feature detection.
-        const isSuccess = Math.random() > 0.1; // 90% success rate for demo
+        const isSuccess = Math.random() > 0.1; 
         setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
         setOverallProgress(((i + 1) / checks.length) * 100);
         if (!isSuccess) {
@@ -80,33 +76,30 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
         }
       }
 
-      // All checks passed if we reach here
       const studentId = studentUser.user_id;
       // Conceptual SEB config. Real SEB config involves more complex settings & often server-side generation.
-      // The "encryption" (btoa) here is basic Base64 encoding, not true cryptographic encryption.
+      // The "encryption" (btoa) here is basic Base64 encoding, NOT true cryptographic encryption.
       // True encryption requires server-side handling and possibly SEB Server.
       const sebConfig = {
         allowReload: true,
         allowSpellCheck: false,
         browserExamKey: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
-        startURL: `${window.location.origin}/student/dashboard/exam/${examId}/take?studentId=${studentId}&examId=${examId}`,
+        startURL: `${window.location.origin}/student/dashboard/exam/${examId}/initiate?studentId=${studentId}&examId=${examId}`, // Updated startURL
         // Add other SEB-specific settings as needed
-        // Example: sendBrowserExamKey=true, showTaskBar=false, allowWlan=true etc.
       };
-      const encodedConfig = btoa(JSON.stringify(sebConfig)); // Base64 encode for demonstration
-      const sebLink = `seb://${window.location.host}/student/dashboard/exam/${examId}/take?studentId=${studentId}&sebConfig=${encodedConfig}`;
+      const encodedConfig = btoa(JSON.stringify(sebConfig));
+      const sebLink = `seb://${window.location.host}/student/dashboard/exam/${examId}/initiate?studentId=${studentId}&sebConfig=${encodedConfig}`; // Updated sebLink target
 
       setCurrentSebLink(sebLink);
-      setAllChecksPassed(true); // Set this after currentSebLink is set
+      setAllChecksPassed(true);
     };
 
     performChecks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId, studentUser?.user_id]);
 
-  // Effect to auto-launch when allChecksPassed and currentSebLink are ready
   useEffect(() => {
-    if (allChecksPassed && currentSebLink && !error) { // Only launch if no error so far
+    if (allChecksPassed && currentSebLink && !error) {
       launchSebExam(currentSebLink);
     }
   }, [allChecksPassed, currentSebLink, launchSebExam, error]);
@@ -121,7 +114,7 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
   };
 
 
-  if (error && !allChecksPassed) { // Show general error if checks failed or studentId was missing
+  if (error && !allChecksPassed) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen py-8 bg-muted/30">
         <Card className="w-full max-w-xl shadow-xl">
@@ -169,7 +162,6 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
             ))}
           </ul>
 
-          {/* Specific error related to pop-up blocker after checks passed */}
           {allChecksPassed && error && (
              <Alert variant="destructive" className="mt-6">
               <ShieldAlert className="h-4 w-4" />
@@ -180,7 +172,7 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
             </Alert>
           )}
 
-          {!allChecksPassed && checks.some(c => c.status === 'failed') && !error && ( // If checks failed but no other general error set
+          {!allChecksPassed && checks.some(c => c.status === 'failed') && !error && (
             <Alert variant="destructive" className="mt-6">
               <ShieldAlert className="h-4 w-4" />
               <AlertTitle>Compatibility Issue Detected</AlertTitle>
@@ -190,7 +182,7 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
             </Alert>
           )}
 
-          {allChecksPassed && !error && ( // Show launch button only if all checks passed and no error
+          {allChecksPassed && !error && (
             <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/30">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <AlertTitle className="text-green-700 font-semibold">System Ready! Launching Exam...</AlertTitle>
@@ -203,7 +195,7 @@ export default function SebRedirectPage({ params }: { params: { examId: string }
                 <p className="mt-2 text-xs">
                   <strong>Important:</strong> This link is intended to be opened by Safe Exam Browser.
                   Keyboard and other restrictions will be active inside SEB.
-                  Actual SEB link encryption and configuration require server-side logic.
+                  Actual SEB link encryption and configuration require server-side logic and potentially SEB Server. The encoding used here is for demonstration purposes only.
                 </p>
               </AlertDescription>
               <Button
