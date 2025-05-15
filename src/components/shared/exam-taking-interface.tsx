@@ -18,9 +18,9 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean;
-  error: string | null;
-  examStarted: boolean; // Should always be true when rendered by initiate/take pages
+  isLoading: boolean; // For loading exam details
+  error: string | null; // Error loading exam details
+  examStarted: boolean; // Should be true when this interface is rendered
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -36,10 +36,10 @@ export function ExamTakingInterface({
   initialAnswers,
   isLoading: parentIsLoading,
   error: examLoadingError,
-  examStarted,
+  examStarted, // This prop is important, should be true when rendering this component
   onAnswerChange,
   onSubmitExam,
-  onTimeUp: parentOnTimeUpProp,
+  onTimeUp,
   isDemoMode = false,
   userIdForActivityMonitor,
   studentName,
@@ -53,15 +53,16 @@ export function ExamTakingInterface({
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
   const [internalError, setInternalError] = useState<string | null>(null);
 
-  const parentOnTimeUpRef = useRef(parentOnTimeUpProp);
+  const parentOnTimeUpRef = useRef(onTimeUp);
   useEffect(() => {
-    parentOnTimeUpRef.current = parentOnTimeUpProp;
-  }, [parentOnTimeUpProp]);
+    parentOnTimeUpRef.current = onTimeUp;
+  }, [onTimeUp]);
 
   const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
   const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
   const examIdForMonitor = useMemo(() => examDetails?.exam_id || 'unknown_exam', [examDetails?.exam_id]);
   
+  // Activity monitor should be active if the exam has started, not finished, and not in demo for real flagging
   const activityMonitorEnabled = useMemo(() => examStarted && !examFinished && !isDemoMode && !!currentQuestion, [examStarted, examFinished, isDemoMode, currentQuestion]);
 
   const handleFlagEvent = useCallback((event: FlaggedEvent) => {
@@ -92,7 +93,7 @@ export function ExamTakingInterface({
   });
 
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
+    setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
   }, [onAnswerChange]);
 
@@ -153,7 +154,12 @@ export function ExamTakingInterface({
     }
   }, [currentQuestionId, handleInternalAnswerChange]);
 
+  // This UI should only render if parentIsLoading is false and examDetails is present,
+  // and examStarted is true (controlled by parent page).
   if (parentIsLoading && !examDetails) {
+    // This state should ideally be handled by the parent page (`take/page.tsx` or `demo/page.tsx`)
+    // which would show its own loader before rendering ExamTakingInterface.
+    // If we reach here, it's unexpected, but show a loader just in case.
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -220,10 +226,13 @@ export function ExamTakingInterface({
           <CardFooter>
             <Button onClick={() => {
               if (isDemoMode && examDetails.exam_id) {
+                 // For demo, redirect to teacher's exam details page
                 window.location.href = `/teacher/dashboard/exams/${examDetails.exam_id}/details`;
               } else if (!isDemoMode) {
+                 // For actual student, redirect to their exam history or dashboard overview
                  window.location.href = `/student/dashboard/exam-history`;
               } else {
+                // Fallback for demo if no exam_id, though unlikely
                 window.close(); 
               }
             }} className="w-full">
@@ -246,6 +255,7 @@ export function ExamTakingInterface({
   }
   
    if (!currentQuestion && questions.length > 0 && !parentIsLoading) {
+     // This state indicates an issue with currentQuestionIndex or questions array update
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -260,22 +270,24 @@ export function ExamTakingInterface({
 
   return (
     <div className="flex flex-col min-h-screen bg-muted/30">
+      {/* ExamTimerWarning should be the very first visible element */}
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          key={`${examDetails.exam_id}-${examDurationForTimer}`}
+          key={`${examDetails.exam_id}-${examDurationForTimer}`} // Key ensures timer resets if exam changes
           totalDurationSeconds={examDurationForTimer * 60}
           onTimeUp={handleInternalTimeUp}
           examTitle={examTitleForTimer + (isDemoMode ? " (Demo)" : "")}
         />
       )}
       
-      {/* Header Section */}
-      <header className="sticky top-[4rem] z-40 w-full bg-background shadow-sm py-3 px-4 md:px-6 border-b">
+      {/* Custom Header for Exam Interface - occupies space below the timer warning */}
+      <header className="sticky top-[4rem] z-40 w-full bg-background shadow-sm py-3 px-4 md:px-6 border-b"> {/* Adjusted top to account for timer */}
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4">
           <div className="flex-grow">
             <h1 className="text-xl font-semibold text-primary truncate flex items-center">
               <BookOpen className="mr-2 h-5 w-5" /> {examDetails.title} {isDemoMode && <span className="text-sm font-normal text-orange-500 ml-2">(Demo Mode)</span>}
             </h1>
+            {/* Student/User Info */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
               {studentName && studentRollNumber && (
                 <>
@@ -289,18 +301,23 @@ export function ExamTakingInterface({
             Question {currentQuestionIndex + 1} of {questions.length || 0}
           </div>
         </div>
+        {/* Progress Bar */}
         {questions.length > 0 && <Progress value={questionProgress} className="mt-2 h-1.5" />}
       </header>
 
+      {/* Main Content: Question and Options */}
       <main className="flex-grow flex items-center justify-center p-4 md:p-6">
         <Card className="w-full max-w-3xl shadow-2xl rounded-lg border">
           <CardHeader className="bg-card-foreground/5 p-4 md:p-6 rounded-t-lg">
+            {/* Question Text */}
             {currentQuestion && <CardDescription className="pt-2 text-lg md:text-xl font-medium text-card-foreground">{currentQuestion.text}</CardDescription>}
             {!currentQuestion && questions.length > 0 && (
+                // This indicates an issue if questions exist but currentQuestion is null
                 <CardDescription className="pt-2 text-lg text-muted-foreground">Loading question text...</CardDescription>
             )}
           </CardHeader>
           <CardContent className="p-4 md:p-6 space-y-4">
+            {/* Options */}
             {currentQuestion?.options ? (
               <RadioGroup
                 value={answers[currentQuestion.id] || ''}
@@ -337,7 +354,7 @@ export function ExamTakingInterface({
             >
               <ArrowLeft className="mr-2 h-5 w-5" /> Previous
             </Button>
-            {currentQuestionIndex < questions.length -1 ? (
+            {currentQuestionIndex < questions.length - 1 ? (
               <Button onClick={handleNextQuestion} disabled={!currentQuestion || isSubmitting} className="py-2 px-4 text-base bg-primary hover:bg-primary/90">
                 Next <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
@@ -354,3 +371,4 @@ export function ExamTakingInterface({
   );
 }
 
+    
