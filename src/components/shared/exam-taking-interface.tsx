@@ -17,7 +17,7 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean;
+  isLoading: boolean; // Prop indicating if the parent is loading data
   error: string | null;
   examStarted: boolean;
   onStartExam: () => void;
@@ -32,17 +32,16 @@ export function ExamTakingInterface({
   examDetails,
   questions,
   initialAnswers,
-  isLoading,
+  isLoading: parentIsLoading, // Renamed to avoid conflict with internal loading if any
   error,
   examStarted,
   onStartExam,
   onAnswerChange,
   onSubmitExam,
-  onTimeUp: parentOnTimeUpProp, // Renamed to avoid confusion with internal onTimeUp
+  onTimeUp: parentOnTimeUp,
   isDemoMode = false,
   userIdForActivityMonitor,
 }: ExamTakingInterfaceProps) {
-  // HOOKS MUST BE CALLED AT THE TOP LEVEL AND IN THE SAME ORDER
   const { toast } = useToast();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
@@ -50,29 +49,43 @@ export function ExamTakingInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
 
-  // Store the latest version of parentOnTimeUpProp in a ref to avoid making it a dependency of handleInternalTimeUp's useCallback
-  const parentOnTimeUpRef = useRef(parentOnTimeUpProp);
+  const parentOnTimeUpRef = useRef(parentOnTimeUp);
   useEffect(() => {
-    parentOnTimeUpRef.current = parentOnTimeUpProp;
-  }, [parentOnTimeUpProp]);
+    parentOnTimeUpRef.current = parentOnTimeUp;
+  }, [parentOnTimeUp]);
 
-  // MEMOIZED VALUES (derived from props or state)
   const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
-  const currentQuestion = useMemo(() => questions?.[currentQuestionIndex], [questions, currentQuestionIndex]);
+  const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
   const examIdForMonitor = useMemo(() => examDetails?.exam_id || 'unknown_exam', [examDetails?.exam_id]);
   const activityMonitorEnabled = useMemo(() => examStarted && !examFinished, [examStarted, examFinished]);
   
   const cantStartReason = useMemo(() => {
     if (examDetails?.status !== 'Published' && examDetails?.status !== 'Ongoing' && !isDemoMode && examDetails !== null) {
-      return `Exam is ${examDetails.status?.toLowerCase()}.`;
+      return `Exam is ${examDetails.status?.toLowerCase()}. This demo allows starting non-published exams.`;
     }
-    if (examDetails && !questions?.length && !isLoading) { // Check after isLoading is false
+    // Ensure questions is not null before checking its length
+    if (examDetails && (!questions || questions.length === 0) && !parentIsLoading) {
       return "This exam has no questions.";
     }
     return null;
-  }, [examDetails, questions, isLoading, isDemoMode]);
+  }, [examDetails, questions, parentIsLoading, isDemoMode]);
 
-  // CALLBACKS
+  const examNotReadyError = useMemo(() => error && examDetails, [error, examDetails]);
+
+  useEffect(() => {
+    // Log conditions for the Start Exam button when relevant props change
+    if (!examStarted) {
+      console.log('[ExamTakingInterface] Start Button Conditions:', {
+        parentIsLoading,
+        examDetailsExists: !!examDetails,
+        examNotReadyError: !!examNotReadyError,
+        cantStartReason,
+        buttonDisabled: parentIsLoading || !examDetails || !!examNotReadyError || !!cantStartReason
+      });
+    }
+  }, [parentIsLoading, examDetails, examNotReadyError, cantStartReason, examStarted]);
+
+
   const handleFlagEvent = useCallback((event: FlaggedEvent) => {
     setFlaggedEvents((prev) => [...prev, event]);
     if (!isDemoMode) {
@@ -91,18 +104,18 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast]); // setFlaggedEvents is stable
+  }, [isDemoMode, toast]);
 
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange]); // setAnswers is stable
+  }, [onAnswerChange]);
 
   const handleNextQuestion = useCallback(() => {
-    if (currentQuestionIndex < (questions?.length || 0) - 1) {
+    if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions]); // setCurrentQuestionIndex is stable
+  }, [currentQuestionIndex, questions]);
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -110,13 +123,13 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast]); // setCurrentQuestionIndex is stable
+  }, [allowBacktracking, currentQuestionIndex, toast]);
 
   const handleInternalSubmitExam = useCallback(async () => {
     setIsSubmitting(true);
     await onSubmitExam(answers, flaggedEvents);
     setExamFinished(true);
-  }, [onSubmitExam, answers, flaggedEvents]); // setIsSubmitting, setExamFinished are stable
+  }, [onSubmitExam, answers, flaggedEvents]);
 
   const handleInternalTimeUp = useCallback(async () => {
     if (!isDemoMode) {
@@ -124,9 +137,9 @@ export function ExamTakingInterface({
     } else {
         toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended." });
     }
-    await parentOnTimeUpRef.current(answers, flaggedEvents); // Use the ref here
+    await parentOnTimeUpRef.current(answers, flaggedEvents);
     setExamFinished(true);
-  }, [answers, flaggedEvents, isDemoMode, toast]); // parentOnTimeUpRef is stable, setExamFinished stable
+  }, [answers, flaggedEvents, isDemoMode, toast]);
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -135,18 +148,14 @@ export function ExamTakingInterface({
     }
   }, [currentQuestionId, handleInternalAnswerChange]);
 
-  // CUSTOM HOOKS (must be called after all built-in hooks if they also use hooks)
-  useActivityMonitor({ // This hook must call its internal hooks unconditionally
+  useActivityMonitor({
     studentId: userIdForActivityMonitor,
     examId: examIdForMonitor,
     enabled: activityMonitorEnabled,
     onFlagEvent: handleFlagEvent,
   });
   
-  // Conditional rendering logic (early returns) starts below.
-  // All hook calls must be above this line.
-
-  if (isLoading && !examStarted) {
+  if (parentIsLoading && !examStarted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -155,7 +164,8 @@ export function ExamTakingInterface({
     );
   }
 
-  if (error && !examDetails && !isLoading) {
+  // This condition checks if an error occurred AND examDetails were never successfully loaded (or were reset to null due to error)
+  if (error && !examDetails && !parentIsLoading && !examStarted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -169,9 +179,24 @@ export function ExamTakingInterface({
   }
   
   if (!examStarted) {
-    const examNotReadyError = error && examDetails; // If there's an error and we have exam details, it means error during load
-    const isUnpublishedDemo = isDemoMode && examDetails?.status !== 'Published' && examDetails?.status !== 'Ongoing';
+    // Show this specific state if parent is done loading, no error, but examDetails is still null
+    if (!parentIsLoading && !error && !examDetails) {
+       return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
+          <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+          <p className="text-lg text-destructive text-center mb-2">Exam Data Unavailable</p>
+          <p className="text-sm text-muted-foreground text-center mb-4">Could not load exam details. The exam might not exist or there was an issue.</p>
+           <Button onClick={() => window.history.back()} className="mt-4">
+              Back
+          </Button>
+        </div>
+      );
+    }
     
+    // This condition (error && examDetails) means an error occurred, but we *have* some examDetails.
+    // It might be partial or from a stale state. We should prioritize showing the error.
+    const displayErrorInsteadOfStart = error && examDetails;
+
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-lg shadow-xl">
@@ -180,10 +205,10 @@ export function ExamTakingInterface({
             <CardDescription>
               Exam ID: {examDetails?.exam_id || 'N/A'} <br />
               Duration: {examDetails?.duration ? `${examDetails.duration} minutes` : 'N/A'} <br />
-              {isDemoMode && <span className="text-primary font-semibold block mt-1">(DEMO MODE {isUnpublishedDemo ? `- ${examDetails?.status}` : ''})</span>}
-              {examNotReadyError && <span className="text-destructive font-medium block mt-1">{error}</span>}
-              {cantStartReason && <span className="text-destructive font-medium block mt-1">{cantStartReason}</span>}
-              {!examNotReadyError && !cantStartReason && `Ensure you are in a quiet environment. ${!isDemoMode ? "Your Safe Exam Browser should be configured if required." : ""}`}
+              {isDemoMode && <span className="text-primary font-semibold block mt-1">(DEMO MODE)</span>}
+              {displayErrorInsteadOfStart && <span className="text-destructive font-medium block mt-1">{error}</span>}
+              {cantStartReason && !displayErrorInsteadOfStart && <span className="text-destructive font-medium block mt-1">{cantStartReason}</span>}
+              {!displayErrorInsteadOfStart && !cantStartReason && `Ensure you are in a quiet environment. ${!isDemoMode ? "Your Safe Exam Browser should be configured if required." : ""}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -201,8 +226,8 @@ export function ExamTakingInterface({
               onClick={onStartExam}
               className="w-full"
               size="lg"
-              disabled={isLoading || !examDetails || !!examNotReadyError || !!cantStartReason } >
-              {isLoading ? <Loader2 className="animate-spin mr-2" /> : null}
+              disabled={parentIsLoading || !examDetails || !!displayErrorInsteadOfStart || !!cantStartReason } >
+              {parentIsLoading ? <Loader2 className="animate-spin mr-2" /> : null}
               Start {isDemoMode ? "Demo " : ""}Exam
             </Button>
           </CardFooter>
@@ -225,7 +250,7 @@ export function ExamTakingInterface({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Number of questions answered: {Object.keys(answers).length} / {questions?.length || 0}</p>
+            <p className="text-sm text-muted-foreground">Number of questions answered: {Object.keys(answers).length} / {(questions && questions.length) || 0}</p>
             {flaggedEvents.length > 0 && (
               <Alert
                 variant={isDemoMode ? "default" : "destructive"}
@@ -252,7 +277,7 @@ export function ExamTakingInterface({
     );
   }
 
-  if (questions && questions.length === 0 && examStarted && !isLoading) {
+  if (questions && questions.length === 0 && examStarted && !parentIsLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -265,7 +290,7 @@ export function ExamTakingInterface({
     );
   }
 
-   if (!currentQuestion && examStarted && !isLoading && questions && questions.length > 0) {
+   if (!currentQuestion && examStarted && !parentIsLoading && questions && questions.length > 0) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -273,18 +298,22 @@ export function ExamTakingInterface({
       </div>
     );
   }
+  
+  // Ensure examDetails is not null before trying to access its properties for the timer
+  const examDurationForTimer = examDetails?.duration ?? 0; 
+  const examTitleForTimer = examDetails?.title ?? "Exam";
 
   return (
     <div className="flex flex-col min-h-screen bg-muted">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          key={examDetails?.exam_id || 'timer-' + Date.now()} // Added key to ensure re-mount if examId changes
-          totalDurationSeconds={(examDetails.duration || 0) * 60}
+          key={examDetails.exam_id + '-' + examDurationForTimer} // Ensure re-mount if examId or duration changes
+          totalDurationSeconds={examDurationForTimer * 60}
           onTimeUp={handleInternalTimeUp}
-          examTitle={examDetails.title + (isDemoMode ? " (Demo)" : "")}
+          examTitle={examTitleForTimer + (isDemoMode ? " (Demo)" : "")}
         />
       )}
-      <main className="flex-grow flex items-center justify-center p-4 pt-20">
+      <main className="flex-grow flex items-center justify-center p-4 pt-20"> {/* pt-20 for timer banner */}
         <Card className="w-full max-w-2xl shadow-xl">
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -292,7 +321,7 @@ export function ExamTakingInterface({
               {questions && questions.length > 0 && <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {questions.length}</span>}
             </div>
             {currentQuestion && <CardDescription className="pt-2 text-lg">{currentQuestion.text}</CardDescription>}
-            {!currentQuestion && examStarted && !isLoading && questions && questions.length > 0 && (
+            {!currentQuestion && examStarted && !parentIsLoading && questions && questions.length > 0 && (
                 <CardDescription className="pt-2 text-lg text-muted-foreground">Loading question text...</CardDescription>
             )}
           </CardHeader>
@@ -311,7 +340,7 @@ export function ExamTakingInterface({
                 ))}
               </RadioGroup>
             )}
-             {!currentQuestion && questions && questions.length > 0 && examStarted && !isLoading && (
+             {!currentQuestion && questions && questions.length > 0 && examStarted && !parentIsLoading && (
                 <div className="text-center py-4">
                     <Loader2 className="h-8 w-8 text-primary animate-spin mx-auto" />
                     <p className="text-muted-foreground mt-2">Loading options...</p>
@@ -326,7 +355,7 @@ export function ExamTakingInterface({
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Previous
             </Button>
-            {currentQuestionIndex < (questions?.length || 0) - 1 ? (
+            {currentQuestionIndex < ( (questions && questions.length) ? questions.length -1 : 0) ? (
               <Button onClick={handleNextQuestion} disabled={!currentQuestion}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -342,5 +371,3 @@ export function ExamTakingInterface({
     </div>
   );
 }
-
-  
