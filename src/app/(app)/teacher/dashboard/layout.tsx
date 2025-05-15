@@ -1,11 +1,11 @@
 
 'use client';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar'; // Updated import name
+import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, UserCircle, BookOpenCheck, Brain, BarChart3 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
-import { useCallback } from 'react'; // Added useCallback
+import { useCallback } from 'react';
 
 const teacherNavItems: NavItem[] = [
   { href: '/teacher/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
@@ -36,7 +36,7 @@ export default function TeacherDashboardLayout({
   }
 
   if (!authLoading && !user) {
-    console.log("[TeacherDashboardLayout] Not auth loading and no user, rendering null (middleware should redirect).");
+    console.log("[TeacherDashboardLayout] Not auth loading and no user, rendering redirecting message (middleware should have redirected).");
      return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <p>Session not found. Redirecting...</p>
@@ -45,8 +45,8 @@ export default function TeacherDashboardLayout({
     );
   }
 
-  if (user) {
-    console.log("[TeacherDashboardLayout] User determined, rendering dashboard for:", user.email);
+  if (user && user.role === 'teacher') { // Ensure user is a teacher for this layout
+    console.log("[TeacherDashboardLayout] User determined, rendering dashboard for teacher:", user.email);
     return (
       <SidebarProvider defaultOpen>
         <div className="flex h-screen w-full bg-muted/40 overflow-x-hidden">
@@ -65,10 +65,11 @@ export default function TeacherDashboardLayout({
     );
   }
   
-  console.log("[TeacherDashboardLayout] Fallback: Reached unexpected state. authLoading:", authLoading, "user:", user);
-  return (
+  // If user exists but is not a teacher, or some other unexpected state
+  console.log("[TeacherDashboardLayout] Fallback: User exists but role is not teacher, or unexpected state. authLoading:", authLoading, "user:", user);
+  return ( // Fallback to a generic loading or error state, or redirect if appropriate
     <div className="flex h-screen w-full items-center justify-center bg-background">
-      <p>Loading dashboard...</p>
+      <p>Access Denied or Loading dashboard...</p>
       <Loader2 className="ml-2 h-4 w-4 animate-spin"/>
     </div>
   );

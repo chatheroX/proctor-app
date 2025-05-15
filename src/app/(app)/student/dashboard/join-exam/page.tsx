@@ -7,28 +7,58 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CheckCircle, XCircle, Loader2, AlertTriangle, ExternalLink, RefreshCw } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showSebRedirect, setShowSebRedirect] = useState(false);
   const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!examCode) return;
+    if (!examCode.trim()) {
+      toast({ title: "Error", description: "Please enter an exam code.", variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
-    
-    // Simulate fetching exam details and preparing SEB link
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setIsLoading(false);
-    // Redirect to a dedicated page for SEB process or show modal
-    router.push(`/student/dashboard/exam/${examCode}/seb-redirect`);
+
+    try {
+      const { data: exam, error } = await supabase
+        .from('ExamX')
+        .select('exam_id, status')
+        .eq('exam_code', examCode.trim().toUpperCase())
+        .single();
+
+      if (error || !exam) {
+        if (error && error.code === 'PGRST116') { // No rows found
+          toast({ title: "Invalid Code", description: "Exam code not found. Please check and try again.", variant: "destructive" });
+        } else {
+          toast({ title: "Error", description: error?.message || "Could not verify exam code.", variant: "destructive" });
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Check exam status - this is a placeholder for more robust status handling
+      if (exam.status !== 'Published' && exam.status !== 'Ongoing') {
+         toast({ title: "Exam Not Active", description: `This exam is currently ${exam.status.toLowerCase()} and cannot be joined.`, variant: "destructive" });
+         setIsLoading(false);
+         return;
+      }
+      
+      // If code is valid and exam is joinable
+      router.push(`/student/dashboard/exam/${exam.exam_id}/seb-redirect`);
+
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
+      setIsLoading(false);
+    }
+    // setIsLoading(false); // Already handled in try/catch paths
   };
 
   return (
@@ -39,8 +69,8 @@ export default function JoinExamPage() {
           <CardHeader>
             <CardTitle>Enter Exam Code</CardTitle>
             <CardDescription>
-              Please enter the unique code provided by your teacher to join the exam. 
-              Ensure you are using Safe Exam Browser.
+              Please enter the unique code provided by your teacher to join the exam.
+              Ensure you are using Safe Exam Browser if required by the exam.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -50,17 +80,18 @@ export default function JoinExamPage() {
                 id="examCode"
                 value={examCode}
                 onChange={(e) => setExamCode(e.target.value.toUpperCase())}
-                placeholder="e.g., MATH101FINAL"
+                placeholder="e.g., EXMCD1"
                 required
                 className="text-lg tracking-wider"
+                autoComplete="off"
               />
             </div>
             <Alert variant="default" className="mt-4 bg-primary/10 border-primary/30">
               <AlertTriangle className="h-5 w-5 text-primary" />
               <AlertTitle className="text-primary font-semibold">Important Notice</AlertTitle>
               <AlertDescription className="text-primary/80">
-                All exams must be taken using <strong>Safe Exam Browser (SEB)</strong>.
-                Attempting to join via a regular browser will not work.
+                Some exams may require <strong>Safe Exam Browser (SEB)</strong>.
+                Attempting to join these via a regular browser will not work.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -80,8 +111,3 @@ export default function JoinExamPage() {
     </div>
   );
 }
-
-// Removed metadata export as this is a Client Component
-// export const metadata = {
-//   title: 'Join Exam | Student Dashboard | ProctorPrep',
-// };

@@ -2,73 +2,117 @@
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2 } from 'lucide-react'; // Added Loader2
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Label } from '@/components/ui/label'; // Added Label import
-
-interface Question {
-  id: string;
-  text: string;
-  options: string[]; // Assuming simple string options for now
-  correctAnswer: string; // For display, if the Exam interface has this
-}
-interface Exam {
-  id: string;
-  title: string;
-  description: string;
-  status: 'Draft' | 'Published' | 'Ongoing' | 'Completed';
-  questions: Question[];
-  duration: number; // in minutes
-  createdAt: string;
-  examCode: string;
-  allowBacktracking: boolean;
-}
-
-// No more mock data
-// const mockFullExams: Exam[] = [ ... ];
-
+import { Label } from '@/components/ui/label';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { Exam, Question } from '@/types/supabase'; // Using types from supabase.ts
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function ExamDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const supabase = createSupabaseBrowserClient();
   const examId = params.id as string;
-  const [exam, setExam] = useState<Exam | null | undefined>(undefined); // undefined for loading
+
+  const [exam, setExam] = useState<Exam | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const fetchExamDetails = useCallback(async () => {
+    if (!examId) {
+      setIsLoading(false);
+      notFound();
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ExamX')
+        .select('*')
+        .eq('exam_id', examId)
+        .single();
+
+      if (error) throw error;
+      setExam(data);
+    } catch (error: any) {
+      toast({ title: "Error", description: `Failed to fetch exam details: ${error.message}`, variant: "destructive" });
+      setExam(null); // Explicitly set to null on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [examId, supabase, toast]);
 
   useEffect(() => {
-    const fetchExamDetails = async () => {
-      if (!examId) {
-        setIsLoading(false);
-        notFound(); // Or redirect, or show error
-        return;
-      }
-      setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // const fetchedExam = await yourApi.getExamById(examId);
-      // setExam(fetchedExam || null);
-      // For now, setting to null as mock data is removed
-      setExam(null); 
-      setIsLoading(false);
-    };
     fetchExamDetails();
-  }, [examId]);
+  }, [fetchExamDetails]);
 
   const copyExamCode = () => {
-    if (exam?.examCode) {
-      navigator.clipboard.writeText(exam.examCode).then(() => {
-        toast({description: `Exam code "${exam.examCode}" copied to clipboard!`});
+    if (exam?.exam_code) {
+      navigator.clipboard.writeText(exam.exam_code).then(() => {
+        toast({ description: `Exam code "${exam.exam_code}" copied to clipboard!` });
       }).catch(err => {
-        toast({description: "Failed to copy code.", variant: "destructive"});
+        toast({ description: "Failed to copy code.", variant: "destructive" });
       });
     }
   };
+
+  const handleDeleteExam = async () => {
+    if (!exam) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('ExamX')
+        .delete()
+        .eq('exam_id', exam.exam_id);
+      if (error) throw error;
+      toast({ title: "Exam Deleted", description: `Exam "${exam.title}" has been deleted successfully.` });
+      router.push('/teacher/dashboard/exams');
+    } catch (error: any) {
+      toast({ title: "Error", description: `Failed to delete exam: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
   
+  const getStatusBadgeVariant = (status?: Exam['status']) => {
+    if (!status) return 'secondary';
+    switch (status) {
+      case 'Published': return 'default';
+      case 'Ongoing': return 'destructive';
+      case 'Completed': return 'outline';
+      case 'Draft':
+      default:
+        return 'secondary';
+    }
+  };
+
+  const getStatusBadgeClass = (status?: Exam['status']) => {
+     if (!status) return '';
+     switch (status) {
+      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white';
+      case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
+      case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
+      default: return '';
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-full py-10">
@@ -78,24 +122,24 @@ export default function ExamDetailsPage() {
     );
   }
 
-
   if (!exam) {
-    // If not loading and exam is still null, it means not found or error during fetch
     return (
-       <div className="space-y-6 text-center py-10">
-         <h1 className="text-2xl font-semibold">Exam Not Found</h1>
-         <p className="text-muted-foreground">The exam details could not be loaded. It might have been deleted or the ID is incorrect.</p>
-         <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')}>
-           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
-         </Button>
-       </div>
+      <div className="space-y-6 text-center py-10">
+        <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
+        <h1 className="text-2xl font-semibold">Exam Not Found</h1>
+        <p className="text-muted-foreground">The exam details could not be loaded. It might have been deleted or the ID is incorrect.</p>
+        <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
+        </Button>
+      </div>
     );
   }
-  
+
+  const questionsList = exam.questions || [];
 
   return (
     <div className="space-y-6">
-      <Button variant="outline" onClick={() => router.back()} className="mb-4">
+      <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')} className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
       </Button>
 
@@ -104,19 +148,11 @@ export default function ExamDetailsPage() {
           <div className="flex justify-between items-start">
             <div>
               <CardTitle className="text-3xl">{exam.title}</CardTitle>
-              <CardDescription className="mt-1">{exam.description}</CardDescription>
+              <CardDescription className="mt-1">{exam.description || "No description provided."}</CardDescription>
             </div>
-            <Badge variant={
-                exam.status === 'Published' ? 'default' :
-                exam.status === 'Ongoing' ? 'destructive' :
-                exam.status === 'Completed' ? 'outline' :
-                'secondary'
-              }
-              className={
-                `text-sm px-3 py-1 ${
-                exam.status === 'Published' ? 'bg-blue-500 text-white' :
-                exam.status === 'Ongoing' ? 'bg-yellow-500 text-white' : ''}`
-              }
+            <Badge
+              variant={getStatusBadgeVariant(exam.status)}
+              className={`text-sm px-3 py-1 ${getStatusBadgeClass(exam.status)}`}
             >
               {exam.status}
             </Badge>
@@ -127,33 +163,33 @@ export default function ExamDetailsPage() {
             <div>
               <Label className="text-sm font-medium text-muted-foreground">Exam Code</Label>
               <div className="flex items-center gap-2">
-                <p className="text-lg font-semibold text-primary">{exam.examCode}</p>
+                <p className="text-lg font-semibold text-primary">{exam.exam_code}</p>
                 <Button variant="ghost" size="icon" onClick={copyExamCode} className="h-7 w-7">
-                    <Copy className="h-4 w-4" />
+                  <Copy className="h-4 w-4" />
                 </Button>
               </div>
             </div>
             <div>
-              <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Clock className="h-4 w-4"/> Duration</Label>
+              <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Clock className="h-4 w-4" /> Duration</Label>
               <p className="text-lg font-semibold">{exam.duration} minutes</p>
             </div>
             <div>
-              <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><CheckSquare className="h-4 w-4"/> Backtracking</Label>
-              <p className="text-lg font-semibold">{exam.allowBacktracking ? 'Allowed' : 'Not Allowed'}</p>
+              <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><CheckSquare className="h-4 w-4" /> Backtracking</Label>
+              <p className="text-lg font-semibold">{exam.allow_backtracking ? 'Allowed' : 'Not Allowed'}</p>
             </div>
           </div>
-          
+
           <div>
-            <h3 className="text-xl font-semibold mb-3 flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary"/> Questions ({exam.questions.length})</h3>
-            {exam.questions.length > 0 ? (
+            <h3 className="text-xl font-semibold mb-3 flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary" /> Questions ({questionsList.length})</h3>
+            {questionsList.length > 0 ? (
               <ul className="space-y-4">
-                {exam.questions.map((q, index) => (
-                  <li key={q.id} className="p-4 border rounded-md bg-background shadow-sm">
+                {questionsList.map((q: Question, index: number) => (
+                  <li key={q.id || index} className="p-4 border rounded-md bg-background shadow-sm">
                     <p className="font-medium text-md mb-1">Q{index + 1}: {q.text}</p>
                     <ul className="list-disc list-inside text-sm space-y-1 pl-4">
                       {q.options.map((opt, i) => (
-                        <li key={i} className={opt === q.correctAnswer ? 'text-green-600 font-semibold' : 'text-muted-foreground'}>
-                          {opt} {opt === q.correctAnswer && "(Correct)"}
+                        <li key={opt.id || i} className={opt.id === q.correctOptionId ? 'text-green-600 font-semibold' : 'text-muted-foreground'}>
+                          {opt.text} {opt.id === q.correctOptionId && "(Correct)"}
                         </li>
                       ))}
                     </ul>
@@ -165,28 +201,41 @@ export default function ExamDetailsPage() {
             )}
           </div>
         </CardContent>
-        <CardFooter className="flex justify-end gap-2 border-t pt-6">
-          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/exams/${exam.id}/edit`)}>
+        <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 border-t pt-6">
+          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/exams/${exam.exam_id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit Exam
           </Button>
-           <Button variant="outline" onClick={copyExamCode}>
+          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/results/${exam.exam_id}`)}>
+            <Users2 className="mr-2 h-4 w-4" /> View Results
+          </Button>
+          <Button variant="outline" onClick={copyExamCode}>
             <Share2 className="mr-2 h-4 w-4" /> Share Exam Code
           </Button>
-          <Button variant="destructive" disabled> {/* Add delete confirmation later */}
+          <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} disabled={isDeleting}>
+            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <Trash2 className="mr-2 h-4 w-4" /> Delete Exam
           </Button>
         </CardFooter>
       </Card>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the exam
+              "{exam?.title}" and all its associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExam} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isDeleting}>
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Yes, delete exam
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-}
-
-
-export async function generateMetadata({ params }: { params: { id: string } }) {
-  // In a real app, fetch exam title here for dynamic metadata
-  // const exam = await yourApi.getExamTitleById(params.id); 
-  const examTitle = "Exam Details"; // Placeholder since mock data is removed
-  return {
-    title: `${examTitle} | ProctorPrep`,
-  };
 }

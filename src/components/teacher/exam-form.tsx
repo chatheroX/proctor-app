@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,35 +13,25 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarDays, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { cn } from "@/lib/utils"; // Added this import
+import { cn } from "@/lib/utils";
+import type { Question, QuestionOption, Exam } from '@/types/supabase'; // Using types from supabase.ts
 
-interface QuestionOption {
-  id: string;
-  text: string;
-}
-interface Question {
-  id: string;
-  text: string;
-  options: QuestionOption[];
-  correctOptionId: string;
-}
-
-interface ExamData {
-  id?: string; // This would be the exam's unique ID if editing
-  user_id?: string; // Teacher's user_id who created the exam
+// ExamData for the form, matching parts of the Exam type
+export interface ExamFormData {
   title: string;
   description: string;
   duration: number; // in minutes
   allowBacktracking: boolean;
   questions: Question[];
-  exam_code?: string; // Will be auto-generated on actual save
-  status?: 'Draft' | 'Published' | 'Ongoing' | 'Completed'; // Default to Draft
-  created_at?: string;
+  // For editing, we might pass the full exam_id, exam_code, status
+  exam_id?: string;
+  exam_code?: string;
+  status?: Exam['status'];
 }
 
 interface ExamFormProps {
-  initialData?: ExamData;
-  onSave: (data: ExamData) => Promise<{success: boolean, error?: string, examId?: string}>; // Updated to reflect potential return
+  initialData?: ExamFormData; // Use ExamFormData
+  onSave: (data: ExamFormData) => Promise<{ success: boolean; error?: string; examId?: string }>;
   isEditing?: boolean;
 }
 
@@ -53,15 +43,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
   const [description, setDescription] = useState(initialData?.description || '');
   const [duration, setDuration] = useState(initialData?.duration || 60);
   const [allowBacktracking, setAllowBacktracking] = useState(initialData?.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
-
-  const initializeQuestions = (initialQs?: Question[]): Question[] => {
-    if (!initialQs) return [];
-    return initialQs.map(q => ({
-      ...q,
-      options: q.options.map(opt => ({ ...opt })), // Ensure options have unique IDs if needed
-    }));
-  };
-  const [questions, setQuestions] = useState<Question[]>(initializeQuestions(initialData?.questions));
+  const [questions, setQuestions] = useState<Question[]>(initialData?.questions || []);
 
   const [currentQuestionText, setCurrentQuestionText] = useState('');
   const [currentOptions, setCurrentOptions] = useState<QuestionOption[]>([
@@ -71,28 +53,29 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const resetOptionIdsAndText = () => {
-    return [
-      { id: `opt-0-${Date.now()}`, text: '' }, 
-      { id: `opt-1-${Date.now() + 1}`, text: '' }, 
-      { id: `opt-2-${Date.now() + 2}`, text: '' }, 
-      { id: `opt-3-${Date.now() + 3}`, text: '' }
-    ];
+  const resetOptionIdsAndText = (): QuestionOption[] => {
+    return Array.from({ length: 4 }, (_, i) => ({ id: `opt-${i}-${Date.now() + i}`, text: '' }));
   };
 
   const handleAddQuestion = () => {
-    if (!currentQuestionText.trim() || currentOptions.some(opt => !opt.text.trim())) {
-      toast({ title: "Incomplete Question", description: "Please fill in the question text and all option fields.", variant: "destructive" });
+    if (!currentQuestionText.trim()) {
+      toast({ title: "Incomplete Question", description: "Please fill in the question text.", variant: "destructive" });
       return;
     }
-    if (!currentCorrectOptionId) {
-        toast({ title: "No Correct Answer", description: "Please select a correct answer for the question.", variant: "destructive" });
-        return;
+    const filledOptions = currentOptions.filter(opt => opt.text.trim() !== '');
+    if (filledOptions.length < 2) {
+      toast({ title: "Not Enough Options", description: "Please provide at least two options.", variant: "destructive" });
+      return;
     }
+    if (!currentCorrectOptionId || !filledOptions.find(opt => opt.id === currentCorrectOptionId)) {
+      toast({ title: "No Correct Answer", description: "Please select a valid correct answer from the provided options.", variant: "destructive" });
+      return;
+    }
+
     const newQuestion: Question = {
-      id: `q-${Date.now()}`,
+      id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       text: currentQuestionText,
-      options: currentOptions.map(opt => ({ ...opt, id: `opt-${Math.random().toString(36).substring(2, 9)}-${Date.now()}` })), // Ensure fresh IDs for options
+      options: filledOptions.map(opt => ({ ...opt, id: `opt-${Math.random().toString(36).substring(2, 9)}-${Date.now()}` })),
       correctOptionId: currentCorrectOptionId,
     };
     setQuestions([...questions, newQuestion]);
@@ -116,44 +99,37 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-        toast({title: "Missing Title", description: "Exam title is required.", variant: "destructive"});
-        return;
+      toast({ title: "Missing Title", description: "Exam title is required.", variant: "destructive" });
+      return;
     }
-    if (questions.length === 0) {
-        toast({title: "No Questions", description: "Please add at least one question to the exam.", variant: "destructive"});
-        return;
+    if (duration <= 0) {
+      toast({ title: "Invalid Duration", description: "Duration must be greater than 0 minutes.", variant: "destructive" });
+      return;
     }
+    if (questions.length === 0 && !isEditing) { // Allow saving changes to metadata even if no questions for editing
+      toast({ title: "No Questions", description: "Please add at least one question to the exam.", variant: "destructive" });
+      return;
+    }
+
     setIsLoading(true);
-    const examData: ExamData = {
-      id: initialData?.id,
+    const examFormData: ExamFormData = {
+      exam_id: initialData?.exam_id, // Pass existing ID if editing
       title,
       description,
       duration,
       allowBacktracking,
       questions,
-      // user_id, status, exam_code, created_at would be set by backend/onSave typically
+      exam_code: initialData?.exam_code,
+      status: initialData?.status
     };
-    
-    // SIMULATED SAVE - Replace with actual save logic
-    console.log("Attempting to save exam (UI only):", examData);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-    // const result = await onSave(examData); // Real save function call
-    const result = {success: true, examId: initialData?.id || `temp-id-${Date.now()}`}; // Mock result for UI flow
 
-    if (result.success) {
-      toast({ title: "Success!", description: `Exam ${isEditing ? 'updated' : 'prepared'} (UI only). Backend saving not implemented.` });
-      // router.push(isEditing && result.examId ? `/teacher/dashboard/exams/${result.examId}/details` : '/teacher/dashboard/exams');
-      if (isEditing && result.examId) {
-        router.push(`/teacher/dashboard/exams/${result.examId}/details`);
-      } else if (!isEditing) {
-        // For new exams, maybe go to list or a temporary success page
-        router.push('/teacher/dashboard/exams'); 
-        // Or if an ID is returned from a real save: router.push(`/teacher/dashboard/exams/${result.examId}/details`);
-      } else {
-        router.push('/teacher/dashboard/exams');
-      }
+    const result = await onSave(examFormData);
+
+    if (result.success && result.examId) {
+      toast({ title: "Success!", description: `Exam ${isEditing ? 'updated' : 'created'} successfully.` });
+      router.push(`/teacher/dashboard/exams/${result.examId}/details`);
     } else {
-      toast({ title: "Error", description: result.error || "Failed to save exam. Please try again.", variant: "destructive" });
+      toast({ title: "Error", description: result.error || `Failed to ${isEditing ? 'update' : 'create'} exam. Please try again.`, variant: "destructive" });
     }
     setIsLoading(false);
   };
@@ -162,14 +138,14 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
     <form onSubmit={handleSubmit}>
       <Card className="w-full shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl">{isEditing ? 'Edit Exam' : 'Create New Exam'}</CardTitle>
+          <CardTitle className="text-2xl">{isEditing ? `Edit Exam: ${initialData?.title || ''}` : 'Create New Exam'}</CardTitle>
           <CardDescription>
-            {isEditing ? 'Modify the details of your existing exam.' : 'Fill in the details to create a new exam. Note: Exam saving to database is not yet implemented.'}
+            {isEditing ? 'Modify the details of your existing exam.' : 'Fill in the details to create a new exam.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
           <section className="space-y-4 p-4 border rounded-lg">
-            <h3 className="text-lg font-medium flex items-center gap-2"><FileText className="h-5 w-5 text-primary"/> Basic Information</h3>
+            <h3 className="text-lg font-medium flex items-center gap-2"><FileText className="h-5 w-5 text-primary" /> Basic Information</h3>
             <div className="space-y-2">
               <Label htmlFor="examTitle">Exam Title</Label>
               <Input id="examTitle" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Final Year Mathematics" required />
@@ -181,27 +157,26 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
           </section>
 
           <section className="space-y-4 p-4 border rounded-lg">
-             <h3 className="text-lg font-medium flex items-center gap-2"><Settings2 className="h-5 w-5 text-primary"/> Exam Settings</h3>
+            <h3 className="text-lg font-medium flex items-center gap-2"><Settings2 className="h-5 w-5 text-primary" /> Exam Settings</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                <Label htmlFor="examDuration" className="flex items-center gap-1"><Clock className="h-4 w-4"/> Duration (minutes)</Label>
-                <Input id="examDuration" type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} min="10" required />
-                </div>
-                <div className="flex items-center space-x-2 pt-8">
-                    <Switch id="allowBacktracking" checked={allowBacktracking} onCheckedChange={setAllowBacktracking} />
-                    <Label htmlFor="allowBacktracking">Allow Backtracking</Label>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="examDuration" className="flex items-center gap-1"><Clock className="h-4 w-4" /> Duration (minutes)</Label>
+                <Input id="examDuration" type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} min="1" required />
+              </div>
+              <div className="flex items-center space-x-2 pt-8">
+                <Switch id="allowBacktracking" checked={allowBacktracking} onCheckedChange={setAllowBacktracking} />
+                <Label htmlFor="allowBacktracking">Allow Backtracking</Label>
+              </div>
             </div>
-             <div className="space-y-2">
-                <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4"/> Scheduling (Coming Soon)</Label>
-                <p className="text-sm text-muted-foreground">Set start and end dates/times for the exam.</p>
-                <Input type="datetime-local" disabled className="w-full md:w-1/2" />
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Scheduling (Coming Soon)</Label>
+              <p className="text-sm text-muted-foreground">Set start and end dates/times for the exam.</p>
+              <Input type="datetime-local" disabled className="w-full md:w-1/2" />
             </div>
           </section>
 
           <section className="space-y-4 p-4 border rounded-lg">
             <h3 className="text-lg font-medium">Manage Questions ({questions.length} added)</h3>
-
             <div className="flex flex-wrap gap-2 my-4">
               <Button type="button" variant="outline" disabled>
                 <Upload className="mr-2 h-4 w-4" /> Upload CSV (Soon)
@@ -223,7 +198,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
                   <Textarea id="questionText" value={currentQuestionText} onChange={(e) => setCurrentQuestionText(e.target.value)} placeholder="Enter the question" />
                 </div>
                 <div>
-                  <Label>Options & Correct Answer</Label>
+                  <Label>Options & Correct Answer (Provide at least 2 options)</Label>
                   <RadioGroup value={currentCorrectOptionId} onValueChange={setCurrentCorrectOptionId} className="mt-2 space-y-2">
                     {currentOptions.map((opt, index) => (
                       <div key={opt.id} className="flex items-center gap-2 p-2 border rounded-md bg-background hover:bg-accent/50 has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary">
@@ -275,10 +250,10 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
           </section>
         </CardContent>
         <CardFooter className="flex justify-end gap-2">
-           <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
           <Button type="submit" disabled={isLoading}>
             {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
-            {isLoading ? (isEditing ? 'Saving...' : 'Preparing...') : (isEditing ? 'Save Changes' : 'Prepare Exam (UI Only)')}
+            {isLoading ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Exam')}
           </Button>
         </CardFooter>
       </Card>

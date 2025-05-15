@@ -2,56 +2,118 @@
 'use client';
 
 import { useParams, notFound, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Download, User, Hash, Percent, CalendarCheck2, Users, Loader2 } from 'lucide-react'; // Added Loader2, Users
-import { Label } from '@/components/ui/label'; // Added Label
+import { ArrowLeft, Download, User, Hash, Percent, CalendarCheck2, Users, Loader2, AlertTriangle, FileText } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import type { Exam } from '@/types/supabase';
 
+// This interface would represent a row in a hypothetical 'ExamSubmissionsX' table
 interface StudentScore {
-  studentId: string;
-  studentName: string;
+  student_id: string;
+  student_name: string; // Would need to join with proctorX or store denormalized
   score: number; // percentage
-  submissionDate: string;
+  submission_date: string;
 }
 
 interface ExamDetailedResult {
-  examId: string;
-  examTitle: string;
-  overallAverage: number;
-  totalParticipants: number;
-  scores: StudentScore[];
+  exam_id: string;
+  exam_title: string;
+  overallAverage: number | null; // Calculated from submissions
+  totalParticipants: number; // Calculated from submissions
+  scores: StudentScore[]; // Fetched from submissions
 }
-
-// No more mock data
-// const mockDetailedResults: ExamDetailedResult[] = [ ... ];
 
 export default function ExamSpecificResultsPage() {
   const params = useParams();
   const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
+  const { toast } = useToast();
   const examId = params.examId as string;
-  const [resultData, setResultData] = useState<ExamDetailedResult | null | undefined>(undefined);
+
+  const [examDetails, setExamDetails] = useState<Exam | null>(null);
+  const [resultData, setResultData] = useState<ExamDetailedResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchExamAndResults = useCallback(async () => {
+    if (!examId) {
+      setIsLoading(false);
+      notFound();
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Fetch exam details first
+      const { data: examData, error: examError } = await supabase
+        .from('ExamX')
+        .select('exam_id, title, status')
+        .eq('exam_id', examId)
+        .single();
+
+      if (examError) throw examError;
+      if (!examData) throw new Error("Exam not found.");
+      setExamDetails(examData as Exam);
+
+      // TODO: Fetch actual student submissions and scores from 'ExamSubmissionsX' table
+      // This is a placeholder as the submission logic and table are not yet implemented.
+      // For now, we'll simulate an empty result set.
+      // Example:
+      /*
+      const { data: submissions, error: submissionError } = await supabase
+        .from('ExamSubmissionsX')
+        .select('student_id, score, submitted_at, proctorX(name)') // Assuming join with proctorX for name
+        .eq('exam_id', examId);
+      
+      if (submissionError) throw submissionError;
+
+      const scores: StudentScore[] = submissions.map(sub => ({
+        student_id: sub.student_id,
+        student_name: sub.proctorX?.name || 'Unknown Student',
+        score: sub.score,
+        submission_date: new Date(sub.submitted_at).toLocaleString(),
+      }));
+
+      const totalParticipants = scores.length;
+      const overallAverage = totalParticipants > 0 
+        ? scores.reduce((sum, s) => sum + s.score, 0) / totalParticipants 
+        : null;
+      
+      setResultData({
+        exam_id: examData.exam_id,
+        exam_title: examData.title,
+        overallAverage: overallAverage,
+        totalParticipants: totalParticipants,
+        scores: scores,
+      });
+      */
+      
+      // Simulate no submissions for now
+      setResultData({
+        exam_id: examData.exam_id,
+        exam_title: examData.title,
+        overallAverage: null,
+        totalParticipants: 0,
+        scores: [],
+      });
+
+    } catch (e: any) {
+      console.error("Error fetching exam results:", e);
+      setError(e.message || "Failed to load results.");
+      setResultData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [examId, supabase, toast]);
 
   useEffect(() => {
-    const fetchResults = async () => {
-      if(!examId) {
-        setIsLoading(false);
-        notFound();
-        return;
-      }
-      setIsLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // const fetchedResult = await yourApi.getDetailedResults(examId);
-      // setResultData(fetchedResult || null);
-      // For now, setting to null
-      setResultData(null);
-      setIsLoading(false);
-    };
-    fetchResults();
-  }, [examId]);
+    fetchExamAndResults();
+  }, [fetchExamAndResults]);
 
   if (isLoading) {
     return (
@@ -61,12 +123,13 @@ export default function ExamSpecificResultsPage() {
       </div>
     );
   }
-
-  if (!resultData) {
+  
+  if (error) {
      return (
        <div className="space-y-6 text-center py-10">
-         <h1 className="text-2xl font-semibold">Results Not Found</h1>
-         <p className="text-muted-foreground">Detailed results for this exam could not be loaded.</p>
+         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
+         <h1 className="text-2xl font-semibold">Error Loading Results</h1>
+         <p className="text-muted-foreground">{error}</p>
          <Button variant="outline" onClick={() => router.push('/teacher/dashboard/results')}>
            <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Results
          </Button>
@@ -74,35 +137,49 @@ export default function ExamSpecificResultsPage() {
     );
   }
 
+
+  if (!resultData || !examDetails) {
+    return (
+      <div className="space-y-6 text-center py-10">
+        <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
+        <h1 className="text-2xl font-semibold">Results Not Found</h1>
+        <p className="text-muted-foreground">Detailed results for this exam could not be loaded.</p>
+        <Button variant="outline" onClick={() => router.push('/teacher/dashboard/results')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Results
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <Button variant="outline" onClick={() => router.back()} className="mb-4">
+      <Button variant="outline" onClick={() => router.push('/teacher/dashboard/results')} className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Results
       </Button>
 
       <Card className="shadow-xl">
         <CardHeader>
-          <CardTitle className="text-3xl">Results for: {resultData.examTitle}</CardTitle>
+          <CardTitle className="text-3xl">Results for: {resultData.exam_title}</CardTitle>
           <CardDescription>
-            Detailed performance of students in this exam.
+            Detailed performance of students in this exam. (Submission data is currently placeholder)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
             <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Hash className="h-4 w-4" /> Exam ID</Label>
-              <p className="text-lg font-semibold">{resultData.examId}</p>
+              <p className="text-lg font-semibold">{resultData.exam_id}</p>
             </div>
             <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Users className="h-4 w-4" /> Total Participants</Label>
-              <p className="text-lg font-semibold">{resultData.totalParticipants}</p>
+              <p className="text-lg font-semibold">{resultData.totalParticipants} (N/A)</p>
             </div>
             <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Percent className="h-4 w-4" /> Overall Average</Label>
-              <p className="text-lg font-semibold text-primary">{resultData.overallAverage}%</p>
+              <p className="text-lg font-semibold text-primary">{resultData.overallAverage !== null ? `${resultData.overallAverage.toFixed(2)}%` : 'N/A'}</p>
             </div>
           </div>
-          
+
           <h3 className="text-xl font-semibold">Individual Student Scores</h3>
           {resultData.scores.length > 0 ? (
             <div className="overflow-x-auto">
@@ -116,19 +193,23 @@ export default function ExamSpecificResultsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {resultData.scores.sort((a,b) => b.score - a.score).map((score) => ( 
-                    <TableRow key={score.studentId}>
-                      <TableCell className="font-medium">{score.studentName}</TableCell>
-                      <TableCell>{score.studentId}</TableCell>
+                  {resultData.scores.sort((a, b) => b.score - a.score).map((score) => (
+                    <TableRow key={score.student_id}>
+                      <TableCell className="font-medium">{score.student_name}</TableCell>
+                      <TableCell>{score.student_id}</TableCell>
                       <TableCell className="text-center font-semibold">{score.score}%</TableCell>
-                      <TableCell>{score.submissionDate}</TableCell>
+                      <TableCell>{score.submission_date}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
           ) : (
-            <p className="text-muted-foreground">No student submissions found for this exam yet.</p>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mb-3" />
+                <p className="text-md text-muted-foreground">No student submissions found for this exam yet.</p>
+                <p className="text-sm text-muted-foreground">Student scores will appear here once submissions are recorded.</p>
+            </div>
           )}
         </CardContent>
         <CardFooter className="border-t pt-6">
@@ -139,12 +220,4 @@ export default function ExamSpecificResultsPage() {
       </Card>
     </div>
   );
-}
-
-export async function generateMetadata({ params }: { params: { examId: string } }) {
-  // const result = await yourApi.getExamTitleForResultPage(params.examId);
-  const examTitle = "Exam Results"; // Placeholder
-  return {
-    title: `Results: ${examTitle} | ProctorPrep`,
-  };
 }

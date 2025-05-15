@@ -1,83 +1,152 @@
 
 'use client';
 
-import { ExamForm } from '@/components/teacher/exam-form';
-import { notFound, useParams, useRouter } from 'next/navigation'; // Using useParams and useRouter
-import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react'; // Added Loader2
-import { Button } from '@/components/ui/button'; // Added Button
-import { ArrowLeft } from 'lucide-react'; // Added ArrowLeft
+import { ExamForm, ExamFormData } from '@/components/teacher/exam-form';
+import { notFound, useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { Exam } from '@/types/supabase'; // Using types from supabase.ts
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
-interface QuestionOption { // Updated to match ExamForm
-  id: string;
-  text: string;
-}
-interface Question {
-  id: string;
-  text: string;
-  options: QuestionOption[];
-  correctOptionId: string;
-}
-interface ExamData {
-  id: string;
-  title: string;
-  description: string;
-  duration: number; // in minutes
-  allowBacktracking: boolean;
-  questions: Question[];
-}
-
-// No more mock exam data
-// const mockExams: ExamData[] = [ ... ];
-
-// Mock save function - replace with actual API call
-const handleUpdateExam = async (data: ExamData) => {
-  console.log('Updating exam:', data);
-  // In a real app, you would update this in a database.
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-  // Example: await yourApi.updateExam(data.id, data);
-};
 
 export default function EditExamPage() {
   const params = useParams();
-  const router = useRouter(); // Added router
-  const examId = params.id as string; 
-  const [examData, setExamData] = useState<ExamData | null | undefined>(undefined); 
+  const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const examId = params.id as string;
+  const [initialExamData, setInitialExamData] = useState<ExamFormData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchExamToEdit = useCallback(async () => {
+    if (!examId) {
+      setIsLoading(false);
+      notFound();
+      return;
+    }
+    if (!user) {
+      setIsLoading(false);
+      setError("User not authenticated.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { data: exam, error: fetchError } = await supabase
+        .from('ExamX')
+        .select('*')
+        .eq('exam_id', examId)
+        .eq('teacher_id', user.user_id) // Ensure teacher owns the exam
+        .single();
+
+      if (fetchError) {
+        if (fetchError.code === 'PGRST116') { // Not found or not authorized
+          setError("Exam not found or you're not authorized to edit it.");
+        } else {
+          throw fetchError;
+        }
+        setInitialExamData(null);
+      } else if (exam) {
+        setInitialExamData({
+          exam_id: exam.exam_id,
+          title: exam.title,
+          description: exam.description || '',
+          duration: exam.duration,
+          allowBacktracking: exam.allow_backtracking,
+          questions: exam.questions || [],
+          exam_code: exam.exam_code,
+          status: exam.status,
+        });
+      } else {
+        setError("Exam not found.");
+        setInitialExamData(null);
+      }
+    } catch (e: any) {
+      console.error("Error fetching exam for editing:", e);
+      setError(e.message || "Failed to load exam data.");
+      setInitialExamData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [examId, supabase, user, toast]);
 
   useEffect(() => {
-    const fetchExamToEdit = async () => {
-      if (!examId) {
-          setIsLoading(false);
-          notFound();
-          return;
-      }
-      setIsLoading(true);
-      // Simulate fetching exam data
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // const foundExam = await yourApi.getExamById(examId);
-      // setExamData(foundExam || null); 
-      // For now, setting to null as mock data is removed
-      setExamData(null);
-      setIsLoading(false);
-    };
     fetchExamToEdit();
-  }, [examId]);
+  }, [fetchExamToEdit]);
+
+  const handleUpdateExam = async (data: ExamFormData): Promise<{ success: boolean; error?: string; examId?: string }> => {
+    if (!user || !initialExamData?.exam_id) {
+      return { success: false, error: "User not authenticated or exam ID missing." };
+    }
+
+    const updatedExamData: Partial<Exam> = {
+      title: data.title,
+      description: data.description || null,
+      duration: data.duration,
+      allow_backtracking: data.allowBacktracking,
+      questions: data.questions,
+      // exam_code and status are generally not updated here, but could be if needed
+    };
+
+    try {
+      const { data: updatedExam, error: updateError } = await supabase
+        .from('ExamX')
+        .update(updatedExamData)
+        .eq('exam_id', initialExamData.exam_id)
+        .eq('teacher_id', user.user_id) // Security check
+        .select()
+        .single();
+
+      if (updateError) {
+        throw updateError;
+      }
+      if (!updatedExam) {
+         return { success: false, error: "Failed to update exam, no data returned." };
+      }
+      
+      return { success: true, examId: updatedExam.exam_id };
+
+    } catch (e: any) {
+      console.error('Error updating exam:', e);
+      return { success: false, error: e.message || "An unexpected error occurred." };
+    }
+  };
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-full py-10">
+      <div className="flex flex-col justify-center items-center h-full py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2 text-muted-foreground">Loading exam data for editing...</p>
+        <p className="ml-2 mt-2 text-muted-foreground">Loading exam data for editing...</p>
       </div>
     );
   }
 
-  if (!examData) {
+  if (error) {
     return (
+      <div className="space-y-6 text-center py-10">
+        <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
+        <h1 className="text-2xl font-semibold">Error Loading Exam</h1>
+        <p className="text-muted-foreground">{error}</p>
+        <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
+        </Button>
+      </div>
+    );
+  }
+  
+  if (!initialExamData) {
+     return ( // Fallback if data is null without specific error, though error state should catch most cases
        <div className="space-y-6 text-center py-10">
+         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
          <h1 className="text-2xl font-semibold">Exam Not Found</h1>
-         <p className="text-muted-foreground">The exam data could not be loaded for editing. It might have been deleted or the ID is incorrect.</p>
+         <p className="text-muted-foreground">The exam could not be loaded for editing.</p>
          <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')}>
            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
          </Button>
@@ -85,21 +154,13 @@ export default function EditExamPage() {
     );
   }
 
+
   return (
     <div className="space-y-6">
       <Button variant="outline" onClick={() => router.back()} className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back
       </Button>
-      <ExamForm initialData={examData} onSave={handleUpdateExam} isEditing={true} />
+      <ExamForm initialData={initialExamData} onSave={handleUpdateExam} isEditing={true} />
     </div>
   );
-}
-
-export async function generateMetadata({ params }: { params: { id: string } }) {
-  // In a real app, fetch exam title here for dynamic metadata
-  // const exam = await yourApi.getExamTitleById(params.id); 
-  const examTitle = "Exam"; // Placeholder
-  return {
-    title: `Edit ${examTitle} | ProctorPrep`,
-  };
 }

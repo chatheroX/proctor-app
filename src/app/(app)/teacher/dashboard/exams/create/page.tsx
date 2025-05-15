@@ -1,44 +1,64 @@
 
 'use client';
 
-import { ExamForm } from '@/components/teacher/exam-form';
-import { generateId } from 'lucide-react'; // Not for this, just an example
+import { ExamForm, ExamFormData } from '@/components/teacher/exam-form';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { Exam } from '@/types/supabase'; // Using the specific Exam type
 
-interface ExamData {
-  id?: string;
-  title: string;
-  description: string;
-  duration: number; // in minutes
-  allowBacktracking: boolean;
-  questions: Array<{ id: string; text: string; options: string[]; correctAnswer: string; }>;
-}
-
-// Mock save function
-const handleCreateExam = async (data: ExamData) => {
-  const newExam = {
-    ...data,
-    id: `exam-${Date.now()}-${Math.random().toString(36).substring(2,7).toUpperCase()}`, // Create a more unique ID
-    examCode: data.title.substring(0,3).toUpperCase() + Math.random().toString(36).substring(2,6).toUpperCase(), // Generate a mock exam code
-    createdAt: new Date().toISOString(),
-    status: 'Draft', // Default status for new exams
-  };
-  console.log('Creating exam:', newExam);
-  // In a real app, you would save this to a database.
-  // For demo, we can store it in localStorage or just log it.
-  // localStorage.setItem('exams', JSON.stringify([...JSON.parse(localStorage.getItem('exams') || '[]'), newExam]));
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+// Helper function to generate a unique exam code (simple version)
+const generateExamCode = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
 
 export default function CreateExamPage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const supabase = createSupabaseBrowserClient();
+
+  const handleCreateExam = async (data: ExamFormData): Promise<{ success: boolean; error?: string; examId?: string }> => {
+    if (!user || user.role !== 'teacher') {
+      return { success: false, error: "You must be logged in as a teacher to create exams." };
+    }
+
+    const newExamData: Omit<Exam, 'exam_id' | 'created_at' | 'updated_at'> & { teacher_id: string } = {
+      teacher_id: user.user_id,
+      title: data.title,
+      description: data.description || null,
+      duration: data.duration,
+      allow_backtracking: data.allowBacktracking,
+      questions: data.questions,
+      exam_code: generateExamCode(), // Generate a unique code
+      status: 'Draft', // Default status for new exams
+    };
+
+    try {
+      const { data: insertedExam, error } = await supabase
+        .from('ExamX')
+        .insert(newExamData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating exam:', error);
+        return { success: false, error: error.message };
+      }
+      if (!insertedExam) {
+        return { success: false, error: "Failed to create exam, no data returned." };
+      }
+      
+      return { success: true, examId: insertedExam.exam_id };
+
+    } catch (e: any) {
+      console.error('Unexpected error creating exam:', e);
+      return { success: false, error: e.message || "An unexpected error occurred." };
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* h1 title is inside ExamForm now */}
       <ExamForm onSave={handleCreateExam} />
     </div>
   );
 }
-
-// Removed metadata export as this is a Client Component
-// export const metadata = {
-//   title: 'Create New Exam | Teacher Dashboard | ProctorPrep',
-// };
