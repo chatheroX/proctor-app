@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock, ClockIcon, CheckCircleIcon, PlayCircleIcon } from 'lucide-react'; // Removed MonitorPlay
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock, ClockIcon, CheckCircleIcon, PlayCircleIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -25,12 +25,13 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Exam, ExamStatus } from '@/types/supabase';
 import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
-import { getEffectiveExamStatus } from './[examId]/details/page'; // Corrected path
+import { getEffectiveExamStatus } from './[examId]/details/page';
 
 interface CategorizedExams {
   ongoing: Exam[];
   upcoming: Exam[];
   completed: Exam[];
+  // No 'Drafts' as it's removed
 }
 
 export default function ManageExamsPage() {
@@ -66,8 +67,9 @@ export default function ManageExamsPage() {
         const effectiveStatus = getEffectiveExamStatus(exam);
 
         if (effectiveStatus === 'Ongoing') newCategorizedExams.ongoing.push(exam);
-        else if (effectiveStatus === 'Published') newCategorizedExams.upcoming.push(exam); // 'Published' here means upcoming
+        else if (effectiveStatus === 'Published') newCategorizedExams.upcoming.push(exam);
         else if (effectiveStatus === 'Completed') newCategorizedExams.completed.push(exam);
+        // No 'Draft' status handling
       });
 
       setCategorizedExams(newCategorizedExams);
@@ -84,7 +86,7 @@ export default function ManageExamsPage() {
     if (user) {
       fetchAndCategorizeExams();
     } else {
-      setIsLoading(false); // Ensure loading stops if no user
+      setIsLoading(false);
       setCategorizedExams({ ongoing: [], upcoming: [], completed: [] });
     }
   }, [user, fetchAndCategorizeExams]);
@@ -101,7 +103,7 @@ export default function ManageExamsPage() {
 
       if (error) throw error;
       toast({ title: "Exam Deleted", description: `Exam "${examToDelete.title}" has been deleted.` });
-      fetchAndCategorizeExams(); // Refresh list
+      fetchAndCategorizeExams();
       setExamToDelete(null);
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to delete exam: ${error.message}`, variant: "destructive" });
@@ -117,6 +119,10 @@ export default function ManageExamsPage() {
   };
 
   const copyExamCode = (code: string) => {
+    if (!code) {
+      toast({ description: "No exam code to copy.", variant: "default" });
+      return;
+    }
     navigator.clipboard.writeText(code).then(() => {
       toast({ description: `Exam code "${code}" copied to clipboard!` });
     }).catch(err => {
@@ -126,7 +132,7 @@ export default function ManageExamsPage() {
 
   const getStatusBadgeVariant = (status: ExamStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'Published': return 'default'; // Upcoming
+      case 'Published': return 'default';
       case 'Ongoing': return 'destructive';
       case 'Completed': return 'outline';
       default: return 'secondary';
@@ -135,7 +141,7 @@ export default function ManageExamsPage() {
 
   const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
-      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // Upcoming
+      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white';
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
       case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
       default: return '';
@@ -164,9 +170,9 @@ export default function ManageExamsPage() {
     return (
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow>{/* Ensure no whitespace directly inside TableRow */}
             <TableHead>Title</TableHead>
-            <TableHead>Effective Status</TableHead> {/* Changed from DB Status */}
+            <TableHead>Effective Status</TableHead>
             <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>Start Time</TableHead>
             <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>End Time</TableHead>
             <TableHead>Questions</TableHead>
@@ -179,7 +185,7 @@ export default function ManageExamsPage() {
           {exams.map((exam) => {
             const effectiveStatus = getEffectiveExamStatus(exam);
             return (
-            <TableRow key={exam.exam_id}>
+            <TableRow key={exam.exam_id}>{/* Ensure no whitespace directly inside TableRow */}
               <TableCell className="font-medium">{exam.title}</TableCell>
               <TableCell>
                  <Badge
@@ -194,8 +200,8 @@ export default function ManageExamsPage() {
               <TableCell>{exam.questions?.length || 0}</TableCell>
               <TableCell>{exam.duration} min</TableCell>
               <TableCell>
-                <Button variant="ghost" size="sm" onClick={() => copyExamCode(exam.exam_code)} className="p-1 h-auto">
-                  {exam.exam_code} <Copy className="ml-2 h-3 w-3" />
+                <Button variant="ghost" size="sm" onClick={() => copyExamCode(exam.exam_code!)} className="p-1 h-auto" disabled={!exam.exam_code}>
+                  {exam.exam_code || 'N/A'} <Copy className="ml-2 h-3 w-3" />
                 </Button>
               </TableCell>
               <TableCell className="text-right">
@@ -214,18 +220,22 @@ export default function ManageExamsPage() {
                     <DropdownMenuItem asChild>
                       <Link href={`/teacher/dashboard/exams/${exam.exam_id}/details`}><Eye className="mr-2 h-4 w-4" /> View Details</Link>
                     </DropdownMenuItem>
-                    {/* Monitor Exam option removed */}
+                    {effectiveStatus === 'Ongoing' && (
+                       <DropdownMenuItem asChild>
+                         <Link href={`/teacher/dashboard/exams/${exam.exam_id}/monitor`}><PlayCircleIcon className="mr-2 h-4 w-4" /> Monitor Exam</Link>
+                       </DropdownMenuItem>
+                    )}
                      <DropdownMenuItem asChild>
                       <Link href={`/teacher/dashboard/results/${exam.exam_id}`}><Users2 className="mr-2 h-4 w-4" /> View Results</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => copyExamCode(exam.exam_code)} disabled={effectiveStatus === 'Completed'}>
+                    <DropdownMenuItem onClick={() => copyExamCode(exam.exam_code!)} disabled={effectiveStatus === 'Completed' || !exam.exam_code}>
                       <Share2 className="mr-2 h-4 w-4" /> Share Code
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => openDeleteDialog(exam)} 
+                    <DropdownMenuItem
+                      onClick={() => openDeleteDialog(exam)}
                       className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                      disabled={effectiveStatus === 'Ongoing'} // Prevent deleting ongoing exams
+                      disabled={effectiveStatus === 'Ongoing'}
                     >
                       <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
@@ -310,9 +320,9 @@ export default function ManageExamsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setExamToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteExam} 
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" 
+            <AlertDialogAction
+              onClick={handleDeleteExam}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               disabled={isDeleting || getEffectiveExamStatus(examToDelete) === 'Ongoing'}
             >
               {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
