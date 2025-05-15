@@ -31,34 +31,43 @@ const features = [
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-b from-background via-secondary/30 to-background">
+    // Add Framer Motion wrapper here for page transitions if desired
+    <div className="flex flex-col min-h-screen bg-gradient-to-b from-background via-muted/30 to-background">
       <AppHeader />
       <main className="flex-grow">
         {/* Hero Section */}
-        <section className="py-16 md:py-24 bg-background">
-          <div className="container px-4 md:px-6">
-            <div className="grid gap-8 md:grid-cols-2 md:items-center">
-              <div className="space-y-6">
-                <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl">
-                  The Future of <span className="text-primary">Secure</span> Online Proctoring
+        <section className="py-20 md:py-32 relative overflow-hidden">
+           {/* Background decorative gradients or shapes */}
+          <div aria-hidden="true" className="absolute inset-0 grid grid-cols-2 -space-x-52 opacity-40 dark:opacity-20">
+            <div className="blur-[106px] h-56 bg-gradient-to-br from-primary to-purple-400 dark:from-primary/70 dark:to-purple-600"></div>
+            <div className="blur-[106px] h-32 bg-gradient-to-r from-cyan-400 to-sky-300 dark:from-cyan-400/70 dark:to-sky-300/70"></div>
+          </div>
+          <div className="container px-4 md:px-6 relative">
+            <div className="grid gap-12 md:grid-cols-2 md:items-center">
+              <div className="space-y-8">
+                {/* Add Framer Motion to h1 and p for staggered entrance */}
+                <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl md:text-7xl !leading-tight">
+                  The Future of <span className="text-primary block">Secure Online</span> Proctoring
                 </h1>
                 <p className="text-lg text-muted-foreground md:text-xl">
                   ProctorPrep offers a robust, modern platform for conducting secure online exams, trusted by educators and students alike.
                 </p>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button size="lg" asChild>
+                <div className="flex flex-col gap-4 sm:flex-row">
+                  {/* Add Framer Motion to buttons for hover/tap effects */}
+                  <Button size="lg" className="shadow-lg hover:shadow-primary/40 transition-shadow duration-300" asChild>
                     <Link href="/auth?action=register&role=teacher">
                       Get Started as Teacher <ArrowRight className="ml-2 h-5 w-5" />
                     </Link>
                   </Button>
-                  <Button size="lg" variant="outline" asChild>
+                  <Button size="lg" variant="outline" className="shadow-md hover:shadow-accent/30 transition-shadow duration-300 border-2 border-primary/50 hover:border-primary" asChild>
                     <Link href="/auth?action=register&role=student">
                       Join as Student
                     </Link>
                   </Button>
                 </div>
               </div>
-              <div>
+              <div className="relative">
+                 {/* Add Framer Motion to ThreeScenePlaceholder for subtle animation */}
                 <ThreeScenePlaceholder />
               </div>
             </div>
@@ -66,22 +75,23 @@ export default function LandingPage() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="py-16 md:py-24 bg-muted/40">
+        <section id="features" className="py-16 md:py-24 bg-secondary/30">
           <div className="container px-4 md:px-6">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Why Choose ProctorPrep?</h2>
-              <p className="mt-4 text-lg text-muted-foreground">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">Why Choose ProctorPrep?</h2>
+              <p className="mt-6 text-lg text-muted-foreground">
                 Empowering education with cutting-edge proctoring technology.
               </p>
             </div>
-            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-8 md:gap-10 sm:grid-cols-2 lg:grid-cols-4">
               {features.map((feature, index) => (
-                <Card key={index} className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-                  <CardHeader className="items-center text-center">
-                    {feature.icon}
-                    <CardTitle className="mt-4 text-xl">{feature.title}</CardTitle>
+                 // Add Framer Motion to Card for staggered reveal or hover effects
+                <Card key={index} className="glass-card p-2 hover:shadow-primary/30 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
+                  <CardHeader className="items-center text-center pt-6 pb-4">
+                    {React.cloneElement(feature.icon, { className: "h-12 w-12 text-primary" })}
+                    <CardTitle className="mt-5 text-xl font-semibold">{feature.title}</CardTitle>
                   </CardHeader>
-                  <CardContent className="text-center text-muted-foreground">
+                  <CardContent className="text-center text-muted-foreground text-sm pb-6">
                     <p>{feature.description}</p>
                   </CardContent>
                 </Card>
@@ -91,15 +101,16 @@ export default function LandingPage() {
         </section>
 
         {/* Call to Action Section */}
-        <section className="py-16 md:py-24 bg-background">
+        <section className="py-16 md:py-24 bg-gradient-to-b from-background via-muted to-background">
           <div className="container px-4 md:px-6 text-center">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+             {/* Add Framer Motion for reveal */}
+            <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
               Ready to Elevate Your Online Exams?
             </h2>
-            <p className="mt-4 mb-8 text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="mt-6 mb-10 text-lg text-muted-foreground max-w-2xl mx-auto">
               Join ProctorPrep today and experience a seamless, secure, and intelligent proctoring solution.
             </p>
-            <Button size="lg" asChild>
+            <Button size="lg" className="shadow-lg hover:shadow-primary/50 transition-shadow duration-300 py-3 px-8 text-lg" asChild>
               <Link href="/auth?action=register">
                 Sign Up Now <ArrowRight className="ml-2 h-5 w-5" />
               </Link>

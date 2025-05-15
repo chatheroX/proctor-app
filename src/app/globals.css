@@ -8,85 +8,87 @@ body {
 
 @layer base {
   :root {
-    --background: 0 0% 100%; /* Neutral white */
-    --foreground: 222.2 84% 4.9%; /* Default dark text */
+    /* New Theme: Modern & Futuristic with Glassmorphism in mind */
+    --background: 220 20% 98%; /* Light, slightly cool off-white */
+    --foreground: 220 15% 20%; /* Dark grey for text */
 
-    --card: 0 0% 97%; /* Light grey - slightly adjusted for card background */
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 20% 100%; /* Base for cards, can be made semi-transparent */
+    --card-foreground: 220 15% 20%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 20% 100%;
+    --popover-foreground: 220 15% 20%;
 
-    --primary: 211 100% 50%; /* Blue #007BFF */
-    --primary-foreground: 0 0% 100%; /* White text on blue */
+    --primary: 250 70% 60%; /* Vibrant Violet/Indigo */
+    --primary-foreground: 0 0% 100%; /* White text on primary */
 
-    --secondary: 0 0% 96.1%; /* Light grey #E5E5E5 is hsl(0, 0%, 90%) - this is close from default */
-    --secondary-foreground: 222.2 84% 4.9%;
+    --secondary: 220 15% 90%; /* Lighter grey */
+    --secondary-foreground: 220 15% 25%;
 
-    --muted: 0 0% 92%; /* Light grey for muted backgrounds/text */
-    --muted-foreground: 215.4 16.3% 46.9%; /* Default muted text */
+    --muted: 220 15% 94%; /* Slightly darker muted */
+    --muted-foreground: 220 10% 45%;
 
-    --accent: 211 100% 50%; /* Using primary blue as accent */
-    --accent-foreground: 0 0% 100%; /* White text on accent */
+    --accent: 300 80% 65%; /* Bright Pink/Magenta for accents */
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 89.8%; /* Default border, works with light grey */
-    --input: 0 0% 89.8%;
-    --ring: 211 100% 50%; /* Blue for focus rings */
+    --border: 220 20% 85%; /* Softer border */
+    --input: 220 20% 92%;
+    --ring: 250 70% 60%; /* Primary color for rings */
     
-    --radius: 0.5rem;
+    --radius: 0.75rem; /* Slightly more rounded */
 
-    /* Sidebar specific theme variables from existing globals, can be adjusted if needed */
-    --sidebar-background: 240 5.9% 10%; /* Default dark sidebar */
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* Sidebar specific theme variables (can be adjusted for glassmorphism) */
+    /* For glassmorphism, sidebar-background might become semi-transparent */
+    --sidebar-background: 220 15% 15%; /* Darker, cool grey for solid sidebar */
+    --sidebar-foreground: 220 10% 90%;
+    --sidebar-primary: 250 70% 60%; /* Same as main primary */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 220 15% 25%;
+    --sidebar-accent-foreground: 220 10% 90%;
+    --sidebar-border: 220 15% 25%;
+    --sidebar-ring: 250 70% 70%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 0 0% 98%;
+    --background: 220 15% 10%; /* Dark cool grey */
+    --foreground: 220 10% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 220 15% 18%; /* Base for dark cards */
+    --card-foreground: 220 10% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 220 15% 12%;
+    --popover-foreground: 220 10% 95%;
 
-    --primary: 211 100% 50%; 
+    --primary: 250 65% 65%; /* Slightly lighter primary for dark mode */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 220 15% 25%; /* Darker grey */
+    --secondary-foreground: 220 10% 90%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 220 15% 20%;
+    --muted-foreground: 220 10% 65%;
 
-    --accent: 211 100% 50%;
+    --accent: 300 70% 70%; /* Lighter accent for dark mode */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 211 100% 50%;
+    --border: 220 15% 30%; /* Softer dark border */
+    --input: 220 15% 22%;
+    --ring: 250 65% 65%;
 
-    /* Sidebar dark theme variables remain the same as default dark provided */
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* Sidebar dark theme variables */
+    --sidebar-background: 220 15% 10%; /* Consistent with page background */
+    --sidebar-foreground: 220 10% 90%;
+    --sidebar-primary: 250 65% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 220 15% 20%;
+    --sidebar-accent-foreground: 220 10% 90%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 250 65% 70%;
   }
 }
 
@@ -96,6 +98,8 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    /* Apply a subtle gradient or pattern for glassmorphism to work better */
+    @apply bg-gradient-to-br from-background via-muted to-background;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -103,4 +107,12 @@ body {
   main {
     flex-grow: 1;
   }
+}
+
+/* Basic glassmorphism utility - you might need to configure Tailwind for backdrop-filter */
+.glass-card {
+  @apply bg-card/60 backdrop-blur-lg border border-white/20 shadow-xl rounded-2xl;
+}
+.dark .glass-card {
+  @apply bg-card/70 backdrop-blur-lg border border-white/10 shadow-xl;
 }

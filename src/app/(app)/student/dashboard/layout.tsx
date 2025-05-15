@@ -3,8 +3,8 @@
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SidebarElements, NavItem } from '@/components/shared/dashboard-sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, UserCircle, Edit3, History, Loader2 } from 'lucide-react';
-import { useCallback } from 'react';
+import { LayoutDashboard, UserCircle, Edit3, History, Loader2, Settings } from 'lucide-react';
+import React, { useCallback } from 'react'; // Added React import
 
 const studentNavItems: NavItem[] = [
   { href: '/student/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
@@ -24,57 +24,59 @@ export default function StudentDashboardLayout({
     await signOut();
   }, [signOut]);
 
-  if (authLoading) { 
-    console.log("[StudentDashboardLayout] Auth loading, showing layout loader.");
+  if (authLoading && !user) { 
+    // console.log("[StudentDashboardLayout] Auth loading, no user yet, showing layout loader.");
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-background via-muted to-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
   
-  if (!user) { 
-    console.log("[StudentDashboardLayout] Not auth loading and no user, rendering redirecting message (middleware should have redirected).");
+  if (!authLoading && !user) { 
+    // console.log("[StudentDashboardLayout] Not auth loading and no user, rendering redirecting message (middleware should have redirected).");
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-            <p>Session not found. Redirecting to login...</p>
-            <Loader2 className="ml-2 h-4 w-4 animate-spin"/>
+        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-background via-muted to-background">
+            <div className="p-8 rounded-lg shadow-2xl bg-card/80 backdrop-blur-md text-center">
+                <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary mb-4"/>
+                <p className="text-lg font-medium text-foreground">Session not found.</p>
+                <p className="text-sm text-muted-foreground">Redirecting to login...</p>
+            </div>
         </div>
     );
   }
   
-  if (user.role === 'student') {
-    console.log("[StudentDashboardLayout] User determined, rendering dashboard for student:", user.email);
-    return (
-      // SidebarProvider's root div is: "group/sidebar-wrapper flex min-h-svh w-full"
-      // It will act as the main flex container for SidebarElements and main.
-      // Add className="bg-muted/40" to SidebarProvider if you want that background for the whole page.
-      // Add className="bg-red-300" for temporary debugging of the provider's area.
-      <SidebarProvider defaultOpen className="bg-muted/40"> 
-        <SidebarElements
-          navItems={studentNavItems}
-          userRoleDashboard="student"
-          user={user}
-          signOut={handleSignOut}
-          authLoading={authLoading}
-          // To debug sidebar's own background/space, you might need to pass a className
-          // into SidebarElements that it then applies to the <Sidebar> component.
-          // e.g., className="TEMPORARY_DEBUG_BG_GREEN"
-        />
-        {/* Add className="bg-blue-300" for temporary debugging of the main content area */}
-        <main className="flex-1 flex flex-col overflow-y-auto p-6 bg-background min-w-0"> 
-          {children}
-        </main>
-      </SidebarProvider>
+  // If user exists but role is incorrect (should also be caught by middleware ideally)
+  if (user && user.role !== 'student') {
+    // console.log(`[StudentDashboardLayout] User ${user.email} is not a student (role: ${user.role}).`);
+     return (
+        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-background via-muted to-background">
+             <div className="p-8 rounded-lg shadow-2xl bg-card/80 backdrop-blur-md text-center">
+                <Loader2 className="mx-auto h-10 w-10 animate-spin text-destructive mb-4"/>
+                <p className="text-lg font-medium text-destructive">Access Denied.</p>
+                <p className="text-sm text-muted-foreground">Your role ({user.role}) does not permit access here.</p>
+            </div>
+        </div>
     );
   }
-
-  // Fallback for incorrect role or other issues
-  console.log(`[StudentDashboardLayout] User ${user.email} is not a student (role: ${user.role}). This should ideally be handled by middleware redirecting to the correct dashboard or an error page.`);
-   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background">
-      <p>Access Denied or error loading student dashboard. Role: {user.role}.</p>
-      <Loader2 className="ml-2 h-4 w-4 animate-spin"/>
-    </div>
+  
+  // console.log("[StudentDashboardLayout] User determined, rendering dashboard for student:", user?.email);
+  return (
+    <SidebarProvider defaultOpen className="bg-gradient-to-br from-primary/5 via-muted/50 to-accent/5 dark:from-primary/10 dark:via-background dark:to-accent/10"> 
+      <SidebarElements
+        navItems={studentNavItems}
+        userRoleDashboard="student"
+        user={user}
+        signOut={handleSignOut}
+        authLoading={authLoading}
+        // Example of trying a glassmorphic effect for sidebar:
+        // Note: True backdrop-blur needs setup if not default in Tailwind
+        className="bg-card/20 dark:bg-card/30 backdrop-blur-xl border-r border-white/10 dark:border-black/20 shadow-2xl"
+      />
+      <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 bg-transparent min-w-0"> 
+        {/* Add Framer Motion Page Wrapper here for content animations */}
+        {children}
+      </main>
+    </SidebarProvider>
   );
 }
