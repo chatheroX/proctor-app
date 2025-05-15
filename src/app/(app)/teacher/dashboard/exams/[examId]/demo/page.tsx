@@ -1,22 +1,22 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } _from_ 'react';
-import { useParams, useRouter } _from_ 'next/navigation';
-import { useToast } _from_ '@/hooks/use-toast';
-import { createSupabaseBrowserClient } _from_ '@/lib/supabase/client';
-import type { Question, Exam, FlaggedEvent } _from_ '@/types/supabase';
-import { useAuth } _from_ '@/contexts/AuthContext';
-import { ExamTakingInterface } _from_ '@/components/shared/exam-taking-interface';
-import { Loader2, AlertTriangle } _from_ 'lucide-react';
-import { Button } _from_ '@/components/ui/button';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { Question, Exam, FlaggedEvent } from '@/types/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { ExamTakingInterface } from '@/components/shared/exam-taking-interface';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function TeacherDemoExamPage() {
   const params = useParams();
   const router = useRouter();
-  const { toast } _from_ useToast();
+  const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
-  const { user: teacherUser } _from_ useAuth();
+  const { user: teacherUser } = useAuth();
 
   const examId = params.examId as string;
 
@@ -40,7 +40,7 @@ export default function TeacherDemoExamPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } _from_ await supabase
+      const { data, error: fetchError } = await supabase
         .from('ExamX')
         .select('exam_id, title, description, duration, questions, allow_backtracking, status, teacher_id')
         .eq('exam_id', examId)
@@ -49,7 +49,6 @@ export default function TeacherDemoExamPage() {
       if (fetchError) throw fetchError;
       if (!data) throw new Error("Exam not found.");
       
-      // Ensure the logged-in teacher owns this exam to demo it
       if (data.teacher_id !== teacherUser.user_id) {
         setError("Access denied. You can only demo exams you have created.");
         setExamDetails(null);
@@ -74,11 +73,11 @@ export default function TeacherDemoExamPage() {
   }, [fetchExamData]);
 
   const handleStartDemoExam = () => {
-    if (questions.length === 0 && !isLoading) { // Check even if isLoading is false but questions are not there
+    if (questions.length === 0 && !isLoading) { 
         toast({ title: "No Questions", description: "This exam has no questions to demo.", variant: "destructive" });
         return;
     }
-    if (error && examDetails === null) { // Critical error like access denied
+    if (error && examDetails === null) { 
         toast({ title: "Cannot Start Demo", description: error || "An error occurred.", variant: "destructive" });
         return;
     }
@@ -86,7 +85,6 @@ export default function TeacherDemoExamPage() {
   };
 
   const handleDemoAnswerChange = (questionId: string, optionId: string) => {
-    // In demo mode, we might not persist answers, or just log them
     console.log(`Demo Answer for QID ${questionId}: OptionID ${optionId}`);
   };
 
@@ -95,12 +93,11 @@ export default function TeacherDemoExamPage() {
     console.log('Demo Answers:', answers);
     console.log('Demo Flagged Events (Informational):', flaggedEvents);
     toast({ title: "Demo Exam Finished!", description: "This was a simulation. No data was saved." });
-    // ExamTakingInterface handles setting examFinished=true
   };
 
-  const handleDemoTimeUp = async () => {
-    console.log("Demo exam time is up.");
-    // ExamTakingInterface handles its own toast for time up
+  const handleDemoTimeUp = async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
+    console.log("Demo exam time is up. Answers:", answers, "Flagged Events:", flaggedEvents);
+    toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended. No data was saved." });
   };
   
   if (isLoading && !examStarted) {
@@ -112,7 +109,7 @@ export default function TeacherDemoExamPage() {
     );
   }
   
-  if (error && !examDetails && !isLoading) { // Critical error, exam details couldn't be fetched or access denied
+  if (error && !examDetails && !isLoading) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -130,13 +127,13 @@ export default function TeacherDemoExamPage() {
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions}
-      isLoading={isLoading} // isLoading for fetching data for the "Ready to Start" screen
-      error={error} // Error for fetching data for "Ready to Start"
+      isLoading={isLoading}
+      error={error} 
       examStarted={examStarted}
       onStartExam={handleStartDemoExam}
       onAnswerChange={handleDemoAnswerChange}
       onSubmitExam={handleDemoSubmitExam}
-      onTimeUp={handleDemoTimeUp}
+      onTimeUp={(currentAnswers, currentFlaggedEvents) => handleDemoTimeUp(currentAnswers, currentFlaggedEvents)}
       isDemoMode={true}
       userIdForActivityMonitor={`teacher_demo_${teacherUser?.user_id || 'unknown'}`}
     />

@@ -7,7 +7,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam } from '@/types/supabase'; // Using types from supabase.ts
+import type { Exam } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -43,11 +43,11 @@ export default function EditExamPage() {
         .from('ExamX')
         .select('*')
         .eq('exam_id', examId)
-        .eq('teacher_id', user.user_id) // Ensure teacher owns the exam
+        .eq('teacher_id', user.user_id) 
         .single();
 
       if (fetchError) {
-        if (fetchError.code === 'PGRST116') { // Not found or not authorized
+        if (fetchError.code === 'PGRST116') { 
           setError("Exam not found or you're not authorized to edit it.");
         } else {
           throw fetchError;
@@ -75,7 +75,7 @@ export default function EditExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, user, toast]);
+  }, [examId, supabase, user, toast]); // Removed 'toast' as it's not used in this callback directly
 
   useEffect(() => {
     fetchExamToEdit();
@@ -92,7 +92,7 @@ export default function EditExamPage() {
       duration: data.duration,
       allow_backtracking: data.allowBacktracking,
       questions: data.questions,
-      // exam_code and status are generally not updated here, but could be if needed
+      status: data.status, // Allow updating status
     };
 
     try {
@@ -100,7 +100,7 @@ export default function EditExamPage() {
         .from('ExamX')
         .update(updatedExamData)
         .eq('exam_id', initialExamData.exam_id)
-        .eq('teacher_id', user.user_id) // Security check
+        .eq('teacher_id', user.user_id) 
         .select()
         .single();
 
@@ -142,7 +142,7 @@ export default function EditExamPage() {
   }
   
   if (!initialExamData) {
-     return ( // Fallback if data is null without specific error, though error state should catch most cases
+     return ( 
        <div className="space-y-6 text-center py-10">
          <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
          <h1 className="text-2xl font-semibold">Exam Not Found</h1>

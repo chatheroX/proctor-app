@@ -1,16 +1,16 @@
 
 'use client';
 
-import { useParams, notFound, useRouter } _from_ 'next/navigation';
-import { useEffect, useState, useCallback } _from_ 'react';
-import { Button } _from_ '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } _from_ '@/components/ui/card';
-import { Badge } _from_ '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare } _from_ 'lucide-react';
-import { useToast } _from_ '@/hooks/use-toast';
-import { Label } _from_ '@/components/ui/label';
-import { createSupabaseBrowserClient } _from_ '@/lib/supabase/client';
-import type { Exam, Question } _from_ '@/types/supabase';
+import { useParams, notFound, useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { Exam, Question } from '@/types/supabase';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,13 +20,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} _from_ "@/components/ui/alert-dialog";
-import Link _from_ 'next/link';
+} from "@/components/ui/alert-dialog";
+import Link from 'next/link';
 
 export default function ExamDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { toast } _from_ useToast();
+  const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
   const examId = params.id as string;
 
@@ -43,7 +43,7 @@ export default function ExamDetailsPage() {
     }
     setIsLoading(true);
     try {
-      const { data, error } _from_ await supabase
+      const { data, error } = await supabase
         .from('ExamX')
         .select('*')
         .eq('exam_id', examId)
@@ -77,7 +77,7 @@ export default function ExamDetailsPage() {
     if (!exam) return;
     setIsDeleting(true);
     try {
-      const { error } _from_ await supabase
+      const { error } = await supabase
         .from('ExamX')
         .delete()
         .eq('exam_id', exam.exam_id);
@@ -211,8 +211,8 @@ export default function ExamDetailsPage() {
               <PlaySquare className="mr-2 h-4 w-4" /> Take Demo Test
             </Link>
           </Button>
-          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/results/${exam.exam_id}`)}>
-            <Users2 className="mr-2 h-4 w-4" /> View Results
+          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/results/${exam.exam_id}`)} disabled>
+            <Users2 className="mr-2 h-4 w-4" /> View Results (Soon)
           </Button>
           <Button variant="outline" onClick={copyExamCode}>
             <Share2 className="mr-2 h-4 w-4" /> Share Exam Code

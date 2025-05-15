@@ -1,23 +1,23 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } _from_ 'react';
-import { useParams, useRouter } _from_ 'next/navigation';
-import { useToast } _from_ '@/hooks/use-toast';
-import { createSupabaseBrowserClient } _from_ '@/lib/supabase/client';
-import type { Question, Exam, FlaggedEvent } _from_ '@/types/supabase';
-import { useAuth } _from_ '@/contexts/AuthContext';
-import { ExamTakingInterface } _from_ '@/components/shared/exam-taking-interface';
-import { Loader2, AlertTriangle } _from_ 'lucide-react';
-import { Button } _from_ '@/components/ui/button';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { Question, Exam, FlaggedEvent } from '@/types/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { ExamTakingInterface } from '@/components/shared/exam-taking-interface';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 
 export default function TakeExamPage() {
   const params = useParams();
   const router = useRouter();
-  const { toast } _from_ useToast();
+  const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
-  const { user: studentUser } _from_ useAuth();
+  const { user: studentUser } = useAuth();
 
   const examId = params.examId as string;
 
@@ -29,15 +29,15 @@ export default function TakeExamPage() {
   // Answers will be managed by ExamTakingInterface, but we might need them for submission
 
   const fetchExamData = useCallback(async () => {
-    if (!examId) {
-      setError("Exam ID is missing.");
+    if (!examId || !studentUser) { // Added studentUser check
+      setError(!examId ? "Exam ID is missing." : "Student not authenticated.");
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } _from_ await supabase
+      const { data, error: fetchError } = await supabase
         .from('ExamX')
         .select('exam_id, title, description, duration, questions, allow_backtracking, status')
         .eq('exam_id', examId)
@@ -59,11 +59,11 @@ export default function TakeExamPage() {
     } catch (e: any) {
       console.error("Failed to fetch exam data:", e);
       setError(e.message || "Failed to load exam data.");
-      setQuestions([]);
+      setQuestions([]); // Ensure questions are empty on error
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase]);
+  }, [examId, supabase, studentUser]); // Added studentUser
 
   useEffect(() => {
     fetchExamData();
@@ -74,8 +74,12 @@ export default function TakeExamPage() {
         toast({ title: "Cannot Start", description: `Exam is ${examDetails?.status.toLowerCase()}.`, variant: "destructive" });
         return;
     }
-    if(questions.length === 0) {
+    if(questions.length === 0 && !isLoading) { // Check isLoading
         toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
+        return;
+    }
+    if(error && examDetails === null) { // Critical error like exam not found
+        toast({ title: "Cannot Start", description: error || "An error occurred.", variant: "destructive" });
         return;
     }
     setExamStarted(true);
@@ -84,7 +88,6 @@ export default function TakeExamPage() {
   const handleAnswerChangeLocal = (questionId: string, optionId: string) => {
     // TODO: Implement local storage auto-save here
     console.log(`Student Answer for QID ${questionId} saved locally (simulated): OptionID ${optionId}`);
-    // This state would likely live in a higher context or be managed more robustly for auto-save
   };
 
   const handleSubmitExamActual = async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -104,15 +107,22 @@ export default function TakeExamPage() {
     // The ExamTakingInterface handles setting examFinished=true
   };
   
-  const handleTimeUpActual = async () => {
-    // Similar to handleSubmitExamActual, but triggered by timer.
-    // The actual submission logic would be invoked here, possibly with current answers.
-    // ExamTakingInterface handles its own toast for time up
-    // await handleSubmitExamActual(currentAnswers, currentFlaggedEvents); // Need a way to get these from interface or manage state here
-    console.log("Time is up. Auto-submission logic would run here.");
+  const handleTimeUpActual = async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
+    if (!studentUser) {
+        toast({title: "Error: Time Up", description: "Student not authenticated for auto-submission.", variant: "destructive"});
+        return;
+    }
+    console.log("Time is up. Auto-submitting answers:", answers);
+    console.log("Time is up. Auto-submitting flagged events:", flaggedEvents);
+    // Actual submission logic:
+    // await handleSubmitExamActual(answers, flaggedEvents); 
+    // The ExamTakingInterface handles its own toast for time up, then calls this.
+    // We can add another toast here if needed or rely on handleSubmitExamActual's toast.
+     await new Promise(resolve => setTimeout(resolve, 1500)); 
+     toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up (simulation)." });
   };
 
-  if (isLoading && !examStarted) { // Initial page load before exam details are fetched
+  if (isLoading && !examStarted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -121,7 +131,6 @@ export default function TakeExamPage() {
     );
   }
   
-  // This critical error state remains for when examDetails *could not* be fetched at all
   if (error && !examDetails && !isLoading) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
@@ -140,12 +149,12 @@ export default function TakeExamPage() {
       examDetails={examDetails}
       questions={questions}
       isLoading={isLoading}
-      error={error} // Pass down error related to fetching exam data (e.g., exam not active)
+      error={error} 
       examStarted={examStarted}
       onStartExam={handleStartExam}
       onAnswerChange={handleAnswerChangeLocal}
       onSubmitExam={handleSubmitExamActual}
-      onTimeUp={handleTimeUpActual}
+      onTimeUp={(currentAnswers, currentFlaggedEvents) => handleTimeUpActual(currentAnswers, currentFlaggedEvents)}
       isDemoMode={false}
       userIdForActivityMonitor={studentUser?.user_id || 'anonymous_student'}
     />

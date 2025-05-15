@@ -1,15 +1,14 @@
 
 'use client';
 
-import { useEffect, useRef } _from_ 'react';
-import type { FlaggedEvent, FlaggedEventType } _from_ '@/types/supabase'; // Using type from central location
+import { useEffect, useRef } from 'react';
+import type { FlaggedEvent, FlaggedEventType } from '@/types/supabase';
 
 interface UseActivityMonitorProps {
-  studentId: string; // Can be actual student ID or a demo identifier
+  studentId: string; 
   examId: string;
   onFlagEvent: (event: FlaggedEvent) => void;
-  enabled?: boolean; // Overall toggle for the monitor
-  isDemoMode?: boolean; // Special mode for teacher demos
+  enabled?: boolean; 
 }
 
 export function useActivityMonitor({
@@ -17,7 +16,6 @@ export function useActivityMonitor({
   examId,
   onFlagEvent,
   enabled = true,
-  isDemoMode = false,
 }: UseActivityMonitorProps) {
   const onFlagEventRef = useRef(onFlagEvent);
 
@@ -31,7 +29,7 @@ export function useActivityMonitor({
     const createEvent = (type: FlaggedEventType, details?: string): FlaggedEvent => ({
       type,
       timestamp: new Date(),
-      studentId, // This will be the generic ID passed in props
+      studentId,
       examId,
       details,
     });
@@ -65,7 +63,6 @@ export function useActivityMonitor({
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
 
-    // Initial check for fullscreen
     if (document.fullscreenElement) {
         onFlagEventRef.current(createEvent('fullscreen_entered', "Initial state: fullscreen"));
     }
@@ -77,7 +74,5 @@ export function useActivityMonitor({
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [enabled, studentId, examId, isDemoMode]); // isDemoMode included if behavior needs to change
+  }, [enabled, studentId, examId]);
 }
-
-    
