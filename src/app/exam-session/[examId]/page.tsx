@@ -23,52 +23,83 @@ export default function ExamSessionPage() {
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // General page loading, true until token validated & data fetched or failed
   const [error, setError] = useState<string | null>(null);
   const [isValidSession, setIsValidSession] = useState(false);
 
   const studentUserId = studentUser?.user_id;
   const studentName = studentUser?.name;
 
+  // Effect for Token Validation
   useEffect(() => {
-    const token = searchParams.get('token');
-    if (!token) {
-      setError("Access denied. Missing required exam token.");
-      setIsLoading(false);
-      setIsValidSession(false);
+    console.log(`[ExamSessionPage TokenValidationEffect] Running. authIsLoading: ${authIsLoading}, studentUserId: ${studentUserId}, examId: ${examId}`);
+
+    if (authIsLoading) {
+      console.log("[ExamSessionPage TokenValidationEffect] Auth is loading, waiting for user context.");
+      // Still loading auth, don't validate token yet. Keep main `isLoading` true.
+      // setIsLoading(true); // Already true by default
       return;
     }
+
+    // Auth is loaded, now check if we have a studentUserId
+    if (!studentUserId) {
+      console.error("[ExamSessionPage TokenValidationEffect] Auth loaded, but studentUserId is missing. Cannot validate token.");
+      setError("Authentication details missing. Please ensure you are logged in and try re-initiating the exam.");
+      setIsValidSession(false);
+      setIsLoading(false); // Stop page loading, validation failed
+      return;
+    }
+
+    const token = searchParams.get('token');
+    if (!token) {
+      setError("Access denied. Missing required exam token. Please re-initiate the exam.");
+      setIsValidSession(false);
+      setIsLoading(false); // Stop page loading
+      return;
+    }
+
+    console.log(`[ExamSessionPage TokenValidationEffect] Attempting to validate token. Context studentId: ${studentUserId}`);
     try {
       const decoded = typeof window !== 'undefined' ? atob(decodeURIComponent(token)) : '';
       const payload = JSON.parse(decoded);
-      if (payload.examId !== examId || payload.studentId !== studentUserId) {
-        throw new Error("Invalid token payload. Session mismatch.");
-      }
-      // Optional: Check timestamp if payload.timestamp is too old etc.
-      // For simplicity, we're just checking examId and studentId match.
-      setIsValidSession(true);
-    } catch (e: any) {
-      setError(e.message || "Invalid or expired exam session token. Please re-initiate the exam.");
-      setIsLoading(false);
-      setIsValidSession(false);
-    }
-  }, [searchParams, examId, studentUserId]);
+      console.log("[ExamSessionPage TokenValidationEffect] Decoded token payload:", payload);
 
+      if (payload.examId !== examId || payload.studentId !== studentUserId) {
+        console.error(
+          `[ExamSessionPage TokenValidationEffect] Token Mismatch! ` +
+          `Token ExamID: ${payload.examId} vs URL ExamID: ${examId}. ` +
+          `Token StudentID: ${payload.studentId} vs Context StudentID: ${studentUserId}`
+        );
+        throw new Error("Invalid token payload. Session mismatch. Please re-initiate the exam.");
+      }
+      console.log("[ExamSessionPage TokenValidationEffect] Token validation successful.");
+      setIsValidSession(true);
+      setError(null); // Clear any previous errors
+      // setIsLoading(true); // Keep true, data fetching will handle setting it to false
+    } catch (e: any) {
+      console.error("[ExamSessionPage TokenValidationEffect] Token validation error:", e.message);
+      setError(e.message || "Invalid or expired exam session token. Please re-initiate the exam.");
+      setIsValidSession(false);
+      setIsLoading(false); // Stop page loading, token invalid
+    }
+  }, [searchParams, examId, studentUserId, authIsLoading]); // Key dependencies
 
   const fetchExamData = useCallback(async () => {
+    console.log(`[ExamSessionPage fetchExamData] Called. examId: ${examId}, studentUserId: ${studentUserId}`);
     if (!examId || !supabase) {
       setError(examId ? "Supabase client not available." : "Exam ID is missing.");
       setIsLoading(false);
       return;
     }
-     if (!studentUserId && !authIsLoading) {
-      setError("Student authentication details missing.");
-      setIsLoading(false);
-      return;
+    // studentUserId check is now more robustly handled by the token validation effect triggering this.
+    // However, a guard here is still good practice.
+    if (!studentUserId) {
+        setError("Student authentication details became unavailable before fetching exam data.");
+        setIsLoading(false);
+        return;
     }
 
-    console.log(`[ExamSessionPage] Fetching exam data for examId: ${examId}`);
-    setIsLoading(true);
+    setIsLoading(true); // Explicitly set loading for data fetch
     setError(null);
     try {
       const { data, error: fetchError } = await supabase
@@ -85,7 +116,7 @@ export default function ExamSessionPage() {
 
       if (effectiveStatus !== 'Ongoing') {
          setError(`This exam is currently ${effectiveStatus.toLowerCase()} and cannot be taken. Please close this tab.`);
-         setExamDetails(currentExam);
+         setExamDetails(currentExam); // Still set details for context if needed
          setQuestions([]);
          setIsLoading(false);
          return;
@@ -103,7 +134,6 @@ export default function ExamSessionPage() {
       setQuestions(currentExam.questions || []);
       
       // TODO: Create or update ExamSubmissionsX record on exam start
-      // This is a critical step for tracking progress and submissions.
       console.log("[ExamSessionPage] TODO: Create/Update ExamSubmissionsX record on exam start for student:", studentUserId, "exam:", examId);
 
     } catch (e: any) {
@@ -113,26 +143,33 @@ export default function ExamSessionPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, studentUserId, authIsLoading]);
+  }, [examId, supabase, studentUserId]); // Removed authIsLoading as it's handled by the calling effect
 
+  // Effect for Fetching Exam Data, depends on isValidSession
   useEffect(() => {
-    if (isValidSession && examId && !authIsLoading) {
-        if (studentUserId) {
-            if (!examDetails && !error && isLoading) {
-                fetchExamData();
-            }
-        } else if (!error && isLoading) {
-            setError("Student authentication details are not available. Cannot load exam.");
-            setIsLoading(false);
+    console.log(`[ExamSessionPage DataFetchEffect] Running. isValidSession: ${isValidSession}, authIsLoading: ${authIsLoading}, studentUserId: ${studentUserId}, examId: ${examId}`);
+    if (isValidSession && !authIsLoading && studentUserId && examId) {
+        // Only fetch if session is valid, auth is loaded, studentUserId is present,
+        // and we haven't already fetched successfully or encountered an error that prevents fetching.
+        if (!examDetails && !error) {
+            console.log("[ExamSessionPage DataFetchEffect] Conditions met, calling fetchExamData.");
+            fetchExamData();
+        } else if (examDetails) {
+            console.log("[ExamSessionPage DataFetchEffect] Exam details already loaded.");
+            setIsLoading(false); // Ensure loading is false if details already present
+        } else if (error) {
+             console.log("[ExamSessionPage DataFetchEffect] Error present, not fetching exam data.");
+             setIsLoading(false); // Ensure loading is false if error present
         }
-    } else if (!isValidSession && !isLoading && !error) {
-        // If session is not valid and we are not already loading/errored, set an error.
-        // The initial useEffect for token validation should set an error if token is bad.
-        if (!searchParams.get('token')) { // Redundant check, but safe.
-             setError("Access denied. Missing required exam token.");
-        }
+    } else if (!isValidSession && !authIsLoading && !isLoading && !error) {
+        // If session became invalid after auth load (e.g., token check failed after auth loaded but before token was processed)
+        // and we're not already showing an error from token validation.
+        // This case might be redundant if token validation sets error correctly.
+        console.log("[ExamSessionPage DataFetchEffect] Session is not valid and not loading auth/data, and no primary error. Setting generic token error.");
+        // setError("Exam session could not be validated. Please re-initiate.");
+        // No need to set isLoading(false) here as it's already false or handled by token validation.
     }
-  }, [isValidSession, examId, authIsLoading, studentUserId, examDetails, error, isLoading, fetchExamData, searchParams]);
+  }, [isValidSession, examId, authIsLoading, studentUserId, examDetails, error, fetchExamData, isLoading]);
 
 
   const handleAnswerChangeLocal = useCallback((questionId: string, optionId: string) => {
@@ -151,28 +188,16 @@ export default function ExamSessionPage() {
     const submissionData: Partial<ExamSubmissionInsert> = {
         exam_id: examDetails.exam_id,
         student_user_id: studentUserId,
-        answers: answers as any,
-        flagged_events: flaggedEvents.length > 0 ? flaggedEvents as any : null,
+        answers: answers as any, // Cast for now, ensure Question type is correct
+        flagged_events: flaggedEvents.length > 0 ? flaggedEvents as any : null, // Cast for now
         status: 'Completed',
         submitted_at: new Date().toISOString(),
-        // Score calculation would happen server-side on submission or by teacher later
     };
 
-    // TODO: Implement actual submission to 'ExamSubmissionsX' table
     console.log("[ExamSessionPage] TODO: Save final submission data to Supabase ExamSubmissionsX:", submissionData);
-    // Example:
-    // const { error: submissionError } = await supabase.from('ExamSubmissionsX')
-    //   .update(submissionData) // or .upsert if an initial record was made
-    //   .eq('exam_id', examDetails.exam_id)
-    //   .eq('student_user_id', studentUserId);
-    // if (submissionError) { 
-    //   toast({ title: "Submission Failed", description: submissionError.message, variant: "destructive" });
-    //   throw submissionError; 
-    // }
     await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate DB call
 
     toast({ title: "Exam Submitted!", description: "Your responses have been recorded (simulated). You can close this tab." });
-    // ExamTakingInterface will show the finished screen.
   }, [studentUserId, examDetails, toast, supabase]);
 
   const handleTimeUpActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -192,98 +217,64 @@ export default function ExamSessionPage() {
         submitted_at: new Date().toISOString(),
     };
     
-    // TODO: Implement actual auto-submission to 'ExamSubmissionsX' table
     console.log("[ExamSessionPage] TODO: Auto-save final submission data (Time Up):", submissionData);
-    // Example:
-    // const { error: submissionError } = await supabase.from('ExamSubmissionsX')
-    //   .update(submissionData)
-    //   .eq('exam_id', examDetails.exam_id)
-    //   .eq('student_user_id', studentUserId);
-    // if (submissionError) { 
-    //   toast({ title: "Auto-Submission Failed", description: submissionError.message, variant: "destructive" });
-    //   throw submissionError;
-    // }
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up (simulation). You can close this tab." });
   }, [studentUserId, examDetails, toast, supabase]);
 
-  if (!isValidSession && !isLoading && error) {
-    // This error is specifically for invalid session/token before exam data fetch attempt
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Invalid Exam Session</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">{error}</p>
-        <p className="text-xs text-muted-foreground text-center mt-2">Please re-initiate the exam from your dashboard or contact support.</p>
-      </div>
-    );
-  }
 
-  if (authIsLoading || (isLoading && !examDetails && !error && isValidSession)) {
+  // Initial loading states: Could be auth loading OR token validation OR data fetching
+  if (isLoading || authIsLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-muted-foreground">Loading exam: {examId}...</p>
+        <p className="text-lg text-muted-foreground">
+          {authIsLoading && !studentUserId ? "Authenticating session..." : 
+           isLoading && !isValidSession && !error ? "Validating exam session..." :
+           isLoading ? `Loading exam: ${examId}...` : 
+           "Preparing exam..."}
+        </p>
       </div>
     );
   }
-
-  if (error && isValidSession) { // Error during exam data fetching, but session token was valid
+  
+  // After all loading, if there's an error (from token validation or data fetch)
+  if (error) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg text-destructive text-center mb-2">Cannot Start Exam</p>
         <p className="text-sm text-muted-foreground text-center mb-4">{error}</p>
-        <p className="text-xs text-muted-foreground text-center mt-2">You may close this tab.</p>
+        <p className="text-xs text-muted-foreground text-center mt-2">You may close this tab or try re-initiating the exam process.</p>
       </div>
     );
   }
   
-  if (!examDetails && !isLoading && isValidSession) {
+  // If loading is done, no error, but examDetails still not loaded (should be rare if logic above is correct)
+  if (!examDetails) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Exam Not Found</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">Could not load details for this exam after session validation. You may close this tab.</p>
+        <p className="text-lg text-destructive text-center mb-2">Exam Data Not Available</p>
+        <p className="text-sm text-muted-foreground text-center mb-4">Could not load details for this exam. Please try again or contact support.</p>
       </div>
     );
   }
 
-  if (!isValidSession && !isLoading && !error) { // Should be caught by initial token check error
-     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Exam Session Invalid</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">The exam session could not be validated. Please try joining the exam again.</p>
-      </div>
-    );
-  }
-
-  if (!examDetails || !isValidSession) {
-      // Final catch-all if examDetails is null or session invalid by this point.
-      // Should be caught by earlier checks.
-       return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
-            <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-            <p className="text-lg text-destructive">Could not start exam.</p>
-            <p className="text-sm text-muted-foreground">Missing exam details or invalid session.</p>
-        </div>
-        );
-  }
-
+  // If we reach here, session is valid, auth is loaded, no errors, and examDetails are present.
   return (
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions || []}
-      isLoading={isLoading && !examDetails} 
-      error={error}
+      isLoading={false} // Data fetching isLoading is handled by this page now
+      error={null} // Errors are handled by this page
       examStarted={true} // This page represents an active exam session
       onAnswerChange={handleAnswerChangeLocal}
       onSubmitExam={handleSubmitExamActual}
       onTimeUp={handleTimeUpActual}
       isDemoMode={false}
-      userIdForActivityMonitor={studentUserId || 'anonymous_student_session'}
+      userIdForActivityMonitor={studentUserId || 'anonymous_student_session'} // studentUserId should be defined here
       studentName={studentName}
       studentRollNumber={studentUserId} // Using user_id as roll number
     />
