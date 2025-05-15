@@ -30,14 +30,13 @@ interface SidebarElementsProps {
   user: CustomUser | null; 
   signOut: () => Promise<void>; 
   authLoading: boolean;
-  className?: string; // Added className prop
+  className?: string; 
 }
 
 export function SidebarElements({ navItems, userRoleDashboard, user, signOut, authLoading, className }: SidebarElementsProps) {
   const pathname = usePathname();
 
   return (
-    // Sidebar now has glassmorphic effect from parent SidebarProvider or its own passed className
     <Sidebar 
         collapsible="icon" 
         className={className} // Apply passed className for effects like backdrop-blur
@@ -45,8 +44,8 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
       <SidebarHeader className="p-4 border-b border-sidebar-border/30">
         <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            <ShieldCheck className="h-7 w-7 text-primary" />
-            <span className="font-semibold text-lg text-sidebar-foreground">ProctorPrep</span>
+            <ShieldCheck className="h-8 w-8 text-primary" />
+            <span className="font-semibold text-xl text-sidebar-foreground">ProctorPrep</span>
           </Link>
           <SidebarTrigger className="text-sidebar-foreground/70 hover:text-sidebar-foreground" />
         </div>
@@ -55,7 +54,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
         {user && (
           <div className="px-2 py-3 mb-2 border-b border-sidebar-border/20 group-data-[collapsible=icon]:hidden">
             <div className="flex items-center gap-3">
-              <UserCircle2 className="h-8 w-8 text-sidebar-primary"/>
+              <UserCircle2 className="h-10 w-10 text-sidebar-primary"/>
               <div>
                 <p className="text-sm font-medium text-sidebar-foreground truncate" title={user.name || user.email}>
                   {user.name || user.email}
@@ -80,10 +79,11 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                 isActive={pathname.startsWith(item.href)}
                 tooltip={{ 
                     children: item.label, 
-                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50"
+                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50 shadow-lg"
                 }}
                 disabled={item.disabled}
-                className="data-[active=true]:bg-sidebar-primary/20 data-[active=true]:text-sidebar-primary hover:bg-sidebar-accent/70 focus:bg-sidebar-accent/70"
+                className="data-[active=true]:bg-sidebar-primary/20 data-[active=true]:text-sidebar-primary hover:bg-sidebar-accent/70 focus:bg-sidebar-accent/70 text-sidebar-foreground/90 hover:text-sidebar-foreground"
+                // The glow effect is now primarily handled by global CSS targeting data-sidebar="menu-button"
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
@@ -102,9 +102,9 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                 isActive={pathname.startsWith(`/${userRoleDashboard}/dashboard/settings`)} 
                 tooltip={{ 
                     children: "Settings", 
-                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50"
+                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50 shadow-lg"
                 }}
-                className="hover:bg-sidebar-accent/70 focus:bg-sidebar-accent/70"
+                className="hover:bg-sidebar-accent/70 focus:bg-sidebar-accent/70 text-sidebar-foreground/90 hover:text-sidebar-foreground"
               >
                 <Link href={`/${userRoleDashboard}/dashboard/settings`}>
                   <Settings className="h-5 w-5" />
@@ -122,7 +122,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                   className="text-destructive hover:bg-destructive/20 hover:text-destructive border-destructive/50 focus:bg-destructive/20"
                   tooltip={{ 
                     children: "Logout", 
-                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50"
+                    className: "group-data-[collapsible=icon]:block hidden bg-popover/90 text-popover-foreground backdrop-blur-sm border-border/50 shadow-lg"
                    }}
                   disabled={authLoading}
               >

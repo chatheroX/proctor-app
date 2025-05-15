@@ -1,20 +1,20 @@
 
-'use client'; // Added 'use client'
+'use client'; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Edit3, History, UserCircle, ArrowRight, ShieldAlert } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
+import { useAuth } from "@/contexts/AuthContext"; 
 
 export default function StudentOverviewPage() {
-  const { user } = useAuth(); // Get user from context
+  const { user } = useAuth(); 
 
   return (
     // TODO: Add Framer Motion wrapper for staggered item reveal
     <div className="space-y-8 w-full">
-      <div className="p-6 rounded-xl bg-gradient-to-r from-primary/80 to-accent/70 text-primary-foreground shadow-xl">
-        {/* TODO: Add Framer Motion text animation */}
-        <h1 className="text-4xl font-bold drop-shadow-md">Welcome, {user?.name || 'Student'}!</h1>
+      {/* TODO: Add Framer Motion text animation */}
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-primary/90 via-primary to-[hsl(var(--accent-gradient-end))] text-primary-foreground shadow-xl">
+        <h1 className="text-3xl md:text-4xl font-bold drop-shadow-lg">Welcome, {user?.name || 'Student'}!</h1>
         <p className="text-lg opacity-90 mt-2 drop-shadow-sm">
           Manage your exams, view your history, and keep your profile up to date.
         </p>
@@ -22,16 +22,16 @@ export default function StudentOverviewPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* TODO: Add Framer Motion for hover scale/lift effects */}
-        <Card className="glass-card hover:shadow-primary/20 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
-          <CardHeader className="pb-3">
+        <Card className="glass-card hover:shadow-primary/20 transition-all duration-300 ease-in-out transform hover:-translate-y-1.5">
+          <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-xl font-semibold">
               <Edit3 className="h-7 w-7 text-primary" />
               Join an Exam
             </CardTitle>
-            <CardDescription className="pt-1 text-sm">Ready for your next assessment? Enter an exam code to begin.</CardDescription>
+            <CardDescription className="pt-1 text-sm text-muted-foreground">Ready for your next assessment? Enter an exam code to begin.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild className="w-full py-3 text-base shadow-md hover:shadow-lg transition-shadow">
+            <Button asChild className="btn-gradient w-full py-3 text-base rounded-lg">
               <Link href="/student/dashboard/join-exam">
                 Go to Join Exam <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -39,16 +39,16 @@ export default function StudentOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="glass-card hover:shadow-primary/20 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
-          <CardHeader className="pb-3">
+        <Card className="glass-card hover:shadow-primary/20 transition-all duration-300 ease-in-out transform hover:-translate-y-1.5">
+          <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-xl font-semibold">
               <History className="h-7 w-7 text-primary" />
               View Exam History
             </CardTitle>
-            <CardDescription className="pt-1 text-sm">Review your past exam attempts and scores (Feature upcoming).</CardDescription>
+            <CardDescription className="pt-1 text-sm text-muted-foreground">Review your past exam attempts and scores (Feature upcoming).</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild className="w-full py-3 text-base" variant="secondary">
+            <Button asChild className="w-full py-3 text-base rounded-lg border-border hover:bg-accent/10" variant="outline">
               <Link href="/student/dashboard/exam-history">
                 Check History <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -56,16 +56,16 @@ export default function StudentOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="glass-card hover:shadow-primary/20 transition-all duration-300 ease-in-out transform hover:-translate-y-1">
-          <CardHeader className="pb-3">
+        <Card className="glass-card hover:shadow-primary/20 transition-all duration-300 ease-in-out transform hover:-translate-y-1.5">
+          <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-3 text-xl font-semibold">
               <UserCircle className="h-7 w-7 text-primary" />
               Update Profile
             </CardTitle>
-            <CardDescription className="pt-1 text-sm">Keep your personal information current.</CardDescription>
+            <CardDescription className="pt-1 text-sm text-muted-foreground">Keep your personal information current.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild className="w-full py-3 text-base" variant="secondary">
+            <Button asChild className="w-full py-3 text-base rounded-lg border-border hover:bg-accent/10" variant="outline">
               <Link href="/student/dashboard/profile">
                 Edit Profile <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

@@ -9,86 +9,94 @@ body {
 
 @layer base {
   :root {
-    /* New Theme: Modern & Cool Blue with Glassmorphism */
+    /* New Theme: Modern & Sleek with Glassmorphism */
     --background: 220 20% 98%; /* Light, slightly cool off-white */
-    --foreground: 220 15% 20%; /* Dark grey for text */
+    --foreground: 220 15% 25%; /* Darker grey for text for better contrast */
 
-    --card: 220 20% 100%; /* Base for cards, can be made semi-transparent */
+    --card: 220 30% 100%; /* Base for cards, will be made semi-transparent for glass */
     --card-foreground: 220 15% 20%;
 
-    --popover: 220 20% 100%;
+    --popover: 220 25% 99%;
     --popover-foreground: 220 15% 20%;
 
-    --primary: 210 70% 55%; /* Cool Blue */
-    --primary-foreground: 0 0% 100%; /* White text on primary */
+    /* Primary color (e.g., for icons, active states, gradient start) */
+    --primary: 210 75% 60%; /* Vibrant Blue */
+    --primary-foreground: 0 0% 100%; 
 
-    --secondary: 220 15% 90%; /* Lighter grey */
-    --secondary-foreground: 220 15% 25%;
+    /* Accent color for gradients or secondary highlights */
+    --accent-gradient-end: 260 80% 65%; /* Vibrant Purple/Magenta */
 
-    --muted: 220 15% 94%; /* Slightly darker muted */
-    --muted-foreground: 220 10% 45%;
+    --secondary: 220 15% 92%; /* Lighter grey for secondary elements */
+    --secondary-foreground: 220 15% 30%;
 
-    --accent: 170 70% 45%; /* Teal for accents */
+    --muted: 220 15% 95%; 
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 180 65% 55%; /* Teal/Cyan for general accents */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 55%;
+    --destructive: 0 70% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 20% 85%; /* Softer border */
-    --input: 220 20% 92%;
-    --ring: 210 70% 55%; /* Primary color for rings */
+    --border: 220 20% 90%; /* Softer border */
+    --input: 220 20% 96%;
+    --ring: 210 75% 60%; /* Primary color for rings */
     
-    --radius: 0.75rem; /* Slightly more rounded */
+    --radius: 0.75rem; /* Consistent rounded corners */
 
     /* Sidebar specific theme variables */
-    --sidebar-background: 220 15% 15%; 
-    --sidebar-foreground: 220 10% 90%;
-    --sidebar-primary: 210 70% 55%; /* Consistent with main primary */
+    --sidebar-background: 220 15% 12%; /* Darker base for contrast with glass */
+    --sidebar-foreground: 220 10% 85%;
+    --sidebar-primary: 210 75% 65%; 
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 25%;
+    --sidebar-accent: 220 15% 22%;
     --sidebar-accent-foreground: 220 10% 90%;
-    --sidebar-border: 220 15% 25%;
-    --sidebar-ring: 210 70% 60%;
+    --sidebar-border: 220 15% 25%; /* For subtle borders within sidebar */
+    --sidebar-ring: 210 75% 65%;
+    --sidebar-glow-color: hsl(var(--primary) / 0.3); /* For hover glow */
   }
 
   .dark {
-    --background: 220 15% 10%; /* Dark cool grey */
-    --foreground: 220 10% 95%;
+    --background: 220 15% 10%; 
+    --foreground: 220 10% 92%;
 
-    --card: 220 15% 18%; 
-    --card-foreground: 220 10% 95%;
+    --card: 220 15% 15%; 
+    --card-foreground: 220 10% 92%;
 
     --popover: 220 15% 12%;
-    --popover-foreground: 220 10% 95%;
+    --popover-foreground: 220 10% 92%;
 
-    --primary: 210 65% 60%; /* Slightly lighter primary for dark mode */
+    --primary: 210 70% 65%; /* Slightly lighter primary for dark mode */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 25%; 
-    --secondary-foreground: 220 10% 90%;
+    --accent-gradient-end: 260 75% 70%; /* Adjusted for dark mode */
 
-    --muted: 220 15% 20%;
-    --muted-foreground: 220 10% 65%;
+    --secondary: 220 15% 20%; 
+    --secondary-foreground: 220 10% 85%;
 
-    --accent: 170 60% 50%; /* Lighter/adjusted accent for dark mode */
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 60%;
+
+    --accent: 180 60% 60%; 
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 60% 50%;
+    --destructive: 0 65% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 30%; 
-    --input: 220 15% 22%;
-    --ring: 210 65% 60%;
-
+    --border: 220 15% 28%; 
+    --input: 220 15% 17%;
+    --ring: 210 70% 65%;
+    
     /* Sidebar dark theme variables */
-    --sidebar-background: 220 15% 10%; 
-    --sidebar-foreground: 220 10% 90%;
-    --sidebar-primary: 210 65% 60%;
+    --sidebar-background: 220 15% 8%; 
+    --sidebar-foreground: 220 10% 88%;
+    --sidebar-primary: 210 70% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 20%;
+    --sidebar-accent: 220 15% 18%;
     --sidebar-accent-foreground: 220 10% 90%;
     --sidebar-border: 220 15% 20%;
-    --sidebar-ring: 210 65% 65%;
+    --sidebar-ring: 210 70% 70%;
+    --sidebar-glow-color: hsl(var(--primary) / 0.4);
   }
 }
 
@@ -98,6 +106,7 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    /* Soft gradient background for the entire app */
     @apply bg-gradient-to-br from-background via-muted to-background;
     min-height: 100vh;
     display: flex;
@@ -108,7 +117,25 @@ body {
   }
 }
 
-/* Basic glassmorphism utility */
+/* Glassmorphism utility for cards */
 .glass-card {
-  @apply bg-card/60 dark:bg-card/70 backdrop-blur-lg border border-white/20 dark:border-white/10 shadow-xl rounded-2xl;
+  @apply bg-card/70 dark:bg-card/75 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-lg dark:shadow-black/20 rounded-2xl;
+  /* Softer shadow: shadow-lg, more defined: shadow-xl */
+}
+
+/* Gradient button style (apply this class to buttons) */
+.btn-gradient {
+  @apply bg-gradient-to-r from-primary to-[hsl(var(--accent-gradient-end))] text-primary-foreground hover:opacity-90 transition-opacity shadow-md hover:shadow-lg;
+}
+
+/* Sidebar specific glow effect for menu items on hover/focus */
+/* This might need to target specific classes or data-attributes from the sidebar component */
+[data-sidebar="menu-button"]:hover:not([data-active="true"]),
+[data-sidebar="menu-button"]:focus-visible:not([data-active="true"]) {
+  box-shadow: 0 0 15px 3px var(--sidebar-glow-color), 0 0 25px 5px var(--sidebar-glow-color) inset;
+  /* transform: scale(1.02); */ /* Optional: slight scale on hover */
+  transition: box-shadow 0.3s ease-out, transform 0.3s ease-out;
+}
+[data-sidebar="menu-button"][data-active="true"] {
+   box-shadow: 0 0 10px 2px var(--sidebar-glow-color), 0 0 15px 3px var(--sidebar-glow-color) inset;
 }
