@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,14 +17,12 @@ import type { CustomUser } from '@/types/supabase';
 type AuthAction = 'login' | 'register';
 
 const AUTH_ROUTE = '/auth';
-const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
-const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-
+// Redirection targets are now primarily handled by AuthContext
 
 export function AuthForm() {
-  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname(); // Correctly placed
   const { toast } = useToast();
   const { user, isLoading: authContextLoading, signIn, signUp } = useAuth();
 
@@ -38,13 +36,16 @@ export function AuthForm() {
   const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // For form submission loading state
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setAction((searchParams.get('action') as AuthAction) || 'login');
-    setRole(''); // Reset role on action change
-  }, [searchParams]);
-
+    const newAction = (searchParams.get('action') as AuthAction) || 'login';
+    if (newAction !== action) {
+        setAction(newAction);
+        // Reset fields when action changes via URL
+        setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
+    }
+  }, [searchParams, action]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +88,7 @@ export function AuthForm() {
       result = await signUp(trimmedEmail, password, trimmedFullName, role as 'student' | 'teacher');
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        // Redirection is now handled by AuthContext's useEffect
+        // Redirection is handled by AuthContext's useEffect
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -95,7 +96,7 @@ export function AuthForm() {
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-         // Redirection is now handled by AuthContext's useEffect
+         // Redirection is handled by AuthContext's useEffect
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
@@ -103,9 +104,8 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
-  // This loader shows when AuthContext is initially determining user state.
-  // It's specific to the /auth page to avoid flashes on other pages.
-  if (authContextLoading && user === undefined && pathname === AUTH_ROUTE) {
+  // This loader shows when AuthContext is initially determining user state for the /auth page.
+  if (authContextLoading && pathname === AUTH_ROUTE && user === null) { // Check user is null, not undefined
     console.log("[AuthForm] AuthContext loading initial state for /auth, showing page loader.");
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
@@ -117,12 +117,27 @@ export function AuthForm() {
   // If user is authenticated (by AuthContext) and on /auth page, show "Finalizing..."
   // AuthContext's useEffect is responsible for the actual redirect.
   if (user && !authContextLoading && pathname === AUTH_ROUTE) {
-    console.log("[AuthForm] User is authenticated on /auth page. AuthContext should redirect. User:", user.email, "Role:", user.role);
+    console.log("[AuthForm] User IS authenticated on /auth page. AuthContext should redirect. User:", user.email, "Role:", user.role);
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12">
         <p className="mb-2 text-lg">Finalizing session & redirecting to dashboard...</p>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="mt-2 text-sm text-muted-foreground">User: {user.email}, Role: {user.role}</p>
+      </div>
+    );
+  }
+
+  // If explicitly not loading, and no user, and on /auth page, render the form.
+  // This handles the case after initial load where user is determined to be unauthenticated.
+  if (!authContextLoading && !user && pathname === AUTH_ROUTE) {
+    console.log("[AuthForm] Ready to render form. authContextLoading:", authContextLoading, "user:", user);
+  } else if (pathname !== AUTH_ROUTE && !user && !authContextLoading) {
+    // This case should ideally be caught by middleware or AuthContext's main redirect effect
+    // but if somehow an unauth user is on a non-auth page, they'll see a brief load.
+    console.log("[AuthForm] Unexpected state: Unauthenticated user on non-auth page. Pathname:", pathname);
+     return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="ml-2">Loading...</p>
       </div>
     );
   }
@@ -133,7 +148,6 @@ export function AuthForm() {
       <Card className="w-full max-w-md shadow-xl">
         <Tabs value={action} onValueChange={(value) => {
           setAction(value as AuthAction);
-          // Reset fields when switching between login/register
           setEmail(''); setPassword(''); setFullName(''); setConfirmPassword(''); setRole('');
         }} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
