@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, PlayCircle, ServerCrash } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, PlayCircle, ServerCrash, UserCircle, Hash, BookOpen } from 'lucide-react';
 import { ExamTimerWarning } from '@/components/student/exam-timer-warning';
 import { useActivityMonitor, type FlaggedEvent } from '@/hooks/use-activity-monitor';
 import { useToast } from '@/hooks/use-toast';
@@ -17,14 +18,16 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean; // True if parent page is still loading exam details.
-  error: string | null; // Error from parent page's data fetching for the exam
-  examStarted: boolean; // If true, shows questions. This should always be true when this component is used by `take/page.tsx`
+  isLoading: boolean;
+  error: string | null;
+  examStarted: boolean; // Should always be true when rendered by initiate/take pages
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   isDemoMode?: boolean;
   userIdForActivityMonitor: string;
+  studentName?: string | null;
+  studentRollNumber?: string | null;
 }
 
 export function ExamTakingInterface({
@@ -33,22 +36,22 @@ export function ExamTakingInterface({
   initialAnswers,
   isLoading: parentIsLoading,
   error: examLoadingError,
-  examStarted, // Should be true when rendered by take/page.tsx
+  examStarted,
   onAnswerChange,
   onSubmitExam,
   onTimeUp: parentOnTimeUpProp,
   isDemoMode = false,
   userIdForActivityMonitor,
+  studentName,
+  studentRollNumber,
 }: ExamTakingInterfaceProps) {
   const { toast } = useToast();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>(() => initialAnswers || {});
+  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
   const [examFinished, setExamFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
   const [internalError, setInternalError] = useState<string | null>(null);
-
-  console.log('[ExamTakingInterface] Props received:', { examDetailsExists: !!examDetails, questionsLength: questions?.length, parentIsLoading, examLoadingError, examStarted, isDemoMode });
 
   const parentOnTimeUpRef = useRef(parentOnTimeUpProp);
   useEffect(() => {
@@ -79,7 +82,7 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast, setFlaggedEvents]);
+  }, [isDemoMode, toast]);
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -88,27 +91,16 @@ export function ExamTakingInterface({
     onFlagEvent: handleFlagEvent,
   });
 
-  useEffect(() => {
-    // This effect could potentially cause issues if initialAnswers prop changes frequently
-    // For now, it only sets on initial mount or if initialAnswers prop itself changes.
-    // The useState initializer `useState<Record<string, string>>(() => initialAnswers || {});`
-    // already handles the initial setup. This effect is for potential re-sync if prop changes.
-    if (initialAnswers && JSON.stringify(initialAnswers) !== JSON.stringify(answers)) {
-        setAnswers(initialAnswers);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialAnswers]); // Only run if initialAnswers reference changes
-
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange, setAnswers]);
+  }, [onAnswerChange]);
 
   const handleNextQuestion = useCallback(() => {
     if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions, setCurrentQuestionIndex]);
+  }, [currentQuestionIndex, questions]);
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -116,7 +108,7 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]);
+  }, [allowBacktracking, currentQuestionIndex, toast]);
 
   const handleInternalSubmitExam = useCallback(async () => {
     if (examFinished) return;
@@ -131,7 +123,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [onSubmitExam, answers, flaggedEvents, examFinished, toast, setIsSubmitting, setInternalError, setExamFinished]);
+  }, [onSubmitExam, answers, flaggedEvents, examFinished, toast]);
 
   const handleInternalTimeUp = useCallback(async () => {
     if (examFinished) return;
@@ -152,7 +144,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, isDemoMode, toast, examFinished, setIsSubmitting, setInternalError, setExamFinished]);
+  }, [answers, flaggedEvents, isDemoMode, toast, examFinished]);
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -161,13 +153,7 @@ export function ExamTakingInterface({
     }
   }, [currentQuestionId, handleInternalAnswerChange]);
 
-  // ------- UI Rendering Logic Starts Here --------
-
-  // Since this component is now only rendered by `take/page.tsx` (which handles loading/errors for examDetails),
-  // we can assume `examStarted` is true and `examDetails` should be present if this component renders.
-  // parentIsLoading and examLoadingError still signal issues from the parent.
-
-  if (parentIsLoading && !examDetails) { // Parent is still loading the core exam data
+  if (parentIsLoading && !examDetails) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -176,7 +162,7 @@ export function ExamTakingInterface({
     );
   }
 
-  if (examLoadingError && !examDetails) { // Parent had an error fetching exam data
+  if (examLoadingError && !examDetails) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <ServerCrash className="h-12 w-12 text-destructive mb-4" />
@@ -186,10 +172,8 @@ export function ExamTakingInterface({
     );
   }
   
-  // If examDetails are somehow null even after parent loading logic, or examStarted is false
-  // (though examStarted should always be true when used by take/page.tsx)
   if (!examDetails || !examStarted) {
-    console.error("[ExamTakingInterface] Critical error: examDetails is null or examStarted is false. This indicates a problem in the parent page's logic.", { examDetailsExists: !!examDetails, examStarted });
+    console.error("[ExamTakingInterface] Critical error: examDetails is null or examStarted is false.", { examDetailsExists: !!examDetails, examStarted });
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -236,10 +220,8 @@ export function ExamTakingInterface({
           <CardFooter>
             <Button onClick={() => {
               if (isDemoMode && examDetails.exam_id) {
-                // This path is less relevant now as demo mode is removed
                 window.location.href = `/teacher/dashboard/exams/${examDetails.exam_id}/details`;
               } else if (!isDemoMode) {
-                 // For students, redirect to exam history or a generic "exam submitted" page.
                  window.location.href = `/student/dashboard/exam-history`;
               } else {
                 window.close(); 
@@ -253,7 +235,7 @@ export function ExamTakingInterface({
     );
   }
 
-  if (questions.length === 0 && !parentIsLoading) { // Parent finished loading, but no questions
+  if (questions.length === 0 && !parentIsLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -262,7 +244,7 @@ export function ExamTakingInterface({
       </div>
     );
   }
-
+  
    if (!currentQuestion && questions.length > 0 && !parentIsLoading) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
@@ -274,30 +256,51 @@ export function ExamTakingInterface({
   
   const examDurationForTimer = examDetails.duration ?? 0;
   const examTitleForTimer = examDetails.title ?? "Exam";
+  const questionProgress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
 
   return (
-    <div className="flex flex-col min-h-screen bg-muted">
+    <div className="flex flex-col min-h-screen bg-muted/30">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
-          key={`${examDetails.exam_id}-${examDurationForTimer}`} // Key to re-mount if duration/ID changes
+          key={`${examDetails.exam_id}-${examDurationForTimer}`}
           totalDurationSeconds={examDurationForTimer * 60}
           onTimeUp={handleInternalTimeUp}
           examTitle={examTitleForTimer + (isDemoMode ? " (Demo)" : "")}
         />
       )}
-      <main className="flex-grow flex items-center justify-center p-4 pt-20"> {/* pt-20 for timer banner */}
-        <Card className="w-full max-w-2xl shadow-xl">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-xl md:text-2xl">{examDetails.title} {isDemoMode && "(Demo)"}</CardTitle>
-              {questions.length > 0 && <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {questions.length}</span>}
+      
+      {/* Header Section */}
+      <header className="sticky top-[4rem] z-40 w-full bg-background shadow-sm py-3 px-4 md:px-6 border-b">
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4">
+          <div className="flex-grow">
+            <h1 className="text-xl font-semibold text-primary truncate flex items-center">
+              <BookOpen className="mr-2 h-5 w-5" /> {examDetails.title} {isDemoMode && <span className="text-sm font-normal text-orange-500 ml-2">(Demo Mode)</span>}
+            </h1>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+              {studentName && studentRollNumber && (
+                <>
+                  <span className="flex items-center gap-1"><UserCircle className="h-3 w-3" /> {studentName}</span>
+                  <span className="flex items-center gap-1"><Hash className="h-3 w-3" /> {studentRollNumber}</span>
+                </>
+              )}
             </div>
-            {currentQuestion && <CardDescription className="pt-2 text-lg">{currentQuestion.text}</CardDescription>}
+          </div>
+          <div className="text-sm text-muted-foreground w-full md:w-auto text-right">
+            Question {currentQuestionIndex + 1} of {questions.length || 0}
+          </div>
+        </div>
+        {questions.length > 0 && <Progress value={questionProgress} className="mt-2 h-1.5" />}
+      </header>
+
+      <main className="flex-grow flex items-center justify-center p-4 md:p-6">
+        <Card className="w-full max-w-3xl shadow-2xl rounded-lg border">
+          <CardHeader className="bg-card-foreground/5 p-4 md:p-6 rounded-t-lg">
+            {currentQuestion && <CardDescription className="pt-2 text-lg md:text-xl font-medium text-card-foreground">{currentQuestion.text}</CardDescription>}
             {!currentQuestion && questions.length > 0 && (
                 <CardDescription className="pt-2 text-lg text-muted-foreground">Loading question text...</CardDescription>
             )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 md:p-6 space-y-4">
             {currentQuestion?.options ? (
               <RadioGroup
                 value={answers[currentQuestion.id] || ''}
@@ -305,9 +308,9 @@ export function ExamTakingInterface({
                 className="space-y-3"
               >
                 {currentQuestion.options.map((option) => (
-                  <div key={option.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-accent/50 transition-colors has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary">
-                    <RadioGroupItem value={option.id} id={`${currentQuestion.id}-option-${option.id}`} />
-                    <Label htmlFor={`${currentQuestion.id}-option-${option.id}`} className="text-base flex-1 cursor-pointer">{option.text}</Label>
+                  <div key={option.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-primary/5 transition-all duration-150 ease-in-out has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:ring-2 has-[[data-state=checked]]:ring-primary/50">
+                    <RadioGroupItem value={option.id} id={`${currentQuestion.id}-option-${option.id}`} className="h-5 w-5"/>
+                    <Label htmlFor={`${currentQuestion.id}-option-${option.id}`} className="text-base md:text-lg flex-1 cursor-pointer py-1">{option.text}</Label>
                   </div>
                 ))}
               </RadioGroup>
@@ -325,21 +328,22 @@ export function ExamTakingInterface({
                 </Alert>
             )}
           </CardContent>
-          <CardFooter className="flex justify-between border-t pt-6">
+          <CardFooter className="flex justify-between border-t p-4 md:p-6 bg-muted/20 rounded-b-lg">
             <Button
               variant="outline"
               onClick={handlePreviousQuestion}
               disabled={currentQuestionIndex === 0 || !allowBacktracking || !currentQuestion || isSubmitting}
+              className="py-2 px-4 text-base"
             >
-              <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+              <ArrowLeft className="mr-2 h-5 w-5" /> Previous
             </Button>
             {currentQuestionIndex < questions.length -1 ? (
-              <Button onClick={handleNextQuestion} disabled={!currentQuestion || isSubmitting}>
-                Next <ArrowRight className="ml-2 h-4 w-4" />
+              <Button onClick={handleNextQuestion} disabled={!currentQuestion || isSubmitting} className="py-2 px-4 text-base bg-primary hover:bg-primary/90">
+                Next <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             ) : (
-              <Button onClick={handleInternalSubmitExam} disabled={isSubmitting || !currentQuestion} className="bg-green-600 hover:bg-green-700 text-white">
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
+              <Button onClick={handleInternalSubmitExam} disabled={isSubmitting || !currentQuestion} className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 text-base">
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-5 w-5" />}
                 Submit {isDemoMode ? "Demo " : ""}Exam
               </Button>
             )}
@@ -349,3 +353,4 @@ export function ExamTakingInterface({
     </div>
   );
 }
+

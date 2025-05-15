@@ -15,7 +15,7 @@ import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[exa
 export default function TakeExamPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams(); // To potentially read the token
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
   const { user: studentUser, isLoading: authIsLoading } = useAuth();
@@ -26,9 +26,10 @@ export default function TakeExamPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // examStarted state is no longer needed here, ExamTakingInterface assumes it's started
 
   const studentUserId = studentUser?.user_id;
+  const studentName = studentUser?.name;
+  const studentRollNumber = studentUser?.user_id; // Using user_id as roll number
 
   const fetchExamData = useCallback(async () => {
     if (!examId || !supabase) {
@@ -36,7 +37,7 @@ export default function TakeExamPage() {
       setIsLoading(false);
       return;
     }
-     if (!studentUserId && !authIsLoading) { // Wait for auth to resolve before checking studentUserId
+     if (!studentUserId && !authIsLoading) {
       setError("Student authentication details missing.");
       setIsLoading(false);
       return;
@@ -46,14 +47,9 @@ export default function TakeExamPage() {
     setIsLoading(true);
     setError(null);
     try {
-      // For actual SEB integration, you might validate the token from searchParams here
-      // const token = searchParams.get('token');
-      // if (!token) { throw new Error("Exam token missing or invalid. Access denied."); }
-      // Add server-side token validation if implementing actual encryption/SEB server.
-
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('*') // Fetch all columns including questions
+        .select('*')
         .eq('exam_id', examId)
         .single();
 
@@ -81,9 +77,6 @@ export default function TakeExamPage() {
 
       setExamDetails(currentExam);
       setQuestions(currentExam.questions || []);
-      // TODO: Create an initial 'ExamSubmissionsX' record here with status 'In Progress'
-      // This is important for auto-save and resume functionality later.
-      // For now, we'll just log.
       console.log("[TakeExamPage] TODO: Create ExamSubmissionsX record on exam start for student:", studentUserId, "exam:", examId);
 
     } catch (e: any) {
@@ -93,29 +86,26 @@ export default function TakeExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, studentUserId, authIsLoading, searchParams]); // Added searchParams for token
+  }, [examId, supabase, studentUserId, authIsLoading]);
 
   useEffect(() => {
-    // Fetch data only if examId is present and auth state is resolved
     if (examId && !authIsLoading) {
-        // Check if studentUserId is available before fetching
         if (studentUserId) {
-            if (!examDetails && !error && isLoading) { // Fetch only if not already fetched/errored
+            if (!examDetails && !error && isLoading) {
                 fetchExamData();
             }
-        } else if (!error && isLoading) { // If studentUser is still null after auth is no longer loading
+        } else if (!error && isLoading) {
             setError("Student authentication details are not available. Cannot load exam.");
             setIsLoading(false);
         }
     } else if (!isLoading && !examId) {
         setError("Exam ID is missing for fetch.");
-        setIsLoading(false); // Ensure loading stops if no examId
+        setIsLoading(false);
     }
   }, [examId, authIsLoading, studentUserId, examDetails, error, isLoading, fetchExamData]);
 
 
   const handleAnswerChangeLocal = useCallback((questionId: string, optionId: string) => {
-    // TODO: Auto-save this answer to local storage AND attempt to patch to Supabase 'ExamSubmissionsX'
     console.log(`[TakeExamPage] Student Answer for QID ${questionId} saved locally (simulated): OptionID ${optionId}`);
   }, []);
 
@@ -127,22 +117,18 @@ export default function TakeExamPage() {
     console.log('[TakeExamPage] Submitting answers to backend:', answers);
     console.log('[TakeExamPage] Flagged Events to backend:', flaggedEvents);
 
-    // TODO: Update 'ExamSubmissionsX' record to 'Completed', save final answers, flagged_events, calculate score.
     const submissionData: Partial<ExamSubmissionInsert> = {
         exam_id: examId,
         student_user_id: studentUserId,
-        answers: answers as any, // Cast for now, ensure correct type for Supabase
-        flagged_events: flaggedEvents as any, // Cast for now
+        answers: answers as any,
+        flagged_events: flaggedEvents as any,
         status: 'Completed',
         submitted_at: new Date().toISOString(),
-        // Score calculation would happen server-side or here based on correctOptionId
     };
     console.log("[TakeExamPage] TODO: Save final submission data to Supabase ExamSubmissionsX:", submissionData);
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
     toast({ title: "Exam Submitted!", description: "Your responses have been recorded (simulation). You can close this tab." });
-    // Typically, this tab might auto-close or redirect to a "submission successful" page
-    // For now, we leave it to the user to close or the parent tab to handle post-exam navigation
   }, [studentUserId, toast, examId]);
 
   const handleTimeUpActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -158,7 +144,7 @@ export default function TakeExamPage() {
         student_user_id: studentUserId,
         answers: answers as any,
         flagged_events: flaggedEvents as any,
-        status: 'Completed', // Or 'Auto-Completed'
+        status: 'Completed', 
         submitted_at: new Date().toISOString(),
     };
     console.log("[TakeExamPage] TODO: Auto-save final submission data to Supabase ExamSubmissionsX (Time Up):", submissionData);
@@ -177,7 +163,7 @@ export default function TakeExamPage() {
     );
   }
 
-  if (error) { // Show any error that occurred during setup or fetching
+  if (error) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -188,7 +174,7 @@ export default function TakeExamPage() {
     );
   }
   
-  if (!examDetails && !isLoading) { // If loading finished but no details (e.g., exam not found, but no specific error set)
+  if (!examDetails && !isLoading) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -198,20 +184,20 @@ export default function TakeExamPage() {
     );
   }
 
-
-  // ExamTakingInterface now expects examStarted to be implicitly true if rendered
   return (
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions || []}
       isLoading={isLoading && !examDetails} 
-      error={error} // This error is if examDetails is present but something else is wrong internally
-      examStarted={true} // This page only renders the interface if the exam should be active
+      error={error}
+      examStarted={true} 
       onAnswerChange={handleAnswerChangeLocal}
       onSubmitExam={handleSubmitExamActual}
       onTimeUp={handleTimeUpActual}
-      isDemoMode={false} // This is a real student exam attempt
+      isDemoMode={false}
       userIdForActivityMonitor={studentUserId || 'anonymous_student_take'}
+      studentName={studentName}
+      studentRollNumber={studentRollNumber}
     />
   );
 }
