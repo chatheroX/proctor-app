@@ -26,12 +26,17 @@ export default function TakeExamPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [examStarted, setExamStarted] = useState(false);
-  
+
   const studentUserId = studentUser?.user_id;
 
   const fetchExamData = useCallback(async () => {
-    if (!examId || !studentUserId) { 
-      setError(!examId ? "Exam ID is missing." : "Student not authenticated.");
+    if (!examId) {
+      setError("Exam ID is missing.");
+      setIsLoading(false);
+      return;
+    }
+    if (!studentUserId) {
+      setError("Student not authenticated.");
       setIsLoading(false);
       return;
     }
@@ -54,17 +59,17 @@ export default function TakeExamPage() {
          setIsLoading(false);
          return;
       }
-      
+
       setExamDetails(data as Exam);
       setQuestions(data.questions || []);
     } catch (e: any) {
       console.error("Failed to fetch exam data:", e);
       setError(e.message || "Failed to load exam data.");
-      setQuestions([]); 
+      setQuestions([]);
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, studentUserId]); 
+  }, [examId, supabase, studentUserId]);
 
   useEffect(() => {
     fetchExamData();
@@ -75,16 +80,16 @@ export default function TakeExamPage() {
         toast({ title: "Cannot Start", description: `Exam is ${examDetails?.status.toLowerCase()}.`, variant: "destructive" });
         return;
     }
-    if(questions.length === 0 && !isLoading) { 
+    if(questions.length === 0 && !isLoading) {
         toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
         return;
     }
-    if(error && examDetails === null) { 
+    if(error && examDetails === null) {
         toast({ title: "Cannot Start", description: error || "An error occurred.", variant: "destructive" });
         return;
     }
     setExamStarted(true);
-  }, [examDetails, questions, isLoading, error, toast]);
+  }, [examDetails, questions.length, isLoading, error, toast]);
 
   const handleAnswerChangeLocal = useCallback((questionId: string, optionId: string) => {
     console.log(`Student Answer for QID ${questionId} saved locally (simulated): OptionID ${optionId}`);
@@ -97,12 +102,12 @@ export default function TakeExamPage() {
     }
     console.log('Submitting answers to backend:', answers);
     console.log('Flagged Events to backend:', flaggedEvents);
-    
-    await new Promise(resolve => setTimeout(resolve, 1500)); 
-    
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     toast({ title: "Exam Submitted!", description: "Your responses have been recorded (simulation)." });
   }, [studentUserId, toast]);
-  
+
   const handleTimeUpActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
     if (!studentUserId) {
         toast({title: "Error: Time Up", description: "Student not authenticated for auto-submission.", variant: "destructive"});
@@ -110,9 +115,8 @@ export default function TakeExamPage() {
     }
     console.log("Time is up. Auto-submitting answers:", answers);
     console.log("Time is up. Auto-submitting flagged events:", flaggedEvents);
-     await new Promise(resolve => setTimeout(resolve, 1500)); 
+     await new Promise(resolve => setTimeout(resolve, 1500));
      toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up (simulation)." });
-     // The ExamTakingInterface calls this, then sets its own examFinished state.
   }, [studentUserId, toast]);
 
   if (isLoading && !examStarted) {
@@ -123,8 +127,8 @@ export default function TakeExamPage() {
       </div>
     );
   }
-  
-  if (error && !examDetails && !isLoading) { 
+
+  if (error && !examDetails && !isLoading) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -142,14 +146,15 @@ export default function TakeExamPage() {
       examDetails={examDetails}
       questions={questions}
       isLoading={isLoading}
-      error={error} 
+      error={error}
       examStarted={examStarted}
       onStartExam={handleStartExam}
       onAnswerChange={handleAnswerChangeLocal}
       onSubmitExam={handleSubmitExamActual}
-      onTimeUp={handleTimeUpActual} // Pass the memoized callback
+      onTimeUp={handleTimeUpActual}
       isDemoMode={false}
       userIdForActivityMonitor={studentUserId || 'anonymous_student'}
     />
   );
 }
+    

@@ -40,6 +40,7 @@ export default function TeacherDemoExamPage() {
       setIsLoading(false);
       return;
     }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -51,7 +52,7 @@ export default function TeacherDemoExamPage() {
 
       if (fetchError) throw fetchError;
       if (!data) throw new Error("Exam not found.");
-      
+
       if (data.teacher_id !== teacherUserId) {
         setError("Access denied. You can only demo exams you have created.");
         setExamDetails(null);
@@ -59,7 +60,7 @@ export default function TeacherDemoExamPage() {
         setIsLoading(false);
         return;
       }
-      
+
       setExamDetails(data as Exam);
       setQuestions(data.questions || []);
     } catch (e: any) {
@@ -76,16 +77,16 @@ export default function TeacherDemoExamPage() {
   }, [fetchExamData]);
 
   const handleStartDemoExam = useCallback(() => {
-    if (questions.length === 0 && !isLoading) { 
+    if (questions.length === 0 && !isLoading) {
         toast({ title: "No Questions", description: "This exam has no questions to demo.", variant: "destructive" });
         return;
     }
-    if (error && examDetails === null) { 
+    if (error && examDetails === null) {
         toast({ title: "Cannot Start Demo", description: error || "An error occurred.", variant: "destructive" });
         return;
     }
     setExamStarted(true);
-  }, [questions, isLoading, error, examDetails, toast]);
+  }, [questions.length, isLoading, error, examDetails, toast]);
 
   const handleDemoAnswerChange = useCallback((questionId: string, optionId: string) => {
     console.log(`Demo Answer for QID ${questionId}: OptionID ${optionId}`);
@@ -102,7 +103,7 @@ export default function TeacherDemoExamPage() {
     console.log("Demo exam time is up. Answers:", answers, "Flagged Events:", flaggedEvents);
     toast({ title: "Demo Time's Up!", description: "The demo exam duration has ended. No data was saved." });
   }, [toast]);
-  
+
   if (isLoading && !examStarted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
@@ -111,8 +112,8 @@ export default function TeacherDemoExamPage() {
       </div>
     );
   }
-  
-  if (error && !examDetails && !isLoading) { 
+
+  if (error && !examDetails && !isLoading) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -125,13 +126,12 @@ export default function TeacherDemoExamPage() {
     );
   }
 
-
   return (
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions}
       isLoading={isLoading}
-      error={error} 
+      error={error}
       examStarted={examStarted}
       onStartExam={handleStartDemoExam}
       onAnswerChange={handleDemoAnswerChange}
@@ -142,3 +142,4 @@ export default function TeacherDemoExamPage() {
     />
   );
 }
+    
