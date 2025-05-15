@@ -6,9 +6,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { ExamInsert } from '@/types/supabase'; // Use ExamInsert type
+import { useMemo } from 'react'; // Import useMemo
 
 const generateExamCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
+// Define defaultFormData outside the component or memoize it
+const defaultFormDataObject: ExamFormData = {
+  title: '',
+  description: '',
+  duration: 60,
+  allowBacktracking: true,
+  questions: [],
+  startTime: null,
+  endTime: null,
+  status: 'Published', // All exams created via form are initially 'Published'
 };
 
 export default function CreateExamPage() {
@@ -16,12 +29,21 @@ export default function CreateExamPage() {
   const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
 
+  // Memoize defaultFormData to ensure stable reference
+  const defaultFormData = useMemo(() => defaultFormDataObject, []);
+
   const handleCreateExam = async (data: ExamFormData): Promise<{ success: boolean; error?: string; examId?: string }> => {
     if (!user || user.role !== 'teacher') {
       return { success: false, error: "You must be logged in as a teacher to create exams." };
     }
     if (!data.startTime || !data.endTime) {
       return { success: false, error: "Start and end times are required for published exams."};
+    }
+    if (data.startTime >= data.endTime) {
+      return { success: false, error: "End time must be after start time." };
+    }
+    if (data.questions.length === 0) {
+      return { success: false, error: "Please add at least one question to the exam." };
     }
 
     const newExamData: ExamInsert = {
@@ -31,8 +53,8 @@ export default function CreateExamPage() {
       duration: data.duration,
       allow_backtracking: data.allowBacktracking,
       questions: data.questions,
-      exam_code: generateExamCode(),
-      status: 'Published', // Always 'Published'
+      exam_code: generateExamCode(), // Initial generation
+      status: 'Published',
       start_time: data.startTime.toISOString(),
       end_time: data.endTime.toISOString(),
     };
@@ -41,55 +63,52 @@ export default function CreateExamPage() {
       let insertedExamId: string | undefined = undefined;
       let attemptError: any = null;
 
-      for (let i = 0; i < 3; i++) { // Try up to 3 times for unique exam code
+      // Retry mechanism for unique exam_code
+      for (let i = 0; i < 3; i++) { 
         const { data: attemptData, error: dbError } = await supabase
           .from('ExamX')
           .insert(newExamData)
-          .select('exam_id') // Only select exam_id
+          .select('exam_id')
           .single();
         
         if (dbError) {
           attemptError = dbError;
           if (dbError.code === '23505' && dbError.message.includes('ExamX_exam_code_key')) {
-            newExamData.exam_code = generateExamCode(); // Generate new code and retry
-            continue;
+            console.warn('Exam code collision, generating new code and retrying...');
+            newExamData.exam_code = generateExamCode(); // Generate new code
+            continue; // Retry insertion
           }
+          // For other errors, break and handle below
           break; 
         }
+        // Success
         insertedExamId = attemptData?.exam_id;
-        attemptError = null; 
-        break; 
+        attemptError = null; // Clear error if successful
+        break; // Exit loop on success
       }
 
       if (attemptError) {
-        console.error('Error creating exam:', attemptError);
+        console.error('Error creating exam after retries (if any):', attemptError);
+        // Specific message for unique constraint failure after retries
         if (attemptError.code === '23505' && attemptError.message.includes('ExamX_exam_code_key')) {
              return { success: false, error: "Failed to generate a unique exam code after multiple attempts. Please try again." };
         }
+        // General error message
         return { success: false, error: attemptError.message || "Failed to create exam."};
       }
+
       if (!insertedExamId) {
-        return { success: false, error: "Failed to create exam, no exam ID returned." };
+        // This case should ideally be caught by attemptError handling above
+        return { success: false, error: "Failed to create exam, no exam ID returned after insert attempt." };
       }
       
       return { success: true, examId: insertedExamId };
 
     } catch (e: any) {
-      console.error('Unexpected error creating exam:', e);
-      return { success: false, error: e.message || "An unexpected error occurred." };
+      // Catch any unexpected errors not handled by Supabase client's error object
+      console.error('Unexpected error during exam creation process:', e);
+      return { success: false, error: e.message || "An unexpected error occurred during exam creation." };
     }
-  };
-
-  // Default form data for creating a new exam
-  const defaultFormData: ExamFormData = {
-    title: '',
-    description: '',
-    duration: 60,
-    allowBacktracking: true,
-    questions: [],
-    startTime: null, // Explicitly null
-    endTime: null,   // Explicitly null
-    status: 'Published', // Default to 'Published'
   };
 
   return (
