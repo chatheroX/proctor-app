@@ -15,7 +15,8 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarSeparator
-} from '@/components/ui/sidebar'; 
+} from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button'; // Added this import
 import { ShieldCheck, LogOut, Settings, Loader2, UserCircle2, Fingerprint, Hash, GripVertical } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
@@ -33,10 +34,10 @@ export interface NavItem {
 interface SidebarElementsProps {
   navItems: NavItem[];
   userRoleDashboard: 'student' | 'teacher';
-  user: CustomUser | null; 
-  signOut: () => Promise<void>; 
+  user: CustomUser | null;
+  signOut: () => Promise<void>;
   authLoading: boolean;
-  className?: string; 
+  className?: string;
 }
 
 export function SidebarElements({ navItems, userRoleDashboard, user, signOut, authLoading, className }: SidebarElementsProps) {
@@ -73,13 +74,13 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
               <SidebarMenuButton
                 asChild
                 isActive={pathname.startsWith(item.href)}
-                tooltip={{ 
-                    children: item.label, 
+                tooltip={{
+                    children: item.label,
                     className: "group-data-[collapsible=icon]:block hidden bg-popover text-popover-foreground border-border shadow-sm rounded-sm"
                 }}
                 disabled={item.disabled}
-                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
-                data-sidebar="menu-button" 
+                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
+                data-sidebar="menu-button"
               >
                 <Link href={item.href} className="gap-2.5">
                   <item.icon className="h-4 w-4" />
@@ -95,9 +96,9 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
 
 
   return (
-    <Sidebar 
-        collapsible="icon" 
-        className={className} 
+    <Sidebar
+        collapsible="icon"
+        className={className}
     >
       <SidebarHeader className="p-3 border-b border-sidebar-border/60 h-16 flex items-center">
         <div className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center">
@@ -109,10 +110,10 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
            <SidebarTrigger className="text-muted-foreground hover:text-foreground hidden group-data-[collapsible=icon]:flex" />
         </div>
       </SidebarHeader>
-      
+
       <SidebarContent className="p-0 flex-grow flex flex-col">
         <div className="py-3 flex-grow">
-            {renderNavGroup(mainNavItems)} 
+            {renderNavGroup(mainNavItems, "Main")}
             {/* Add other groups if you define them in navItems */}
             {/* {renderNavGroup(toolsNavItems, 'TOOLS')} */}
             {/* {renderNavGroup(otherNavItems, 'OTHER')} */}
@@ -123,12 +124,12 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                 <SidebarMenuItem>
                 <SidebarMenuButton
                     asChild
-                    isActive={pathname.startsWith(`/${userRoleDashboard}/dashboard/settings`)} 
-                    tooltip={{ 
-                        children: "Settings", 
+                    isActive={pathname.startsWith(`/${userRoleDashboard}/dashboard/settings`)}
+                    tooltip={{
+                        children: "Settings",
                          className: "group-data-[collapsible=icon]:block hidden bg-popover text-popover-foreground border-border shadow-sm rounded-sm"
                     }}
-                    className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
+                    className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
                      data-sidebar="menu-button"
                 >
                     <Link href={`/${userRoleDashboard}/dashboard/settings`} className="gap-2.5">
@@ -155,15 +156,15 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                         <p className="text-xs font-medium text-foreground truncate" title={user.name || user.email}>
                         {user.name || user.email}
                         </p>
-                        <p className="text-xs text-muted-foreground capitalize truncate">
-                        {user.role || 'N/A'}
+                        <p className="text-xs text-muted-foreground capitalize truncate" title={user.role || undefined}>
+                          {user.role || 'N/A'} {user.user_id && `(${user.user_id})`}
                         </p>
                     </div>
                 </div>
-                 <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={signOut} 
+                 <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={signOut}
                     disabled={authLoading}
                     className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8"
                     aria-label="Logout"
