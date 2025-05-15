@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Mail, Lock, Save, Loader2, Hash, Briefcase, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { CustomUser } from '@/types/supabase';
-import { DICEBEAR_STYLES, DICEBEAR_TECH_KEYWORDS, generateEnhancedDiceBearAvatar } from '@/contexts/AuthContext'; // Assuming these are exported
+import { DICEBEAR_STYLES, DICEBEAR_TECH_KEYWORDS, generateEnhancedDiceBearAvatar } from '@/contexts/AuthContext';
 
 interface UserProfileFormProps {
   user: CustomUser;
@@ -30,7 +30,7 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
 
   useEffect(() => {
     setName(propUser.name || '');
-    setCurrentAvatarUrl(propUser.avatar_url || '');
+    setCurrentAvatarUrl(propUser.avatar_url || ''); // Ensure this updates if propUser.avatar_url changes from AuthContext
     setNewAvatarPreviewUrl(null); 
   }, [propUser]);
 
@@ -39,6 +39,7 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
       toast({ title: "Error", description: "User details missing for avatar generation.", variant: "destructive" });
       return;
     }
+    // Randomly select a style from the imported DICEBEAR_STYLES
     const randomStyle = DICEBEAR_STYLES[Math.floor(Math.random() * DICEBEAR_STYLES.length)];
     const newUrl = generateEnhancedDiceBearAvatar(propUser.role, propUser.user_id, randomStyle, DICEBEAR_TECH_KEYWORDS);
     setNewAvatarPreviewUrl(newUrl);
@@ -65,13 +66,13 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
         avatar_url: avatarToSave || undefined,
       });
       
-      // After successful save, if a new avatar was previewed, make it the current one
       if (newAvatarPreviewUrl) {
-        setCurrentAvatarUrl(newAvatarPreviewUrl);
+        setCurrentAvatarUrl(newAvatarPreviewUrl); // Make the previewed avatar the current one visually
         setNewAvatarPreviewUrl(null); // Clear the preview
       }
       setPassword('');
       setConfirmPassword('');
+      // No toast here, onSave in parent page should show it
     } catch (error: any) {
       toast({ title: "Error Saving Profile", description: error.message || "Failed to update profile. Please try again.", variant: "destructive" });
     } finally {
@@ -89,20 +90,21 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
           <CardDescription className="text-muted-foreground/90">Update your personal information and avatar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8 pt-2 pb-6">
-          <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
-            <Avatar className="h-28 w-28 border-4 border-primary/30 shadow-lg rounded-full bg-muted shrink-0">
-              <AvatarImage src={displayAvatarUrl || undefined} alt={name || 'User'} className="rounded-full" />
-              <AvatarFallback className="text-3xl text-muted-foreground font-semibold rounded-full">
+          
+          <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
+            <Avatar className="h-24 w-24 sm:h-28 sm:w-28 border-4 border-primary/20 shadow-lg rounded-full bg-muted shrink-0">
+              <AvatarImage src={displayAvatarUrl || undefined} alt={name || 'User'} className="rounded-full object-cover" />
+              <AvatarFallback className="text-3xl text-muted-foreground font-semibold rounded-full bg-slate-200 dark:bg-slate-700">
                 {(name || propUser.email || 'U').substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             
-            <div className="flex flex-col items-center md:items-start">
-                <Button id="refreshAvatar" type="button" variant="outline" onClick={handleGenerateNewAvatar} title="Generate New Avatar Preview" className="border-border/50 hover:bg-primary/10 hover:border-primary/50 text-sm">
+            <div className="flex flex-col items-center sm:items-start mt-2 sm:mt-0">
+                <Button id="refreshAvatar" type="button" variant="outline" onClick={handleGenerateNewAvatar} title="Generate New Avatar Preview" className="border-border/50 hover:bg-primary/10 hover:border-primary/50 text-sm py-2 px-4 rounded-md shadow-sm">
                     <RefreshCw className="mr-2 h-4 w-4 text-primary" />
                     Refresh Avatar
                 </Button>
-                 <p className="text-xs text-muted-foreground/80 text-center md:text-left mt-2">Click to generate a new random avatar.</p>
+                 <p className="text-xs text-muted-foreground/80 text-center sm:text-left mt-2 max-w-xs">Click to generate a new random avatar. Save changes to apply.</p>
             </div>
           </div>
 
@@ -161,5 +163,3 @@ export function UserProfileForm({ user: propUser, onSave }: UserProfileFormProps
     </Card>
   );
 }
-
-    
