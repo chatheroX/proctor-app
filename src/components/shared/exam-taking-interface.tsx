@@ -3,24 +3,26 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card'; // Removed CardTitle, CardDescription
+import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen } from 'lucide-react';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen, Check, X } from 'lucide-react';
 import { ExamTimerWarning } from '@/components/student/exam-timer-warning';
 import { useActivityMonitor, type FlaggedEvent } from '@/hooks/use-activity-monitor';
 import { useToast } from '@/hooks/use-toast';
 import type { Question, Exam } from '@/types/supabase';
+import { cn } from '@/lib/utils';
 
 interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  isLoading: boolean; // For loading exam details in parent
-  error: string | null; // Error loading exam details in parent
-  examStarted: boolean; // Prop to control visibility, should be true when this interface is rendered
+  isLoading: boolean;
+  error: string | null;
+  examStarted: boolean; // Should always be true when this component is rendered directly
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -34,9 +36,9 @@ export function ExamTakingInterface({
   examDetails,
   questions,
   initialAnswers,
-  isLoading: parentIsLoading, // Renamed to avoid conflict if we introduce internal loading
+  isLoading: parentIsLoading,
   error: examLoadingError,
-  examStarted,
+  examStarted, // This prop now signifies if the exam is actively being taken
   onAnswerChange,
   onSubmitExam,
   onTimeUp,
@@ -82,7 +84,7 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast]);
+  }, [isDemoMode, toast, setFlaggedEvents]); // Added setFlaggedEvents
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -94,13 +96,13 @@ export function ExamTakingInterface({
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: optionId }));
     onAnswerChange(questionId, optionId);
-  }, [onAnswerChange]);
+  }, [onAnswerChange, setAnswers]); // Added setAnswers
 
   const handleNextQuestion = useCallback(() => {
     if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
-  }, [currentQuestionIndex, questions]);
+  }, [currentQuestionIndex, questions, setCurrentQuestionIndex]); // Added setCurrentQuestionIndex
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -108,7 +110,18 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast]);
+  }, [allowBacktracking, currentQuestionIndex, toast, setCurrentQuestionIndex]); // Added setCurrentQuestionIndex
+
+  const handleQuestionNavigation = useCallback((index: number) => {
+    if (index >= 0 && questions && index < questions.length) {
+      if (!allowBacktracking && index < currentQuestionIndex) {
+        toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
+        return;
+      }
+      setCurrentQuestionIndex(index);
+    }
+  }, [allowBacktracking, currentQuestionIndex, questions, toast, setCurrentQuestionIndex]);
+
 
   const handleInternalSubmitExam = useCallback(async () => {
     if (examFinished) return;
@@ -123,7 +136,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [onSubmitExam, answers, flaggedEvents, examFinished, toast]);
+  }, [onSubmitExam, answers, flaggedEvents, examFinished, toast, setIsSubmitting, setInternalError, setExamFinished]);
 
   const handleInternalTimeUp = useCallback(async () => {
     if (examFinished) return;
@@ -135,7 +148,7 @@ export function ExamTakingInterface({
     setIsSubmitting(true);
     setInternalError(null);
     try {
-        await parentOnTimeUpRef.current(answers, flaggedEvents); // Use the ref here
+        await parentOnTimeUpRef.current(answers, flaggedEvents);
         setExamFinished(true);
     } catch (e: any) {
         setInternalError(e.message || "Failed to auto-submit exam on time up.");
@@ -143,7 +156,7 @@ export function ExamTakingInterface({
     } finally {
         setIsSubmitting(false);
     }
-  }, [answers, flaggedEvents, isDemoMode, toast, examFinished]);
+  }, [answers, flaggedEvents, isDemoMode, toast, examFinished, setIsSubmitting, setInternalError, setExamFinished]);
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -155,7 +168,7 @@ export function ExamTakingInterface({
 
   if (parentIsLoading && !examDetails) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-lg text-muted-foreground">Loading exam interface...</p>
       </div>
@@ -164,7 +177,7 @@ export function ExamTakingInterface({
 
   if (examLoadingError && !examDetails) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
         <ServerCrash className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg text-destructive text-center mb-2">Error Loading Exam Data</p>
         <p className="text-sm text-muted-foreground text-center mb-4">{examLoadingError}</p>
@@ -175,7 +188,7 @@ export function ExamTakingInterface({
   if (!examDetails || !examStarted) {
     console.error("[ExamTakingInterface] Critical error: examDetails is null or examStarted is false.", { examDetailsExists: !!examDetails, examStarted });
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg text-destructive">Exam session not properly initiated.</p>
         <p className="text-sm text-muted-foreground">Required exam details are missing or the session was not started correctly.</p>
@@ -185,7 +198,7 @@ export function ExamTakingInterface({
 
   if (examFinished) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
         <Card className="w-full max-w-md shadow-xl text-center">
           <CardHeader>
             <ShieldCheck className="h-16 w-16 text-green-500 mx-auto mb-4" />
@@ -218,16 +231,18 @@ export function ExamTakingInterface({
             )}
           </CardContent>
           <CardFooter>
-            <Button onClick={() => {
-              if (isDemoMode && examDetails.exam_id) {
-                window.location.href = `/teacher/dashboard/exams/${examDetails.exam_id}/details`;
-              } else if (!isDemoMode) {
-                 window.location.href = `/student/dashboard/exam-history`;
-              } else {
-                window.close(); 
+             <Button onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.close(); // Attempt to close the tab
+                // If not closed by window.close(), provide fallback
+                if (!isDemoMode) {
+                   setTimeout(() => router.push('/student/dashboard/exam-history'), 500);
+                } else if (isDemoMode && examDetails.exam_id) {
+                   setTimeout(() => router.push(`/teacher/dashboard/exams/${examDetails.exam_id}/details`), 500);
+                }
               }
             }} className="w-full">
-              {isDemoMode ? "Back to Exam Details" : "View Exam History / Close"}
+              Close Tab / Return to Dashboard
             </Button>
           </CardFooter>
         </Card>
@@ -237,7 +252,7 @@ export function ExamTakingInterface({
 
   if (questions.length === 0 && !parentIsLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg text-muted-foreground">No questions found for this exam.</p>
         <p className="text-sm text-muted-foreground">Please contact your instructor.</p>
@@ -247,7 +262,7 @@ export function ExamTakingInterface({
   
    if (!currentQuestion && questions.length > 0 && !parentIsLoading) {
      return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-lg text-muted-foreground">Loading question...</p>
       </div>
@@ -257,9 +272,11 @@ export function ExamTakingInterface({
   const examDurationForTimer = examDetails.duration ?? 0;
   const examTitleForTimer = examDetails.title ?? "Exam";
   const questionProgress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
+  const router = useRouter(); // Added for fallback navigation on exam end
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-slate-100 dark:bg-slate-900"> {/* High z-index, main background */}
+    // Main container for the distinct exam UI
+    <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-900">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
           key={`${examDetails.exam_id}-${examDurationForTimer}`}
@@ -270,7 +287,7 @@ export function ExamTakingInterface({
       )}
       
       {/* Exam Interface Header - positioned below the timer */}
-      <header className="sticky top-[calc(4rem)] z-40 w-full bg-white dark:bg-slate-800 shadow-md py-3 px-4 md:px-6 border-b border-slate-200 dark:border-slate-700">
+      <header className="sticky top-[calc(3rem)] z-10 w-full bg-white dark:bg-slate-800 shadow-md py-3 px-4 md:px-6 border-b border-slate-200 dark:border-slate-700">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4">
           <div className="flex-grow">
             <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100 truncate flex items-center">
@@ -292,70 +309,103 @@ export function ExamTakingInterface({
         {questions.length > 0 && <Progress value={questionProgress} className="mt-2 h-2 rounded-full" />}
       </header>
 
-      {/* Main Content: Question and Options */}
-      <main className="flex-grow flex items-center justify-center p-4 md:p-6 overflow-y-auto"> {/* Scrollable main area */}
-        <Card className="w-full max-w-3xl shadow-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
-          <CardHeader className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-700">
-            {currentQuestion && <h2 className="text-lg md:text-xl font-semibold text-slate-800 dark:text-slate-100 leading-tight">{currentQuestion.text}</h2>}
-            {!currentQuestion && questions.length > 0 && (
-                <h2 className="text-lg text-slate-500 dark:text-slate-400">Loading question text...</h2>
-            )}
-          </CardHeader>
-          <CardContent className="p-5 md:p-6 space-y-4">
-            {currentQuestion?.options ? (
-              <RadioGroup
-                value={answers[currentQuestion.id] || ''}
-                onValueChange={memoizedOnRadioValueChange}
-                className="space-y-3"
-              >
-                {currentQuestion.options.map((option) => (
-                  <div 
-                    key={option.id} 
-                    className="flex items-center space-x-3 p-3.5 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 transition-all duration-150 ease-in-out has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary dark:has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:ring-2 has-[[data-state=checked]]:ring-primary/60"
+      {/* Main Exam Content Area with Question Panel */}
+      <div className="flex-grow flex overflow-hidden"> {/* Parent flex for panel and content */}
+        {/* Question Navigation Panel */}
+        <aside className="w-1/4 md:w-1/5 lg:w-1/6 bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-3 shadow-sm">
+          <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-200 sticky top-0 bg-slate-50 dark:bg-slate-800 py-2 z-10">Questions</h3>
+          <ScrollArea className="h-[calc(100vh-10rem)] pr-2"> {/* Adjust height as needed */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {questions.map((q, index) => {
+                const isAnswered = !!answers[q.id];
+                const isCurrent = index === currentQuestionIndex;
+                return (
+                  <Button
+                    key={q.id}
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "aspect-square h-auto text-xs p-1 justify-center items-center",
+                      "border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700",
+                      isCurrent && "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1 hover:bg-primary/90",
+                      isAnswered && !isCurrent && "bg-green-100 dark:bg-green-800/30 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300",
+                      !isAnswered && !isCurrent && "bg-white dark:bg-slate-700/50"
+                    )}
+                    onClick={() => handleQuestionNavigation(index)}
+                    disabled={!allowBacktracking && index < currentQuestionIndex}
                   >
-                    <RadioGroupItem value={option.id} id={`${currentQuestion.id}-option-${option.id}`} className="h-5 w-5 border-slate-400 dark:border-slate-500 text-primary focus:ring-primary"/>
-                    <Label htmlFor={`${currentQuestion.id}-option-${option.id}`} className="text-base md:text-lg flex-1 cursor-pointer py-1 text-slate-700 dark:text-slate-200">{option.text}</Label>
+                    {index + 1}
+                  </Button>
+                );
+              })}
+            </div>
+          <ScrollBar orientation="vertical" />
+          </ScrollArea>
+        </aside>
+
+        {/* Current Question and Options Area */}
+        <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-6 overflow-y-auto bg-background">
+          <Card className="w-full max-w-3xl shadow-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+            <CardHeader className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-700">
+              {currentQuestion && <h2 className="text-lg md:text-xl font-semibold text-slate-800 dark:text-slate-100 leading-tight">{currentQuestion.text}</h2>}
+              {!currentQuestion && questions.length > 0 && (
+                  <h2 className="text-lg text-slate-500 dark:text-slate-400">Loading question text...</h2>
+              )}
+            </CardHeader>
+            <CardContent className="p-5 md:p-6 space-y-4">
+              {currentQuestion?.options ? (
+                <RadioGroup
+                  value={answers[currentQuestion.id] || ''}
+                  onValueChange={memoizedOnRadioValueChange}
+                  className="space-y-3"
+                >
+                  {currentQuestion.options.map((option) => (
+                    <div 
+                      key={option.id} 
+                      className="flex items-center space-x-3 p-3.5 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 transition-all duration-150 ease-in-out has-[[data-state=checked]]:bg-primary/10 has-[[data-state=checked]]:border-primary dark:has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:ring-2 has-[[data-state=checked]]:ring-primary/60"
+                    >
+                      <RadioGroupItem value={option.id} id={`${currentQuestion.id}-option-${option.id}`} className="h-5 w-5 border-slate-400 dark:border-slate-500 text-primary focus:ring-primary"/>
+                      <Label htmlFor={`${currentQuestion.id}-option-${option.id}`} className="text-base md:text-lg flex-1 cursor-pointer py-1 text-slate-700 dark:text-slate-200">{option.text}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              ) : (
+                   <div className="text-center py-4">
+                      <Loader2 className="h-8 w-8 text-primary animate-spin mx-auto" />
+                      <p className="text-slate-500 dark:text-slate-400 mt-2">Loading options...</p>
                   </div>
-                ))}
-              </RadioGroup>
-            ) : (
-                 <div className="text-center py-4">
-                    <Loader2 className="h-8 w-8 text-primary animate-spin mx-auto" />
-                    <p className="text-slate-500 dark:text-slate-400 mt-2">Loading options...</p>
-                </div>
-            )}
-            {internalError && (
-                <Alert variant="destructive" className="mt-4">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{internalError}</AlertDescription>
-                </Alert>
-            )}
-          </CardContent>
-          <CardFooter className="flex justify-between border-t border-slate-200 dark:border-slate-700 p-4 md:p-6 bg-slate-50 dark:bg-slate-800/30 rounded-b-xl">
-            <Button
-              variant="outline"
-              onClick={handlePreviousQuestion}
-              disabled={currentQuestionIndex === 0 || !allowBacktracking || !currentQuestion || isSubmitting}
-              className="py-2.5 px-5 text-base rounded-md shadow-sm border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-            >
-              <ArrowLeft className="mr-2 h-5 w-5" /> Previous
-            </Button>
-            {currentQuestionIndex < questions.length - 1 ? (
-              <Button onClick={handleNextQuestion} disabled={!currentQuestion || isSubmitting} className="py-2.5 px-5 text-base rounded-md shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground">
-                Next <ArrowRight className="ml-2 h-5 w-5" />
+              )}
+              {internalError && (
+                  <Alert variant="destructive" className="mt-4">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Error</AlertTitle>
+                      <AlertDescription>{internalError}</AlertDescription>
+                  </Alert>
+              )}
+            </CardContent>
+            <CardFooter className="flex justify-between border-t border-slate-200 dark:border-slate-700 p-4 md:p-6 bg-slate-50 dark:bg-slate-800/30 rounded-b-xl">
+              <Button
+                variant="outline"
+                onClick={handlePreviousQuestion}
+                disabled={currentQuestionIndex === 0 || !allowBacktracking || !currentQuestion || isSubmitting}
+                className="py-2.5 px-5 text-base rounded-md shadow-sm border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <ArrowLeft className="mr-2 h-5 w-5" /> Previous
               </Button>
-            ) : (
-              <Button onClick={handleInternalSubmitExam} disabled={isSubmitting || !currentQuestion} className="bg-green-600 hover:bg-green-700 text-white py-2.5 px-5 text-base rounded-md shadow-sm">
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-5 w-5" />}
-                Submit {isDemoMode ? "Demo " : ""}Exam
-              </Button>
-            )}
-          </CardFooter>
-        </Card>
-      </main>
+              {currentQuestionIndex < questions.length - 1 ? (
+                <Button onClick={handleNextQuestion} disabled={!currentQuestion || isSubmitting} className="py-2.5 px-5 text-base rounded-md shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground">
+                  Next <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              ) : (
+                <Button onClick={handleInternalSubmitExam} disabled={isSubmitting || !currentQuestion} className="bg-green-600 hover:bg-green-700 text-white py-2.5 px-5 text-base rounded-md shadow-sm">
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-5 w-5" />}
+                  Submit {isDemoMode ? "Demo " : ""}Exam
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+        </main>
+      </div>
     </div>
   );
 }
-
-    

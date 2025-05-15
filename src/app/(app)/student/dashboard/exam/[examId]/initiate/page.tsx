@@ -3,14 +3,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
+// import Image from 'next/image'; // Not used in current design
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, AlertTriangle, Clock, HelpCircle, ListChecks, PlayCircle, ExternalLink, CheckCircle, XCircle, ShieldAlert } from 'lucide-react';
+import { Loader2, AlertTriangle, Clock, ListChecks, PlayCircle, ExternalLink, CheckCircle, XCircle, ShieldAlert } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam, Question } from '@/types/supabase';
+import type { Exam } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
@@ -26,6 +26,7 @@ const initialChecks: CheckStatus[] = [
   { name: 'Browser Compatibility', status: 'pending' },
   { name: 'Internet Connectivity', status: 'pending' },
   { name: 'System Integrity (Basic)', status: 'pending' },
+  // { name: 'SEB Launcher Check', status: 'pending' }, // Example SEB specific check
   { name: 'Secure Session Readiness', status: 'pending' },
 ];
 
@@ -40,12 +41,11 @@ export default function InitiateExamPage() {
   const examId = params.examId as string;
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
-  const [questionsCount, setQuestionsCount] = useState(0); // Only count, not full questions
+  const [questionsCount, setQuestionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [effectiveStatus, setEffectiveStatus] = useState<string | null>(null);
   
-  // State for system checks
   const [checks, setChecks] = useState<CheckStatus[]>(initialChecks);
   const [overallProgress, setOverallProgress] = useState(0);
   const [allChecksPassed, setAllChecksPassed] = useState(false);
@@ -62,7 +62,6 @@ export default function InitiateExamPage() {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch only essential details for the instruction page
       const { data, error: fetchError } = await supabase
         .from('ExamX')
         .select('exam_id, title, description, duration, questions, start_time, end_time, status')
@@ -116,16 +115,17 @@ export default function InitiateExamPage() {
     }
 
     setPerformingChecks(true);
-    setError(null); // Clear previous check errors
+    setError(null);
     setAllChecksPassed(false);
     setChecks(initialChecks.map(c => ({ ...c, status: 'pending', details: undefined })));
     setOverallProgress(0);
 
+    // Simulate system checks
     for (let i = 0; i < initialChecks.length; i++) {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
-      await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); // Simulate check
+      await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); 
 
-      const isSuccess = Math.random() > 0.05; // High success rate for demo
+      const isSuccess = Math.random() > 0.05; // Simulate high success rate
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
       setOverallProgress(((i + 1) / initialChecks.length) * 100);
       if (!isSuccess) {
@@ -137,27 +137,25 @@ export default function InitiateExamPage() {
     setAllChecksPassed(true);
     setPerformingChecks(false);
     toast({ title: "System Checks Passed!", description: "You can now proceed to the exam.", variant: "default" });
-  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast, examId]);
+  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast]);
 
 
   const launchExamInNewTab = useCallback(() => {
-    if (!allChecksPassed || !examDetails || !studentUser) {
+    if (!allChecksPassed || !examDetails || !studentUser?.user_id) {
       toast({ title: "Cannot Launch", description: "System checks not passed or exam/user data missing.", variant: "destructive" });
       return;
     }
 
-    // For developer testing, we just open the /take page.
-    // For actual SEB, this URL would be the SEB-specific link.
     // "Encrypted" URL simulation (basic base64 encoding for demo)
-    // In a real scenario, this would involve more secure token generation and server-side validation.
+    // In a real SEB scenario, this would involve more secure token generation, possibly SEB config key.
     const payload = JSON.stringify({ examId: examDetails.exam_id, studentId: studentUser.user_id, timestamp: Date.now() });
-    const token = typeof window !== 'undefined' ? btoa(payload) : ''; // Basic encoding, NOT encryption
+    const token = typeof window !== 'undefined' ? btoa(payload) : ''; 
     
-    const examUrl = `/student/dashboard/exam/${examDetails.exam_id}/take?token=${encodeURIComponent(token)}`;
+    // New URL for the dedicated exam session page
+    const examUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(token)}`;
     
-    // Attempt to open in a new tab.
-    // The 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes' options are good practice for new tabs.
-    // For SEB, specific kiosk mode flags might be needed if SEB is launched via a custom protocol from this link.
+    // For SEB, this might be a custom protocol link like 'seb://...' or a link to an .seb config file
+    // For browser testing, we open in a new tab.
     const newWindow = window.open(examUrl, '_blank', 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes');
 
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
@@ -169,13 +167,11 @@ export default function InitiateExamPage() {
           duration: 7000,
       });
     } else {
-      // Optional: Redirect current tab to a "waiting" or "exam in progress" page
-      // For simplicity, we can just inform the user.
       toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
-      // Maybe close this "initiate" tab after a delay, or redirect to exam history
-      // router.push('/student/dashboard/exam-history');
+      // Optionally, can redirect this initiate page to a waiting screen or exam history
+      // router.push('/student/dashboard/exam-history'); // Example
     }
-  }, [allChecksPassed, examDetails, studentUser, toast, router]);
+  }, [allChecksPassed, examDetails, studentUser?.user_id, toast, router]);
 
   const getStatusIcon = (status: CheckStatus['status']) => {
     if (status === 'pending') return <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />;
@@ -184,7 +180,6 @@ export default function InitiateExamPage() {
     if (status === 'failed') return <XCircle className="h-5 w-5 text-destructive" />;
     return null;
   };
-
 
   if (authLoading || (isLoading && !examDetails && !error)) {
     return (
@@ -196,8 +191,6 @@ export default function InitiateExamPage() {
   }
 
   if (error && !examDetails && !performingChecks) {
-    // This error state is for when exam details themselves fail to load,
-    // not for when a system check fails.
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -211,7 +204,6 @@ export default function InitiateExamPage() {
   }
 
   if (!examDetails && !isLoading && !performingChecks) {
-     // Handles case where exam details are null after loading attempt (e.g., not found but no specific error string)
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
@@ -223,7 +215,6 @@ export default function InitiateExamPage() {
     );
   }
   
-  // If examDetails is null at this point (should be caught above, but defensive)
   if (!examDetails) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -236,13 +227,11 @@ export default function InitiateExamPage() {
     );
   }
 
-
   const canStartTestProcess = effectiveStatus === 'Ongoing';
   const examTimeInfo = examDetails.start_time && examDetails.end_time
     ? `${format(new Date(examDetails.start_time), "dd MMM yyyy, hh:mm a")} - ${format(new Date(examDetails.end_time), "hh:mm a")}`
     : "Timing not specified";
 
-  // Main UI: Exam Instructions or System Checks
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
       <Card className="w-full max-w-3xl shadow-xl">
@@ -262,17 +251,14 @@ export default function InitiateExamPage() {
               <div className="text-center">
                 <p className="text-xl font-semibold text-gray-700">{examDetails.duration}</p>
                 <p className="text-xs text-gray-500">MINUTES</p>
-                <p className="text-xs text-gray-500">Duration</p>
               </div>
               <div className="text-center">
-                <p className="text-xl font-semibold text-gray-700">100</p> {/* Placeholder */}
+                <p className="text-xl font-semibold text-gray-700">100</p> {/* Placeholder for Max Marks */}
                 <p className="text-xs text-gray-500">MARKS</p>
-                <p className="text-xs text-gray-500">Max Marks</p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-semibold text-gray-700">{questionsCount}</p>
                 <p className="text-xs text-gray-500">QUESTIONS</p>
-                <p className="text-xs text-gray-500">Total Questions</p>
               </div>
             </div>
             
@@ -280,13 +266,13 @@ export default function InitiateExamPage() {
               <ShieldAlert className="h-4 w-4" />
               <AlertTitle>Exam Integrity Notice</AlertTitle>
               <AlertDescription>
-                This exam will be monitored. Ensure you adhere to all exam regulations.
+                This exam is designed to be taken in a secure environment (e.g., Safe Exam Browser).
                 System compatibility checks will be performed before starting.
-                For SEB compatibility, ensure you have SEB installed.
+                Ensure you have any required software installed and configured.
               </AlertDescription>
             </Alert>
             
-            {error && ( // This error is for exam details loading issues, or system check failures shown before starting checks
+            {error && (
               <Alert variant="destructive" className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
@@ -311,7 +297,7 @@ export default function InitiateExamPage() {
                 </li>
               ))}
             </ul>
-             {error && !allChecksPassed && ( // Show check-specific errors if checks are running/failed
+             {error && !allChecksPassed && (
                 <Alert variant="destructive" className="mt-4">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>System Check Failed</AlertTitle>
@@ -323,7 +309,7 @@ export default function InitiateExamPage() {
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <AlertTitle className="text-green-700 font-semibold">System Ready!</AlertTitle>
                     <AlertDescription className="text-green-600/80">
-                        Your system is compatible. The exam will open in a new tab.
+                        Your system is compatible. The exam will attempt to open in a new tab.
                         If it doesn&apos;t, please ensure pop-ups are allowed and use the "Launch Exam Manually" button.
                     </AlertDescription>
                 </Alert>
@@ -347,7 +333,7 @@ export default function InitiateExamPage() {
               onClick={launchExamInNewTab}
               className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg rounded-md shadow-md"
             >
-              <ExternalLink className="mr-2" /> Launch Exam in New Tab
+              <ExternalLink className="mr-2" /> Launch Exam
             </Button>
            )}
             <Button variant="outline" onClick={() => router.push('/student/dashboard/join-exam')} className="w-full">
