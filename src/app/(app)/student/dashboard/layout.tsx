@@ -11,7 +11,6 @@ const studentNavItems: NavItem[] = [
   { href: '/student/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
   { href: '/student/dashboard/join-exam', label: 'Join Exam', icon: Edit3 },
   { href: '/student/dashboard/exam-history', label: 'Exam History', icon: History },
-  // "My Profile" is handled by the fixed bottom section in SidebarElements
 ];
 
 export default function StudentDashboardLayout({
@@ -25,18 +24,18 @@ export default function StudentDashboardLayout({
     await signOut();
   }, [signOut]);
 
-  if (authLoading && !user && !authError) {
+  if (authLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+      <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (!user && !authLoading) { // Handles cases like init error or definitively no user after loading
+  if (!user && !authLoading) {
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
-            <Card className="p-6 glass-card text-center">
+        <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
+            <Card className="p-6 modern-card text-center">
               <CardHeader>
                 <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-3"/>
                 <CardTitle className="text-xl text-foreground">Session Not Found</CardTitle>
@@ -54,8 +53,8 @@ export default function StudentDashboardLayout({
   
   if (user && user.role !== 'student') {
      return (
-        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
-             <Card className="p-6 glass-card text-center">
+        <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
+             <Card className="p-6 modern-card text-center">
                 <CardHeader>
                     <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-3"/>
                     <CardTitle className="text-xl text-foreground">Access Denied</CardTitle>
@@ -71,17 +70,16 @@ export default function StudentDashboardLayout({
   return (
     <SidebarProvider 
         defaultOpen 
-        className="bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900 min-h-screen"
+        className="bg-slate-100 dark:bg-slate-900 min-h-screen"
     > 
       <SidebarElements
         navItems={studentNavItems}
         userRoleDashboard="student"
-        user={user} // Pass user (which can be null if authLoading is false and no user)
+        user={user} 
         signOut={handleSignOut}
         authLoading={authLoading}
       />
       <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 bg-transparent min-w-0"> 
-        {/* TODO: Add Framer Motion Page Wrapper here for content animations */}
         {children}
       </main>
     </SidebarProvider>
