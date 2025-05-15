@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Share2, Eye, Copy, BookOpenCheck, Loader2, Users2, CalendarClock, ClockIcon, CheckCircleIcon, PlayCircleIcon, ArchiveIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -22,22 +23,30 @@ import {
 } from "@/components/ui/alert-dialog";
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Exam } from '@/types/supabase';
-import { format, parseISO } from 'date-fns';
+import type { Exam, ExamStatus } from '@/types/supabase';
+import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
+import { getEffectiveExamStatus } from './[examId]/details/page'; // Import the helper
+
+interface CategorizedExams {
+  ongoing: Exam[];
+  upcoming: Exam[];
+  completed: Exam[];
+  drafts: Exam[];
+}
 
 export default function ManageExamsPage() {
   const supabase = createSupabaseBrowserClient();
   const { user } = useAuth();
-  const [exams, setExams] = useState<Exam[]>([]);
+  const [categorizedExams, setCategorizedExams] = useState<CategorizedExams>({ ongoing: [], upcoming: [], completed: [], drafts: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
   const { toast } = useToast();
 
-  const fetchExams = useCallback(async () => {
+  const fetchAndCategorizeExams = useCallback(async () => {
     if (!user) {
       setIsLoading(false);
-      setExams([]);
+      setCategorizedExams({ ongoing: [], upcoming: [], completed: [], drafts: [] });
       return;
     }
     setIsLoading(true);
@@ -48,26 +57,35 @@ export default function ManageExamsPage() {
         .eq('teacher_id', user.user_id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        throw error;
-      }
-      setExams(data || []);
+      if (error) throw error;
+
+      const examsData = data || [];
+      const newCategorizedExams: CategorizedExams = { ongoing: [], upcoming: [], completed: [], drafts: [] };
+
+      examsData.forEach(exam => {
+        const effectiveStatus = getEffectiveExamStatus(exam);
+        if (effectiveStatus === 'Ongoing') newCategorizedExams.ongoing.push(exam);
+        else if (effectiveStatus === 'Published') newCategorizedExams.upcoming.push(exam); // 'Published' and not yet started means upcoming
+        else if (effectiveStatus === 'Completed') newCategorizedExams.completed.push(exam);
+        else if (effectiveStatus === 'Draft') newCategorizedExams.drafts.push(exam);
+      });
+      
+      setCategorizedExams(newCategorizedExams);
+
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to fetch exams: ${error.message}`, variant: "destructive" });
-      setExams([]);
+      setCategorizedExams({ ongoing: [], upcoming: [], completed: [], drafts: [] });
     } finally {
       setIsLoading(false);
     }
   }, [user, supabase, toast]);
 
   useEffect(() => {
-    fetchExams();
-  }, [fetchExams]);
+    fetchAndCategorizeExams();
+  }, [fetchAndCategorizeExams]);
 
   const handleDeleteExam = async () => {
     if (!examToDelete) return;
-    // Optimistically set loading state for the whole page for simplicity
-    // Or, you could add a specific `isDeleting` state for the dialog button
     setIsLoading(true); 
     try {
       const { error } = await supabase
@@ -75,11 +93,9 @@ export default function ManageExamsPage() {
         .delete()
         .eq('exam_id', examToDelete.exam_id);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       toast({ title: "Exam Deleted", description: `Exam "${examToDelete.title}" has been deleted.` });
-      setExams(prevExams => prevExams.filter(exam => exam.exam_id !== examToDelete.exam_id));
+      fetchAndCategorizeExams(); // Re-fetch and re-categorize
       setExamToDelete(null);
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to delete exam: ${error.message}`, variant: "destructive" });
@@ -102,7 +118,7 @@ export default function ManageExamsPage() {
     });
   };
   
-  const getStatusBadgeVariant = (status: Exam['status']) => {
+  const getStatusBadgeVariant = (status: ExamStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
       case 'Published': return 'default';
       case 'Ongoing': return 'destructive'; 
@@ -113,26 +129,114 @@ export default function ManageExamsPage() {
     }
   };
   
-  const getStatusBadgeClass = (status: Exam['status']) => {
+  const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
-      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white';
+      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // Upcoming
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
       case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
-      default: return '';
+      default: return ''; // Draft
     }
   }
 
   const formatTableDateTime = (isoString: string | null | undefined) => {
     if (!isoString) return 'N/A';
     try {
-      return format(parseISO(isoString), "MMM d, yyyy HH:mm");
+      const date = parseISO(isoString);
+      if(!isValid(date)) return 'Invalid Date';
+      return format(date, "MMM d, yyyy HH:mm");
     } catch {
       return "Invalid Date";
     }
   };
 
+  const renderExamTable = (exams: Exam[], categoryTitle: string, categoryIcon: React.ReactNode) => {
+    if (exams.length === 0) {
+      return (
+        <div className="py-4 text-center text-muted-foreground">
+          No {categoryTitle.toLowerCase()} exams.
+        </div>
+      );
+    }
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Title</TableHead>
+            <TableHead>Status (DB)</TableHead>
+            <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>Start Time</TableHead>
+            <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>End Time</TableHead>
+            <TableHead>Questions</TableHead>
+            <TableHead>Duration</TableHead>
+            <TableHead>Exam Code</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {exams.map((exam) => (
+            <TableRow key={exam.exam_id}>
+              <TableCell className="font-medium">{exam.title}</TableCell>
+              <TableCell>
+                 <Badge 
+                  variant={getStatusBadgeVariant(exam.status)} // Use DB status for this column
+                  className={getStatusBadgeClass(exam.status)}
+                >
+                  {exam.status}
+                </Badge>
+              </TableCell>
+              <TableCell>{formatTableDateTime(exam.start_time)}</TableCell>
+              <TableCell>{formatTableDateTime(exam.end_time)}</TableCell>
+              <TableCell>{exam.questions?.length || 0}</TableCell>
+              <TableCell>{exam.duration} min</TableCell>
+              <TableCell>
+                <Button variant="ghost" size="sm" onClick={() => copyExamCode(exam.exam_code)} className="p-1 h-auto">
+                  {exam.exam_code} <Copy className="ml-2 h-3 w-3" />
+                </Button>
+              </TableCell>
+              <TableCell className="text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                      <span className="sr-only">Open menu</span>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuItem asChild>
+                      <Link href={`/teacher/dashboard/exams/${exam.exam_id}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href={`/teacher/dashboard/exams/${exam.exam_id}/details`}><Eye className="mr-2 h-4 w-4" /> View Details</Link>
+                    </DropdownMenuItem>
+                     <DropdownMenuItem asChild>
+                      <Link href={`/teacher/dashboard/results/${exam.exam_id}`}><Users2 className="mr-2 h-4 w-4" /> View Results</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => copyExamCode(exam.exam_code)}>
+                      <Share2 className="mr-2 h-4 w-4" /> Share Code
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => openDeleteDialog(exam)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+  };
+  
+  const examCategories = [
+    { title: "Ongoing Exams", data: categorizedExams.ongoing, icon: <PlayCircleIcon className="h-5 w-5 text-yellow-500" />, defaultOpen: true },
+    { title: "Upcoming Exams", data: categorizedExams.upcoming, icon: <ClockIcon className="h-5 w-5 text-blue-500" />, defaultOpen: true },
+    { title: "Completed Exams", data: categorizedExams.completed, icon: <CheckCircleIcon className="h-5 w-5 text-green-500" /> },
+    { title: "Draft Exams", data: categorizedExams.drafts, icon: <ArchiveIcon className="h-5 w-5 text-gray-500" /> },
+  ];
 
-  if (isLoading && exams.length === 0) { // Show main loader only if exams array is empty during initial load
+
+  if (isLoading && Object.values(categorizedExams).every(arr => arr.length === 0)) {
     return (
       <div className="flex justify-center items-center h-full py-10">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -154,90 +258,32 @@ export default function ManageExamsPage() {
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle>Your Exams</CardTitle>
-          <CardDescription>View, edit, and manage all your created exams.</CardDescription>
+          <CardTitle>Your Exams Dashboard</CardTitle>
+          <CardDescription>View, edit, and manage all your created exams, categorized by status.</CardDescription>
         </CardHeader>
         <CardContent>
-          {exams.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead><CalendarClock className="inline mr-1 h-4 w-4"/>Start Time</TableHead>
-                  <TableHead>Questions</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Exam Code</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {exams.map((exam) => (
-                  <TableRow key={exam.exam_id}>
-                    <TableCell className="font-medium">{exam.title}</TableCell>
-                    <TableCell>
-                       <Badge 
-                        variant={getStatusBadgeVariant(exam.status)}
-                        className={getStatusBadgeClass(exam.status)}
-                      >
-                        {exam.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatTableDateTime(exam.start_time)}</TableCell>
-                    <TableCell>{exam.questions?.length || 0}</TableCell>
-                    <TableCell>{exam.duration} min</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => copyExamCode(exam.exam_code)} className="p-1 h-auto">
-                        {exam.exam_code} <Copy className="ml-2 h-3 w-3" />
-                      </Button>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem asChild>
-                            {/* Ensure this uses exam_id for routing consistently */}
-                            <Link href={`/teacher/dashboard/exams/${exam.exam_id}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit</Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/teacher/dashboard/exams/${exam.exam_id}/details`}><Eye className="mr-2 h-4 w-4" /> View Details</Link>
-                          </DropdownMenuItem>
-                           <DropdownMenuItem asChild>
-                            <Link href={`/teacher/dashboard/results/${exam.exam_id}`}><Users2 className="mr-2 h-4 w-4" /> View Results</Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => copyExamCode(exam.exam_code)}>
-                            <Share2 className="mr-2 h-4 w-4" /> Share Code
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => openDeleteDialog(exam)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          {isLoading && <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
+          {!isLoading && Object.values(categorizedExams).every(arr => arr.length === 0) ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <BookOpenCheck className="h-16 w-16 text-muted-foreground mb-4" />
+              <p className="text-lg text-muted-foreground">No exams created yet.</p>
+              <p className="text-sm text-muted-foreground">Click "Create New Exam" to get started.</p>
+            </div>
           ) : (
-             isLoading ? (
-                <div className="flex justify-center items-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="ml-2 text-muted-foreground">Loading exams...</p>
-                </div>
-             ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <BookOpenCheck className="h-16 w-16 text-muted-foreground mb-4" />
-                  <p className="text-lg text-muted-foreground">No exams created yet.</p>
-                  <p className="text-sm text-muted-foreground">Click "Create New Exam" to get started.</p>
-                </div>
-             )
+            <Accordion type="multiple" defaultValue={examCategories.filter(c=>c.defaultOpen).map(c => c.title)} className="w-full">
+              {examCategories.map(category => (
+                <AccordionItem value={category.title} key={category.title}>
+                  <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+                    <div className="flex items-center gap-2">
+                        {category.icon} {category.title} ({category.data.length})
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {renderExamTable(category.data, category.title, category.icon)}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           )}
         </CardContent>
       </Card>

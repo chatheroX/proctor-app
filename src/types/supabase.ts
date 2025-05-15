@@ -29,40 +29,42 @@ export interface ProctorXTableType {
   created_at?: string;
 }
 
+export type ExamStatus = 'Draft' | 'Published' | 'Ongoing' | 'Completed';
+
 export interface Database {
   public: {
     Tables: {
       proctorX: {
         Row: ProctorXTableType;
-        Insert: ProctorXTableType;
-        Update: Partial<ProctorXTableType>;
+        Insert: Omit<ProctorXTableType, 'created_at'>;
+        Update: Partial<Omit<ProctorXTableType, 'created_at'>>;
       };
-      ExamX: { // Exam table
+      ExamX: {
         Row: {
-          exam_id: string; // UUID, Primary Key
-          teacher_id: string; // Foreign Key to proctorX.user_id (teacher who created it)
+          exam_id: string;
+          teacher_id: string;
           title: string;
           description: string | null;
-          duration: number; // in minutes
+          duration: number;
           allow_backtracking: boolean;
-          questions: Question[] | null; // JSONB stored as array of Question objects
-          exam_code: string; // Unique code for students to join (e.g., 6-8 char alphanumeric)
-          status: 'Draft' | 'Published' | 'Ongoing' | 'Completed'; // Exam lifecycle status
-          start_time: string | null; // TIMESTAMPTZ as ISO string
-          end_time: string | null;   // TIMESTAMPTZ as ISO string
+          questions: Question[] | null;
+          exam_code: string;
+          status: ExamStatus;
+          start_time: string | null; // ISO string
+          end_time: string | null;   // ISO string
           created_at: string;
           updated_at: string;
         };
         Insert: {
-          exam_id?: string; // Optional on insert, DB defaults to gen_random_uuid()
+          exam_id?: string;
           teacher_id: string;
           title: string;
           description?: string | null;
           duration: number;
           allow_backtracking?: boolean;
           questions?: Question[] | null;
-          exam_code: string; // Should be generated and unique
-          status?: 'Draft' | 'Published' | 'Ongoing' | 'Completed';
+          exam_code: string;
+          status?: ExamStatus;
           start_time?: string | null;
           end_time?: string | null;
           created_at?: string;
@@ -77,25 +79,12 @@ export interface Database {
           allow_backtracking?: boolean;
           questions?: Question[] | null;
           exam_code?: string;
-          status?: 'Draft' | 'Published' | 'Ongoing' | 'Completed';
+          status?: ExamStatus;
           start_time?: string | null;
           end_time?: string | null;
-          updated_at?: string; // Auto-updated by trigger
+          updated_at?: string;
         };
       };
-      // Potential future table for exam submissions
-      // ExamSubmissionsX: {
-      //   Row: {
-      //     submission_id: string; // PK
-      //     exam_id: string; // FK to ExamX
-      //     student_id: string; // FK to proctorX (student who took it)
-      //     answers: Json; // e.g., { "questionId1": "optionId2", ... }
-      //     score: number | null;
-      //     submitted_at: string;
-      //     flagged_events: FlaggedEvent[] | null;
-      //   }
-      //   // Insert, Update types
-      // }
     };
     Views: {
       [_ in never]: never;
@@ -112,18 +101,16 @@ export interface Database {
   };
 }
 
-// Custom user type for the application context
 export type CustomUser = {
-  user_id: string; // 6-character ID from proctorX
+  user_id: string;
   email: string;
   name: string | null;
-  role: 'student' | 'teacher' | null; // Role can be null if not set or during initial loading
+  role: 'student' | 'teacher' | null;
 };
 
 export type ProctorXTable = Database['public']['Tables']['proctorX'];
 export type ExamXTable = Database['public']['Tables']['ExamX'];
 export type Exam = ExamXTable['Row'];
-
 
 export type FlaggedEventType =
   | 'visibility_hidden'
@@ -135,7 +122,7 @@ export type FlaggedEventType =
 
 export interface FlaggedEvent {
   type: FlaggedEventType;
-  timestamp: Date; // Will be stringified for DB storage
+  timestamp: Date;
   studentId: string;
   examId: string;
   details?: string;

@@ -7,11 +7,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam } from '@/types/supabase';
+import type { Exam, ExamStatus } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { parseISO } from 'date-fns';
-
 
 export default function EditExamPage() {
   const params = useParams();
@@ -20,7 +19,7 @@ export default function EditExamPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const examId = params.examId as string; // Changed from params.id
+  const examId = params.examId as string;
   const [initialExamData, setInitialExamData] = useState<ExamFormData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +62,7 @@ export default function EditExamPage() {
           allowBacktracking: exam.allow_backtracking,
           questions: exam.questions || [],
           exam_code: exam.exam_code,
-          status: exam.status,
+          status: exam.status as ExamStatus,
           startTime: exam.start_time ? parseISO(exam.start_time) : null,
           endTime: exam.end_time ? parseISO(exam.end_time) : null,
         });
@@ -78,7 +77,7 @@ export default function EditExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, user]);
+  }, [examId, supabase, user, toast]); // Added toast to deps
 
   useEffect(() => {
     fetchExamToEdit();
@@ -98,6 +97,7 @@ export default function EditExamPage() {
       status: data.status,
       start_time: data.startTime ? data.startTime.toISOString() : null,
       end_time: data.endTime ? data.endTime.toISOString() : null,
+      // exam_code is not updated here to prevent accidental changes
     };
 
     try {

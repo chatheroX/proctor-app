@@ -11,6 +11,8 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import type { Exam } from '@/types/supabase';
+import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page'; // Import the helper
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
@@ -30,12 +32,12 @@ export default function JoinExamPage() {
     try {
       const { data: exam, error } = await supabase
         .from('ExamX')
-        .select('exam_id, status')
+        .select('*') // Fetch all details to use getEffectiveExamStatus
         .eq('exam_code', examCode.trim().toUpperCase())
         .single();
 
       if (error || !exam) {
-        if (error && error.code === 'PGRST116') { // No rows found
+        if (error && error.code === 'PGRST116') { 
           toast({ title: "Invalid Code", description: "Exam code not found. Please check and try again.", variant: "destructive" });
         } else {
           toast({ title: "Error", description: error?.message || "Could not verify exam code.", variant: "destructive" });
@@ -43,22 +45,21 @@ export default function JoinExamPage() {
         setIsLoading(false);
         return;
       }
+      
+      const effectiveStatus = getEffectiveExamStatus(exam as Exam);
 
-      // Check exam status - this is a placeholder for more robust status handling
-      if (exam.status !== 'Published' && exam.status !== 'Ongoing') {
-         toast({ title: "Exam Not Active", description: `This exam is currently ${exam.status.toLowerCase()} and cannot be joined.`, variant: "destructive" });
+      if (effectiveStatus !== 'Ongoing') {
+         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined.`, variant: "destructive" });
          setIsLoading(false);
          return;
       }
       
-      // If code is valid and exam is joinable
       router.push(`/student/dashboard/exam/${exam.exam_id}/seb-redirect`);
 
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setIsLoading(false);
     }
-    // setIsLoading(false); // Already handled in try/catch paths
   };
 
   return (

@@ -5,7 +5,7 @@ import { ExamForm, ExamFormData } from '@/components/teacher/exam-form';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam } from '@/types/supabase';
+import type { Exam, ExamStatus } from '@/types/supabase'; // Import ExamStatus
 
 const generateExamCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -29,24 +29,42 @@ export default function CreateExamPage() {
       allow_backtracking: data.allowBacktracking,
       questions: data.questions,
       exam_code: generateExamCode(),
-      status: data.status || 'Draft',
+      status: data.status, // Status from form
       start_time: data.startTime ? data.startTime.toISOString() : null,
       end_time: data.endTime ? data.endTime.toISOString() : null,
     };
 
     try {
-      const { data: insertedExam, error } = await supabase
-        .from('ExamX')
-        .insert(newExamData)
-        .select()
-        .single();
+      // Retry generating exam code if it collides (simple retry mechanism)
+      let insertedExam: Exam | null = null;
+      let error: any = null;
+      for (let i = 0; i < 3; i++) { // Try up to 3 times
+        const { data: attemptData, error: attemptError } = await supabase
+          .from('ExamX')
+          .insert(newExamData)
+          .select()
+          .single();
+        
+        if (attemptError) {
+          error = attemptError;
+          if (attemptError.code === '23505' && attemptError.message.includes('ExamX_exam_code_key')) {
+            newExamData.exam_code = generateExamCode(); // Generate new code and retry
+            continue;
+          }
+          break; // Other error, break loop
+        }
+        insertedExam = attemptData;
+        error = null; // Clear error on success
+        break; // Success, break loop
+      }
+
 
       if (error) {
         console.error('Error creating exam:', error);
         if (error.code === '23505' && error.message.includes('ExamX_exam_code_key')) {
-             return { success: false, error: "Failed to generate a unique exam code. Please try again." };
+             return { success: false, error: "Failed to generate a unique exam code after multiple attempts. Please try again." };
         }
-        return { success: false, error: error.message };
+        return { success: false, error: error.message || "Failed to create exam."};
       }
       if (!insertedExam) {
         return { success: false, error: "Failed to create exam, no data returned." };
@@ -60,9 +78,20 @@ export default function CreateExamPage() {
     }
   };
 
+  const defaultFormData: ExamFormData = {
+    title: '',
+    description: '',
+    duration: 60,
+    allowBacktracking: true,
+    questions: [],
+    startTime: null,
+    endTime: null,
+    status: 'Draft',
+  };
+
   return (
     <div className="space-y-6">
-      <ExamForm onSave={handleCreateExam} />
+      <ExamForm initialData={defaultFormData} onSave={handleCreateExam} />
     </div>
   );
 }

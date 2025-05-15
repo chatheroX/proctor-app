@@ -16,22 +16,20 @@ import { PlusCircle, Trash2, Upload, Brain, Save, FileText, Settings2, CalendarD
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { cn } from "@/lib/utils";
-import type { Question, QuestionOption, Exam } from '@/types/supabase';
+import type { Question, QuestionOption, Exam, ExamStatus } from '@/types/supabase';
 import { format, parseISO } from 'date-fns';
 
-
-// ExamData for the form, matching parts of the Exam type
 export interface ExamFormData {
   title: string;
   description: string;
-  duration: number; // in minutes
+  duration: number;
   allowBacktracking: boolean;
   questions: Question[];
   startTime: Date | null;
   endTime: Date | null;
+  status: ExamStatus;
   exam_id?: string;
   exam_code?: string;
-  status?: Exam['status'];
 }
 
 interface ExamFormProps {
@@ -44,49 +42,49 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
   const router = useRouter();
   const { toast } = useToast();
 
-  const [title, setTitle] = useState(initialData?.title || '');
-  const [description, setDescription] = useState(initialData?.description || '');
-  const [duration, setDuration] = useState(initialData?.duration || 60);
-  const [allowBacktracking, setAllowBacktracking] = useState(initialData?.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
-  const [questions, setQuestions] = useState<Question[]>(initialData?.questions || []);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [duration, setDuration] = useState(60);
+  const [allowBacktracking, setAllowBacktracking] = useState(true);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [status, setStatus] = useState<ExamStatus>('Draft');
 
-  const [startTime, setStartTime] = useState<Date | null>(initialData?.startTime ? (typeof initialData.startTime === 'string' ? parseISO(initialData.startTime) : initialData.startTime) : null);
-  const [endTime, setEndTime] = useState<Date | null>(initialData?.endTime ? (typeof initialData.endTime === 'string' ? parseISO(initialData.endTime) : initialData.endTime) : null);
-  const [startTimeStr, setStartTimeStr] = useState(initialData?.startTime ? format(typeof initialData.startTime === 'string' ? parseISO(initialData.startTime) : initialData.startTime, "HH:mm") : "00:00");
-  const [endTimeStr, setEndTimeStr] = useState(initialData?.endTime ? format(typeof initialData.endTime === 'string' ? parseISO(initialData.endTime) : initialData.endTime, "HH:mm") : "00:00");
-
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [endTime, setEndTime] = useState<Date | null>(null);
+  const [startTimeStr, setStartTimeStr] = useState("00:00");
+  const [endTimeStr, setEndTimeStr] = useState("00:00");
 
   const [currentQuestionText, setCurrentQuestionText] = useState('');
   const [currentOptions, setCurrentOptions] = useState<QuestionOption[]>([
     { id: `opt-0-${Date.now()}`, text: '' }, { id: `opt-1-${Date.now() + 1}`, text: '' }, { id: `opt-2-${Date.now() + 2}`, text: '' }, { id: `opt-3-${Date.now() + 3}`, text: '' }
   ]);
   const [currentCorrectOptionId, setCurrentCorrectOptionId] = useState<string>('');
-
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (initialData) {
-        setTitle(initialData.title || '');
-        setDescription(initialData.description || '');
-        setDuration(initialData.duration || 60);
-        setAllowBacktracking(initialData.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
-        setQuestions(initialData.questions || []);
-        
-        const initialStartTime = initialData.startTime ? (typeof initialData.startTime === 'string' ? parseISO(initialData.startTime) : initialData.startTime) : null;
-        const initialEndTime = initialData.endTime ? (typeof initialData.endTime === 'string' ? parseISO(initialData.endTime) : initialData.endTime) : null;
+      setTitle(initialData.title || '');
+      setDescription(initialData.description || '');
+      setDuration(initialData.duration || 60);
+      setAllowBacktracking(initialData.allowBacktracking !== undefined ? initialData.allowBacktracking : true);
+      setQuestions(initialData.questions || []);
+      setStatus(initialData.status || 'Draft');
+      
+      const initialStartTime = initialData.startTime ? (typeof initialData.startTime === 'string' ? parseISO(initialData.startTime) : initialData.startTime) : null;
+      const initialEndTime = initialData.endTime ? (typeof initialData.endTime === 'string' ? parseISO(initialData.endTime) : initialData.endTime) : null;
 
-        setStartTime(initialStartTime);
-        setEndTime(initialEndTime);
-        setStartTimeStr(initialStartTime ? format(initialStartTime, "HH:mm") : "00:00");
-        setEndTimeStr(initialEndTime ? format(initialEndTime, "HH:mm") : "00:00");
+      setStartTime(initialStartTime);
+      setEndTime(initialEndTime);
+      setStartTimeStr(initialStartTime ? format(initialStartTime, "HH:mm") : "00:00");
+      setEndTimeStr(initialEndTime ? format(initialEndTime, "HH:mm") : "00:00");
     }
   }, [initialData]);
 
   const handleDateChange = (date: Date | undefined, type: 'start' | 'end') => {
     if (!date) {
-        if (type === 'start') setStartTime(null);
-        else setEndTime(null);
-        return;
+      if (type === 'start') setStartTime(null);
+      else setEndTime(null);
+      return;
     }
 
     const timeStr = type === 'start' ? startTimeStr : endTimeStr;
@@ -96,9 +94,13 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
     newDateTime.setHours(hours, minutes, 0, 0);
 
     if (type === 'start') {
-        setStartTime(newDateTime);
+      setStartTime(newDateTime);
+      if (endTime && newDateTime >= endTime) {
+        setEndTime(null); // Reset end time if it's no longer valid
+        setEndTimeStr("00:00");
+      }
     } else {
-        setEndTime(newDateTime);
+      setEndTime(newDateTime);
     }
   };
 
@@ -108,14 +110,24 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
     else setEndTimeStr(timeValue);
 
     if (currentDate) {
-        const [hours, minutes] = timeValue.split(':').map(Number);
-        const newDateTime = new Date(currentDate);
-        newDateTime.setHours(hours, minutes, 0, 0);
-        if (type === 'start') setStartTime(newDateTime);
-        else setEndTime(newDateTime);
+      const [hours, minutes] = timeValue.split(':').map(Number);
+      const newDateTime = new Date(currentDate); // Use existing date part
+      newDateTime.setHours(hours, minutes, 0, 0);
+
+      if (type === 'start') {
+        setStartTime(newDateTime);
+        if (endTime && newDateTime >= endTime) {
+          setEndTime(null); // Reset end time
+          setEndTimeStr("00:00");
+        }
+      } else {
+        setEndTime(newDateTime);
+      }
+    } else {
+      // If date isn't set yet, just store the time string. Date selection will combine them.
+      toast({ title: "Info", description: `Please select a ${type} date first to set the time.`, variant: "default"});
     }
   };
-
 
   const resetOptionIdsAndText = (): QuestionOption[] => {
     return Array.from({ length: 4 }, (_, i) => ({ id: `opt-${i}-${Date.now() + i}`, text: '' }));
@@ -139,7 +151,7 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
     const newQuestion: Question = {
       id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       text: currentQuestionText,
-      options: filledOptions.map(opt => ({ ...opt, id: `opt-${Math.random().toString(36).substring(2, 9)}-${Date.now()}` })), // Ensure new IDs for options when added to question
+      options: filledOptions.map(opt => ({ ...opt, id: `opt-${Math.random().toString(36).substring(2, 9)}-${Date.now()}` })),
       correctOptionId: currentCorrectOptionId,
     };
     setQuestions([...questions, newQuestion]);
@@ -170,15 +182,14 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
       toast({ title: "Invalid Duration", description: "Duration must be greater than 0 minutes.", variant: "destructive" });
       return;
     }
-     if (startTime && endTime && startTime >= endTime) {
+    if (startTime && endTime && startTime >= endTime) {
       toast({ title: "Invalid Dates", description: "Start time must be before end time.", variant: "destructive" });
       return;
     }
-    // Questions are optional for draft, but might be required for publishing later
-    // if (questions.length === 0 && !isEditing) {
-    //   toast({ title: "No Questions", description: "Please add at least one question to the exam.", variant: "destructive" });
-    //   return;
-    // }
+    if (status === 'Published' && (!startTime || !endTime)) {
+      toast({ title: "Scheduling Required", description: "Published exams must have both a start and end time.", variant: "destructive" });
+      return;
+    }
 
     setIsLoading(true);
     const examFormData: ExamFormData = {
@@ -190,8 +201,8 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
       questions,
       startTime,
       endTime,
+      status,
       exam_code: initialData?.exam_code,
-      status: initialData?.status || 'Draft' // Default to Draft if not editing an existing status
     };
 
     const result = await onSave(examFormData);
@@ -240,8 +251,22 @@ export function ExamForm({ initialData, onSave, isEditing = false }: ExamFormPro
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Scheduling</Label>
-              <p className="text-sm text-muted-foreground">Set start and end dates/times for the exam. (Optional)</p>
+              <Label htmlFor="status">Exam Status</Label>
+              <select
+                id="status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as ExamStatus)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <option value="Draft">Draft</option>
+                <option value="Published">Published</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Set to 'Published' to make it available. 'Ongoing' and 'Completed' are set automatically or can be manually set in details page if needed.
+              </p>
+            </div>
+            <div className="space-y-2 mt-4">
+              <Label className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Scheduling (Required if Status is 'Published')</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="startTimeDate">Start Date & Time</Label>

@@ -5,12 +5,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Question, Exam, FlaggedEvent } from '@/types/supabase';
+import type { Question, Exam, FlaggedEvent, ExamStatus } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ExamTakingInterface } from '@/components/shared/exam-taking-interface';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
+import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 
 export default function TakeExamPage() {
   const params = useParams();
@@ -23,7 +23,7 @@ export default function TakeExamPage() {
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // For loading exam data
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [examStarted, setExamStarted] = useState(false);
 
@@ -43,15 +43,16 @@ export default function TakeExamPage() {
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('exam_id, title, description, duration, questions, allow_backtracking, status, start_time, end_time')
+        .select('*') // Fetch all details for effective status check
         .eq('exam_id', examId)
         .single();
 
       if (fetchError) throw fetchError;
       if (!data) throw new Error("Exam not found.");
 
-      if (data.status !== 'Published' && data.status !== 'Ongoing') {
-         setError(`This exam is currently ${data.status.toLowerCase()} and cannot be taken.`);
+      const effectiveStatus = getEffectiveExamStatus(data as Exam);
+      if (effectiveStatus !== 'Ongoing') {
+         setError(`This exam is currently ${effectiveStatus.toLowerCase()} and cannot be taken.`);
          setExamDetails(data as Exam);
          setQuestions([]);
          setIsLoading(false);
@@ -67,26 +68,28 @@ export default function TakeExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, studentUserId]); // setError, setExamDetails, setQuestions, setIsLoading are stable
+  }, [examId, supabase, studentUserId]);
 
   useEffect(() => {
-    if (examId && studentUserId && !examDetails && isLoading) { // Only fetch if needed and params are ready
+    if (examId && studentUserId && !examDetails && isLoading) {
         fetchExamData();
     } else if (!isLoading && (!examId || !studentUserId)) {
         if (!examId) setError("Exam ID is missing for fetch.");
         else if(!studentUserId) setError("Student authentication details missing for fetch.");
-        // setIsLoading(false); // Already false
     }
-  }, [examId, studentUserId, fetchExamData, isLoading, examDetails]); // Added examDetails & isLoading to dependencies
+  }, [examId, studentUserId, fetchExamData, isLoading, examDetails]);
 
   const handleStartExam = useCallback(() => {
     if (error && !examDetails) {
         toast({ title: "Cannot Start", description: error || "An error occurred.", variant: "destructive" });
         return;
     }
-    if (examDetails?.status !== 'Published' && examDetails?.status !== 'Ongoing') {
-        toast({ title: "Cannot Start", description: `Exam is ${examDetails?.status.toLowerCase()}.`, variant: "destructive" });
-        return;
+    if (examDetails) {
+        const effectiveStatus = getEffectiveExamStatus(examDetails);
+        if (effectiveStatus !== 'Ongoing') {
+            toast({ title: "Cannot Start", description: `Exam is ${effectiveStatus.toLowerCase()}.`, variant: "destructive" });
+            return;
+        }
     }
     if(examDetails && (questions === null || questions.length === 0) && !isLoading) {
         toast({ title: "No Questions", description: "This exam has no questions. Please contact your teacher.", variant: "destructive" });
@@ -95,11 +98,10 @@ export default function TakeExamPage() {
     if (!isLoading && !error && examDetails) {
         setExamStarted(true);
     }
-  }, [questions, isLoading, error, examDetails, toast]); // setExamStarted is stable
+  }, [questions, isLoading, error, examDetails, toast]);
 
   const handleAnswerChangeLocal = useCallback((questionId: string, optionId: string) => {
     console.log(`Student Answer for QID ${questionId} saved locally (simulated): OptionID ${optionId}`);
-    // Here you would implement local storage saving
   }, []);
 
   const handleSubmitExamActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -111,7 +113,8 @@ export default function TakeExamPage() {
     console.log('Flagged Events to backend:', flaggedEvents);
 
     // TODO: Implement actual submission to Supabase 'ExamSubmissionsX' table
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+    // Update exam status to 'Completed' if this student was the last one or based on exam end time
+    await new Promise(resolve => setTimeout(resolve, 1500)); 
 
     toast({ title: "Exam Submitted!", description: "Your responses have been recorded (simulation)." });
     router.push('/student/dashboard/exam-history');
@@ -124,8 +127,7 @@ export default function TakeExamPage() {
     }
     console.log("Time is up. Auto-submitting answers:", answers);
     console.log("Time is up. Auto-submitting flagged events:", flaggedEvents);
-    // TODO: Implement actual auto-submission to Supabase 'ExamSubmissionsX' table
-     await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+     await new Promise(resolve => setTimeout(resolve, 1500));
      toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up (simulation)." });
      router.push('/student/dashboard/exam-history');
   }, [studentUserId, toast, router]);
@@ -156,7 +158,7 @@ export default function TakeExamPage() {
   return (
     <ExamTakingInterface
       examDetails={examDetails}
-      questions={questions || []} // Ensure questions is not null
+      questions={questions || []}
       isLoading={isLoading && !examDetails}
       error={error}
       examStarted={examStarted}
@@ -169,5 +171,3 @@ export default function TakeExamPage() {
     />
   );
 }
-
-  

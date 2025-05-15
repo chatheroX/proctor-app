@@ -6,11 +6,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare, CalendarClock, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam, Question } from '@/types/supabase';
+import type { Exam, Question, ExamStatus } from '@/types/supabase';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,16 +22,46 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import Link from 'next/link';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
+
+// Helper function to determine effective status
+export const getEffectiveExamStatus = (exam: Exam): ExamStatus => {
+  if (!exam || !exam.status) return 'Draft'; // Default if exam or status is undefined
+
+  const now = new Date();
+  const startTime = exam.start_time ? parseISO(exam.start_time) : null;
+  const endTime = exam.end_time ? parseISO(exam.end_time) : null;
+
+  if (exam.status === 'Draft') return 'Draft';
+  if (exam.status === 'Completed') return 'Completed';
+
+  if (exam.status === 'Published') {
+    if (startTime && endTime && isValid(startTime) && isValid(endTime)) {
+      if (isAfter(now, endTime)) return 'Completed';
+      if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing';
+      if (isBefore(now, startTime)) return 'Published'; // Upcoming
+    }
+    return 'Published'; // If times are not set or invalid, but it's published.
+  }
+  
+  if (exam.status === 'Ongoing') {
+     if (endTime && isValid(endTime) && isAfter(now, endTime)) return 'Completed';
+     return 'Ongoing';
+  }
+
+  return exam.status; // Fallback
+};
+
 
 export default function ExamDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
-  const examId = params.examId as string; // Changed from params.id
+  const examId = params.examId as string;
 
   const [exam, setExam] = useState<Exam | null>(null);
+  const [effectiveStatus, setEffectiveStatus] = useState<ExamStatus>('Draft');
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -52,6 +82,9 @@ export default function ExamDetailsPage() {
 
       if (error) throw error;
       setExam(data);
+      if (data) {
+        setEffectiveStatus(getEffectiveExamStatus(data));
+      }
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to fetch exam details: ${error.message}`, variant: "destructive" });
       setExam(null);
@@ -93,20 +126,18 @@ export default function ExamDetailsPage() {
     }
   };
   
-  const getStatusBadgeVariant = (status?: Exam['status']) => {
-    if (!status) return 'secondary';
+  const getStatusBadgeVariant = (status: ExamStatus) => {
     switch (status) {
-      case 'Published': return 'default';
-      case 'Ongoing': return 'destructive'; 
-      case 'Completed': return 'outline'; 
+      case 'Published': return 'default'; // Blue
+      case 'Ongoing': return 'destructive'; // Yellow/Orange - using destructive for now
+      case 'Completed': return 'outline'; // Green
       case 'Draft':
       default:
-        return 'secondary';
+        return 'secondary'; // Grey
     }
   };
 
-  const getStatusBadgeClass = (status?: Exam['status']) => {
-     if (!status) return '';
+  const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
       case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white';
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
@@ -118,7 +149,9 @@ export default function ExamDetailsPage() {
   const formatDateTime = (isoString: string | null | undefined) => {
     if (!isoString) return 'Not set';
     try {
-      return format(parseISO(isoString), "PPP p"); // e.g., Jun 1, 2024, 2:00 PM
+      const date = parseISO(isoString);
+      if (!isValid(date)) return 'Invalid Date';
+      return format(date, "MMM d, yyyy, hh:mm a"); // e.g., Jun 1, 2024, 02:00 PM
     } catch (error) {
       console.error("Error formatting date:", error);
       return "Invalid Date";
@@ -148,6 +181,7 @@ export default function ExamDetailsPage() {
   }
 
   const questionsList = exam.questions || [];
+  const isJoinable = effectiveStatus === 'Ongoing' || (effectiveStatus === 'Published' && exam.start_time && exam.end_time && isAfter(new Date(), parseISO(exam.start_time)) && isBefore(new Date(), parseISO(exam.end_time)));
 
   return (
     <div className="space-y-6">
@@ -163,10 +197,10 @@ export default function ExamDetailsPage() {
               <CardDescription className="mt-1">{exam.description || "No description provided."}</CardDescription>
             </div>
             <Badge
-              variant={getStatusBadgeVariant(exam.status)}
-              className={`text-sm px-3 py-1 ${getStatusBadgeClass(exam.status)}`}
+              variant={getStatusBadgeVariant(effectiveStatus)}
+              className={`text-sm px-3 py-1 ${getStatusBadgeClass(effectiveStatus)}`}
             >
-              {exam.status}
+              {effectiveStatus}
             </Badge>
           </div>
         </CardHeader>
@@ -196,6 +230,10 @@ export default function ExamDetailsPage() {
              <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><CalendarClock className="h-4 w-4" /> End Time</Label>
               <p className="text-lg font-semibold">{formatDateTime(exam.end_time)}</p>
+            </div>
+             <div>
+                <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><AlertCircle className="h-4 w-4" /> Database Status</Label>
+                <p className="text-lg font-semibold">{exam.status}</p>
             </div>
           </div>
 
@@ -230,10 +268,10 @@ export default function ExamDetailsPage() {
               <PlaySquare className="mr-2 h-4 w-4" /> Take Demo Test
             </Link>
           </Button>
-          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/results/${exam.exam_id}`)} disabled>
+          <Button variant="outline" disabled>
             <Users2 className="mr-2 h-4 w-4" /> View Results (Soon)
           </Button>
-          <Button variant="outline" onClick={copyExamCode}>
+          <Button variant="outline" onClick={copyExamCode} disabled={!isJoinable && exam.status !== 'Published'}>
             <Share2 className="mr-2 h-4 w-4" /> Share Exam Code
           </Button>
           <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} disabled={isDeleting}>
