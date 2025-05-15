@@ -4,16 +4,15 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress'; // Kept for header progress, removed from footer
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-// Textarea import removed as it's no longer used
-import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen, Check, XCircle, ThumbsUp, ClockIcon, LogOut, HelpCircle, MessageSquare, Menu, Bookmark, Palette, FileTextIcon, GripVertical, Type, UploadCloud, Minus, LayoutGrid } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowRight, ArrowLeft, ListChecks, Flag, AlertTriangle, ServerCrash, UserCircle, Hash, BookOpen, Check, XCircle, ThumbsUp, ClockIcon, LogOut, HelpCircle, MessageSquare, Menu, Bookmark, Palette, FileTextIcon, GripVertical, Type, UploadCloud, Minus, LayoutGrid, ChevronRight, Info } from 'lucide-react';
 import { ExamTimerWarning } from '@/components/student/exam-timer-warning';
 import { useActivityMonitor, type FlaggedEvent } from '@/hooks/use-activity-monitor';
 import { useToast } from '@/hooks/use-toast';
@@ -24,9 +23,9 @@ interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
   questions: Question[];
   initialAnswers?: Record<string, string>;
-  parentIsLoading: boolean; 
+  isLoading: boolean; // Renamed from parentIsLoading for clarity within this component
   error: string | null;
-  examStarted: boolean; // This prop indicates if the exam session has actively started
+  examStarted: boolean;
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -40,9 +39,9 @@ export function ExamTakingInterface({
   examDetails,
   questions,
   initialAnswers,
-  parentIsLoading,
-  error: examLoadingError, // Renamed for clarity
-  examStarted,
+  isLoading: parentIsLoading, // Prop from parent
+  error: examLoadingError,
+  examStarted, // This prop is now key to determine if exam UI should show
   onAnswerChange,
   onSubmitExam: parentOnSubmitExam,
   onTimeUp: parentOnTimeUp,
@@ -62,7 +61,7 @@ export function ExamTakingInterface({
   const [examFinished, setExamFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [flaggedEvents, setFlaggedEvents] = useState<FlaggedEvent[]>([]);
-  const [internalError, setInternalError] = useState<string | null>(null);
+  const [internalError, setInternalError] = useState<string | null>(null); // For errors during submission etc.
   
   const onSubmitExamRef = useRef(parentOnSubmitExam);
   const onTimeUpRef = useRef(parentOnTimeUp);
@@ -74,8 +73,9 @@ export function ExamTakingInterface({
   useEffect(() => {
     onTimeUpRef.current = parentOnTimeUp;
   }, [parentOnTimeUp]);
-  
+
   useEffect(() => {
+    // Mark current question as visited when it becomes active
     if (questions && questions.length > 0 && questions[currentQuestionIndex]) {
       setVisitedQuestions(prev => ({ ...prev, [questions[currentQuestionIndex].id]: true }));
     }
@@ -103,7 +103,7 @@ export function ExamTakingInterface({
         duration: 3000,
       });
     }
-  }, [isDemoMode, toast, setFlaggedEvents]); 
+  }, [isDemoMode, toast]); 
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -113,7 +113,11 @@ export function ExamTakingInterface({
   });
 
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
-    setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: optionId }));
+    setAnswers((prevAnswers) => {
+      const newAnswers = { ...prevAnswers, [questionId]: optionId };
+      // console.log('[ExamTakingInterface] Answer changed:', newAnswers);
+      return newAnswers;
+    });
     onAnswerChange(questionId, optionId);
   }, [onAnswerChange]);
 
@@ -125,7 +129,7 @@ export function ExamTakingInterface({
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev + 1);
+      setCurrentQuestionIndex((prev) => prev - 1); // Corrected to decrement
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
@@ -163,7 +167,7 @@ export function ExamTakingInterface({
   }, [answers, flaggedEvents, examFinished, toast]); 
 
   const handleInternalTimeUp = useCallback(async () => {
-    if (examFinished) return;
+    if (examFinished) return; // Prevent multiple submissions
     if (!isDemoMode) {
         toast({ title: "Time's Up!", description: "Auto-submitting your exam.", variant: "destructive" });
     } else {
@@ -178,13 +182,12 @@ export function ExamTakingInterface({
         setInternalError(e.message || "Failed to auto-submit exam on time up.");
         toast({ title: "Auto-Submission Error", description: e.message || "Could not auto-submit exam.", variant: "destructive"});
     } finally {
-        setExamFinished(true); // Ensure examFinished is true even on error to show submission screen
+        // setExamFinished(true); // Already done in try/catch
         setIsSubmitting(false);
     }
   }, [answers, flaggedEvents, isDemoMode, toast, examFinished]); 
 
-  const currentQuestionId = useMemo(() => currentQuestion?.id, [currentQuestion]);
-  
+  const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
     if (currentQuestionId) {
       handleInternalAnswerChange(currentQuestionId, optionId);
@@ -197,54 +200,55 @@ export function ExamTakingInterface({
     const isMarked = !!markedForReview[qId];
     const isVis = !!visitedQuestions[qId];
 
-    if (isCurrent) return "bg-primary text-primary-foreground ring-2 ring-primary-foreground/50";
-    if (isAns && isMarked) return "bg-purple-500 text-white relative after:content-[''] after:absolute after:top-1 after:right-1 after:w-2 after:h-2 after:bg-green-400 after:rounded-full";
-    if (isMarked) return "bg-purple-500 text-white";
-    if (isAns) return "bg-green-500 text-white";
-    if (!isAns && isVis) return "bg-red-500 text-white"; 
-    return "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300";
+    if (isCurrent) return "bg-primary text-primary-foreground ring-2 ring-offset-1 ring-primary/80";
+    if (isAns && isMarked) return "bg-purple-500 hover:bg-purple-600 text-white"; // Answered & Marked
+    if (isMarked) return "bg-purple-500 hover:bg-purple-600 text-white"; // Marked
+    if (isAns) return "bg-green-500 hover:bg-green-600 text-white"; // Answered
+    if (!isAns && isVis) return "bg-red-500 hover:bg-red-600 text-white"; // Not Answered (Visited)
+    return "bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300";
   }, [currentQuestionIndex, answers, markedForReview, visitedQuestions]);
 
   const examDurationForTimer = useMemo(() => examDetails?.duration ?? 0, [examDetails?.duration]);
   const examTitleForTimer = useMemo(() => examDetails?.title ?? "Exam", [examDetails?.title]);
-  const progressValue = useMemo(() => questions.length > 0 ? ((Object.keys(answers).length) / questions.length) * 100 : 0, [answers, questions.length]);
+  const progressValue = useMemo(() => questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0, [currentQuestionIndex, questions.length]);
 
-
-  if (parentIsLoading && !examDetails) {
+  if (parentIsLoading) { // Loading state for exam data itself
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-muted-foreground">Loading exam interface...</p>
+        <p className="text-lg text-muted-foreground">Loading exam questions...</p>
       </div>
     );
   }
 
-  if (examLoadingError && !examDetails) {
+  if (examLoadingError) { // Error loading exam data
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4 text-center">
         <ServerCrash className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold text-destructive mb-2">Error Loading Exam</h2>
+        <h2 className="text-2xl font-semibold text-destructive mb-2">Error Loading Exam Content</h2>
         <p className="text-md text-muted-foreground mb-6 max-w-md">{examLoadingError}</p>
-        <p className="text-xs text-muted-foreground">You may need to close this tab and try re-initiating the exam.</p>
+        <p className="text-xs text-muted-foreground">Please close this tab and try re-initiating the exam. If the problem persists, contact support.</p>
+        <Button onClick={() => window.close()} className="mt-4 btn-primary-solid">Close Tab</Button>
       </div>
     );
   }
   
-  if (!examDetails || !examStarted) {
+  if (!examDetails || !examStarted) { // Should be caught by parent page, but as a fallback
+    // console.log('[ExamTakingInterface] Rendering error: examDetails or examStarted is false.', { examDetails, examStarted });
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-gray-800 p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900 p-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">Exam Session Error</h2>
         <p className="text-md text-muted-foreground mb-6 max-w-md">Exam session not properly initiated or critical details are missing.</p>
-         <Button onClick={() => window.close()} className="mt-4 btn-primary-solid">Close Tab</Button>
+        <Button onClick={() => window.close()} className="mt-4 btn-primary-solid">Close Tab</Button>
       </div>
     );
   }
 
   if (examFinished) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-background to-muted/30 p-4 text-center">
-        <Card className="w-full max-w-md modern-card shadow-2xl p-6 bg-card/80 backdrop-blur-md border-border/20">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-background to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4 text-center">
+        <Card className="w-full max-w-md modern-card shadow-2xl p-6 bg-card/90 dark:bg-card/70 backdrop-blur-md border-border/20">
           <CardHeader className="pb-4">
             <ThumbsUp className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-foreground">{isDemoMode ? "Demo " : ""}Exam {internalError ? "Submission Attempted" : "Submitted"}!</h2>
@@ -292,27 +296,29 @@ export function ExamTakingInterface({
     );
   }
 
-  if ((!questions || questions.length === 0) && !parentIsLoading) {
+  if ((!questions || questions.length === 0) && !parentIsLoading) { // Exam details loaded, but no questions
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900 p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900 p-4 text-center">
         <XCircle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-2xl font-semibold text-destructive mb-2">No Questions Available</h2>
-        <p className="text-md text-muted-foreground">This exam has no questions. Please contact your instructor.</p>
+        <p className="text-md text-muted-foreground">This exam currently has no questions. Please contact your instructor or proctor.</p>
+         <Button onClick={() => window.close()} className="mt-4 btn-primary-solid">Close Tab</Button>
       </div>
     );
   }
   
-   if (!currentQuestion && questions && questions.length > 0 && !parentIsLoading) {
+   if (!currentQuestion && questions && questions.length > 0 && !parentIsLoading) { // Should ideally not happen if questions exist
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900 p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-muted-foreground">Loading question...</p>
+        <p className="text-lg text-muted-foreground">Loading current question...</p>
       </div>
     );
   }
 
+  // Main Exam Taking UI
   return (
-    <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-950 text-foreground overflow-hidden">
+    <div className="flex flex-col h-screen bg-slate-100 dark:bg-gray-950 text-foreground overflow-hidden">
       {examDetails && examStarted && !examFinished && (
         <ExamTimerWarning
           key={`${examDetails.exam_id}-${examDurationForTimer}-${isDemoMode}`}
@@ -322,21 +328,21 @@ export function ExamTakingInterface({
         />
       )}
 
-      {/* Top Header Bar - Simplified */}
-      <header className="h-16 bg-card/50 dark:bg-card/30 backdrop-blur-lg shadow-md flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-0 z-40 border-b border-border/30 mt-[52px]">
+      {/* Top Header Bar */}
+      <header className="h-16 bg-card/80 dark:bg-card/50 backdrop-blur-md shadow-md flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-0 z-40 border-b border-border/60 mt-[52px]"> {/* mt-[52px] to offset timer warning */}
         <div className="flex items-center gap-3">
-          <Menu className="h-6 w-6 text-muted-foreground md:hidden" /> {/* Placeholder: no functionality */}
+          <Menu className="h-6 w-6 text-muted-foreground md:hidden cursor-pointer hover:text-primary" /> {/* Placeholder for mobile nav toggle */}
           <h1 className="text-lg font-semibold text-foreground truncate">
             All Questions
           </h1>
         </div>
-        {/* Section dropdown removed */}
+        {/* Section dropdown removed as requested */}
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel: Question Navigation */}
-        <aside className="w-72 bg-card/30 dark:bg-card/10 backdrop-blur-md border-r border-border/20 flex flex-col p-4 space-y-4 shadow-lg">
-          <div className="text-center py-2 border-b border-border/20">
+        <aside className="w-72 bg-card/50 dark:bg-card/30 backdrop-blur-md border-r border-border/30 flex flex-col p-4 space-y-3 shadow-lg">
+          <div className="text-center py-2 border-b border-border/40">
             <h2 className="text-md font-semibold text-foreground">
                 {studentName || 'Student'}
             </h2>
@@ -344,18 +350,19 @@ export function ExamTakingInterface({
           </div>
           
           <ScrollArea className="flex-grow -mx-1">
-            <div className="grid grid-cols-5 gap-1.5 p-1">
+            <div className="grid grid-cols-4 gap-2 p-1"> {/* Adjusted for slightly larger buttons */}
               {questions.map((q, index) => (
                 <Button
                   key={q.id}
                   variant="outline"
                   className={cn(
-                    "h-9 w-9 rounded-md text-xs font-medium flex items-center justify-center transition-all duration-150 ease-in-out focus:ring-2 focus:ring-offset-1 focus:ring-primary focus:z-10 shadow-sm border",
+                    "h-9 w-9 rounded-full text-xs font-medium flex items-center justify-center transition-all duration-150 ease-in-out focus:ring-2 focus:ring-offset-1 focus:ring-primary focus:z-10 shadow",
                     getQuestionStatusClass(q.id, index),
                     (!allowBacktracking && index < currentQuestionIndex) && "opacity-60 cursor-not-allowed"
                   )}
                   onClick={() => handleQuestionNavigation(index)}
                   disabled={(!allowBacktracking && index < currentQuestionIndex) || isSubmitting}
+                  title={`Question ${index + 1}`}
                 >
                   {index + 1}
                 </Button>
@@ -363,47 +370,47 @@ export function ExamTakingInterface({
             </div>
           </ScrollArea>
 
-          <div className="mt-auto pt-4 border-t border-border/20 space-y-1 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500 border border-green-700"></span> Answered</div>
-            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500 border border-red-700"></span> Not Answered (Visited)</div>
-            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-200 border border-gray-400 dark:bg-gray-700 dark:border-gray-500"></span> Not Visited</div>
-            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-purple-500 border border-purple-700"></span> Marked for Review</div>
+          <div className="mt-auto pt-3 border-t border-border/40 space-y-1.5 text-xs text-muted-foreground">
+            <p className="font-semibold mb-1 text-foreground/90">Legend:</p>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500 border border-green-700/50"></span> Answered</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500 border border-red-700/50"></span> Not Answered</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-slate-200 border border-slate-400/50 dark:bg-slate-700 dark:border-slate-500/50"></span> Not Visited</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-purple-500 border border-purple-700/50"></span> Marked for Review</div>
             <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-purple-500 border border-purple-700 relative after:content-[''] after:absolute after:top-0.5 after:right-0.5 after:w-1.5 after:h-1.5 after:bg-green-400 after:rounded-full"></span> Answered & Marked
+                <span className="w-3 h-3 rounded-full bg-purple-500 border border-purple-700/50 relative after:content-[''] after:absolute after:top-0.5 after:right-0.5 after:w-1.5 after:h-1.5 after:bg-green-400 after:rounded-full"></span> Ans & Marked
             </div>
           </div>
           
-          <div className="pt-4 border-t border-border/20 flex items-center justify-between">
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
-              <UserCircle className="h-5 w-5" />
-              <span className="sr-only">Profile</span>
-            </Button>
-             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary"><LayoutGrid className="h-5 w-5"/></Button>
-             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary"><Palette className="h-5 w-5"/></Button>
-             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary"><Type className="h-5 w-5"/></Button>
-           </div>
+          {/* Removed bottom icon bar */}
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto bg-background">
+        <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto bg-background/70 dark:bg-background/50">
           {currentQuestion ? (
             <>
-              <div className="mb-4 flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">Q.{currentQuestionIndex + 1}</h2>
-                  {/* Removed Subjective/Mark Badges */}
+              {/* Header for Exam Title and Question Progress within Main Content */}
+              <div className="mb-4 pb-3 border-b border-border/40">
+                  <h2 className="text-xl font-bold text-primary truncate">{examDetails.title}</h2>
+                  <div className="flex justify-between items-center mt-1">
+                    <p className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {questions.length}</p>
+                    <Progress value={progressValue} className="w-1/3 h-2" />
+                  </div>
+              </div>
+              
+              <div className="mb-3 flex justify-between items-center">
+                <div className="flex items-baseline gap-2">
+                    <h3 className="text-lg font-semibold text-foreground shrink-0">Q.{currentQuestionIndex + 1}:</h3>
+                    {/* Question text is now part of the paragraph below for better flow */}
                 </div>
                 <Button variant="ghost" size="icon" onClick={toggleMarkForReview} title="Mark for Review" className="text-muted-foreground hover:text-primary dark:text-gray-400 dark:hover:text-primary">
                   <Bookmark className={cn("h-5 w-5", markedForReview[currentQuestion.id] && "fill-primary text-primary")} />
                 </Button>
               </div>
 
-              <Card className="flex-grow mb-6 glass-card shadow-lg border-border/10">
-                <CardContent className="p-6 space-y-4">
+              <Card className="flex-grow mb-6 modern-card shadow-lg border-border/20 bg-card/90 dark:bg-card/70 p-2 md:p-0">
+                <CardContent className="p-4 md:p-6 space-y-4">
                   <p className="text-md md:text-lg text-foreground leading-relaxed">{currentQuestion.text}</p>
                   
-                  {/* Removed "Question image would appear here" text */}
-
                   <RadioGroup
                     value={answers[currentQuestion.id] || ''}
                     onValueChange={memoizedOnRadioValueChange}
@@ -413,17 +420,17 @@ export function ExamTakingInterface({
                     {currentQuestion.options.map((option) => (
                       <Label
                         key={option.id}
-                        htmlFor={option.id}
+                        htmlFor={`opt-${currentQuestion.id}-${option.id}`} // Ensure unique ID for label's htmlFor
                         className={cn(
-                          "flex items-center space-x-3 p-4 border rounded-lg transition-all duration-150 ease-in-out cursor-pointer modern-card",
-                          "hover:shadow-md hover:border-primary/60 dark:hover:bg-primary/10",
-                          answers[currentQuestion.id] === option.id ? "bg-primary/10 border-primary ring-2 ring-primary/80 shadow-lg dark:bg-primary/20" : "bg-card/60 dark:bg-card/40 border-border/30",
+                          "flex items-center space-x-3 p-3.5 border rounded-lg transition-all duration-150 ease-in-out cursor-pointer modern-card",
+                          "hover:shadow-md hover:border-primary/50 dark:hover:bg-primary/5",
+                          answers[currentQuestion.id] === option.id ? "bg-primary/15 border-primary ring-2 ring-primary/70 shadow-lg dark:bg-primary/25" : "bg-card dark:bg-slate-800/60 border-border/40",
                           isSubmitting && "cursor-not-allowed opacity-70"
                         )}
                       >
                         <RadioGroupItem 
                           value={option.id} 
-                          id={option.id} 
+                          id={`opt-${currentQuestion.id}-${option.id}`} // Unique ID for radio item
                           className="h-5 w-5 border-muted-foreground text-primary focus:ring-primary disabled:opacity-50 shrink-0" 
                           disabled={isSubmitting}
                         />
@@ -431,8 +438,6 @@ export function ExamTakingInterface({
                       </Label>
                     ))}
                   </RadioGroup>
-
-                  {/* Removed subjective answer Textarea and Upload section */}
 
                   {internalError && (
                       <Alert variant="destructive" className="mt-4 rounded-md">
@@ -444,17 +449,14 @@ export function ExamTakingInterface({
                 </CardContent>
               </Card>
               
-              {/* Bottom Navigation Bar */}
-              <div className="mt-auto pt-4 flex justify-between items-center sticky bottom-0 bg-background pb-4 px-1 z-10 border-t border-border/30">
-                 <div className="flex items-center gap-2 w-1/3">
-                    {/* Placeholder for other controls if needed */}
-                </div>
-                <div className="flex gap-3 justify-center w-1/3">
+              {/* Bottom Navigation Bar - Moved to left, progress bar removed */}
+              <div className="mt-auto pt-4 flex justify-start items-center sticky bottom-0 bg-background/70 dark:bg-background/50 pb-4 px-1 z-10 border-t border-border/40">
+                <div className="flex gap-3">
                   <Button
                     variant="outline"
                     onClick={handlePreviousQuestion}
                     disabled={currentQuestionIndex === 0 || !allowBacktracking || isSubmitting}
-                    className="py-2.5 px-6 text-sm rounded-md shadow-md border-border hover:bg-accent/10"
+                    className="py-2.5 px-6 text-sm rounded-md shadow-md border-border hover:bg-accent/20 dark:hover:bg-accent/10"
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" /> Previous
                   </Button>
@@ -468,12 +470,6 @@ export function ExamTakingInterface({
                       Submit Exam
                     </Button>
                   )}
-                </div>
-                <div className="w-1/3 flex flex-col items-end">
-                    <Progress value={progressValue} className="w-full max-w-xs h-2.5 mb-1" />
-                    <p className="text-xs text-muted-foreground">
-                        {Object.keys(answers).length} / {questions.length} Answered
-                    </p>
                 </div>
               </div>
             </>
