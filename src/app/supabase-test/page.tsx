@@ -7,15 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label'; // Added this import
 import { Loader2, AlertTriangle } from 'lucide-react';
-import type { Database } from '@/types/supabase';
+import type { Database, ProctorXTableType } from '@/types/supabase';
 
-// Define a type for a proctorX record
-type ProctorXRecord = Database['public']['Tables']['proctorX']['Row'];
 
 export default function SupabaseTestPage() {
   const supabase = createSupabaseBrowserClient();
-  const [proctorXData, setProctorXData] = useState<ProctorXRecord[]>([]);
+  const [proctorXData, setProctorXData] = useState<ProctorXTableType['Row'][]>([]);
   const [newPassValue, setNewPassValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +23,7 @@ export default function SupabaseTestPage() {
   const fetchProctorXTableData = async () => {
     setIsLoading(true);
     setFetchError(null);
-    setProctorXData([]); 
+    setProctorXData([]);
     try {
       const { data, error: dbError } = await supabase
         .from('proctorX')
@@ -36,7 +35,7 @@ export default function SupabaseTestPage() {
       setProctorXData(data || []);
     } catch (e: any) {
       console.error('Error fetching proctorX data:', e);
-      setFetchError(`Failed to fetch from 'proctorX': ${e.message}. Ensure the 'proctorX' table exists, has columns (id, pass, created_at), and RLS is configured if active.`);
+      setFetchError(`Failed to fetch from 'proctorX': ${e.message}. Ensure the 'proctorX' table exists, has columns (user_id, email, pass, name, role, created_at), and RLS is configured if active.`);
       setProctorXData([]);
     } finally {
       setIsLoading(false);
@@ -45,16 +44,27 @@ export default function SupabaseTestPage() {
 
   const addProctorXRecord = async (e: React.FormEvent) => {
     e.preventDefault();
+    // This form is simplified as proctorX now expects user_id, email, name, role as well.
+    // This test page is primarily for SELECT and a very basic INSERT.
+    // For full user creation, use the /auth page.
     if (!newPassValue.trim()) {
-      setError("'Pass' value cannot be empty.");
+      setError("'Pass' value cannot be empty for this basic test insert.");
       return;
     }
     setIsLoading(true);
     setError(null);
     try {
+      // For a meaningful insert that matches proctorX, you'd need more fields.
+      // This is a simplified insert to test connection and basic write.
       const { error: dbError } = await supabase
         .from('proctorX')
-        .insert([{ pass: newPassValue }]); 
+        .insert([{ 
+            user_id: `test-${Math.random().toString(36).substring(2,8)}`, // Dummy user_id
+            email: `test-${Math.random().toString(36).substring(2,8)}@example.com`, // Dummy email
+            pass: newPassValue, 
+            name: 'Test User SupabasePage',
+            role: 'student' // Dummy role
+        }]);
 
       if (dbError) {
         throw dbError;
@@ -63,7 +73,7 @@ export default function SupabaseTestPage() {
       await fetchProctorXTableData(); // Refresh list after adding
     } catch (e: any) {
       console.error('Error adding proctorX record:', e);
-      setError(`Failed to add record to 'proctorX': ${e.message}. Ensure RLS is configured if active, and you have insert permissions. Check column names and types.`);
+      setError(`Failed to add record to 'proctorX': ${e.message}. Ensure RLS is configured if active, and you have insert permissions. Check column names and types. Required: user_id, email, pass, name, role.`);
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +83,7 @@ export default function SupabaseTestPage() {
   useEffect(() => {
     fetchProctorXTableData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []);
 
   return (
     <div className="container mx-auto p-4 py-8">
@@ -81,7 +91,8 @@ export default function SupabaseTestPage() {
         <CardHeader>
           <CardTitle className="text-2xl">Supabase 'proctorX' Table Test</CardTitle>
           <CardDescription>
-            Test direct database interactions (select & insert) with your 'proctorX' table using the 'anon' key.
+            Test direct database interactions (select & basic insert) with your 'proctorX' table using the 'anon' key.
+            This page is for basic DB connectivity testing, not full user management.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -91,18 +102,18 @@ export default function SupabaseTestPage() {
               <div>
                 <p className="font-bold">Important Note for Testing:</p>
                 <ul className="list-disc list-inside text-sm">
-                  <li>Ensure a 'proctorX' table exists in your Supabase public schema.</li>
-                  <li>Expected columns: 'id' (uuid, primary key, default gen_random_uuid()), 'created_at' (timestamptz, default now()), 'pass' (text).</li>
-                  <li>For these operations to succeed, especially inserts, ensure Row Level Security (RLS) is turned OFF for the 'proctorX' table in your Supabase dashboard, OR appropriate RLS policies are in place that grant access to the 'anon' key.</li>
+                  <li>Ensure your 'proctorX' table exists in Supabase public schema.</li>
+                  <li>Expected columns: 'user_id' (text, primary key), 'email' (text, unique), 'created_at' (timestamptz), 'pass' (text), 'name' (text), 'role' (text).</li>
+                  <li>For these operations to succeed, ensure Row Level Security (RLS) is OFF for 'proctorX', OR appropriate RLS policies grant access to the 'anon' key for select/insert.</li>
                 </ul>
               </div>
             </div>
           </div>
 
           <form onSubmit={addProctorXRecord} className="space-y-4 p-4 border rounded-md bg-background">
-            <h3 className="text-lg font-medium">Add New Record to 'proctorX'</h3>
+            <h3 className="text-lg font-medium">Add Test Record to 'proctorX' (Basic Insert)</h3>
             <div>
-              <Label htmlFor="passValue" className="block text-sm font-medium mb-1">'Pass' Column Value</Label>
+              <Label htmlFor="passValue" className="block text-sm font-medium mb-1">'Pass' Column Value (Other fields will be dummy values)</Label>
               <Input
                 id="passValue"
                 type="text"
@@ -115,7 +126,7 @@ export default function SupabaseTestPage() {
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" disabled={isLoading && !fetchError} className="w-full">
               {isLoading && !fetchError ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Add Record
+              Add Test Record
             </Button>
           </form>
 
