@@ -2,19 +2,21 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, ExternalLink } from 'lucide-react';
+import { Loader2, ExternalLink, ShieldAlert } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, SebEntryTokenInsert } from '@/types/supabase';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { useAuth } from '@/contexts/AuthContext';
 
-const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb'; // Relative to public folder
+// This should be the exact path to your .seb file within the /public directory
+const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb';
 const TOKEN_EXPIRY_MINUTES = 5; // Short-lived token for SEB entry
 
 export default function JoinExamPage() {
@@ -22,7 +24,8 @@ export default function JoinExamPage() {
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
-  const { user: studentUser, isLoading: authLoading } = useAuth();
+  const { user: studentUser, isLoading: authLoading, supabaseInitializationError } = useAuth();
+  const router = useRouter();
 
   const generateRandomToken = (length = 64) => {
     const array = new Uint8Array(length / 2);
@@ -32,6 +35,8 @@ export default function JoinExamPage() {
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[JoinExamPage] Handle submit initiated.");
+
     if (!examCode.trim()) {
       toast({ title: "Error", description: "Please enter an exam code.", variant: "destructive" });
       return;
@@ -41,10 +46,16 @@ export default function JoinExamPage() {
       setIsLoading(false);
       return;
     }
+    if (supabaseInitializationError || !supabase) {
+      toast({ title: "Connection Error", description: "Cannot connect to services. Please try again later.", variant: "destructive" });
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
 
     try {
+      console.log(`[JoinExamPage] Fetching exam with code: ${examCode.trim().toUpperCase()}`);
       const { data: exam, error } = await supabase
         .from('ExamX')
         .select('exam_id, title, description, duration, questions, allow_backtracking, status, teacher_id, start_time, end_time, exam_code')
@@ -54,8 +65,10 @@ export default function JoinExamPage() {
       if (error || !exam) {
         toast({ title: "Invalid Code", description: error?.message || "Exam code not found or error fetching exam.", variant: "destructive" });
         setIsLoading(false);
+        console.error("[JoinExamPage] Error fetching exam or exam not found:", error);
         return;
       }
+      console.log("[JoinExamPage] Exam details fetched:", exam);
 
       const effectiveStatus = getEffectiveExamStatus(exam as Exam);
       if (effectiveStatus !== 'Ongoing') {
@@ -80,6 +93,7 @@ export default function JoinExamPage() {
         created_at: new Date().toISOString(),
         expires_at: expiresAt,
       };
+      console.log("[JoinExamPage] Generated SEB entry token record:", tokenRecord);
 
       const { error: tokenInsertError } = await supabase.from('SebEntryTokens').insert(tokenRecord);
 
@@ -89,27 +103,28 @@ export default function JoinExamPage() {
         setIsLoading(false);
         return;
       }
+      console.log("[JoinExamPage] SEB entry token inserted successfully.");
 
-      // Construct the URL to the .seb file with entryToken in the hash
+      // The URL to the .seb file, including the app's origin and the hash parameters for SEB
+      // SEB is expected to download this .seb file, parse it, and then use the Start URL
+      // defined *inside* the .seb file, appending the hash parameters from this configUrl.
+      // The Start URL inside your .seb file should be YOUR_APP_DOMAIN/seb/entry
       const appDomain = window.location.origin;
       const configUrlWithHash = `${appDomain}${SEB_CONFIG_FILE_RELATIVE_PATH}#entryToken=${encodeURIComponent(sebEntryToken)}`;
+      console.log("[JoinExamPage] Generated configUrlWithHash (for SEB to download .seb file and get parameters):", configUrlWithHash);
       
       // Remove http(s):// prefix and prepend sebs://
       const domainAndPathForSeb = configUrlWithHash.replace(/^https?:\/\//, '');
       const sebLaunchUrl = `sebs://${domainAndPathForSeb}`;
-
-      console.log("[JoinExamPage] Attempting to launch SEB by pointing to .seb config file with hash token:", sebLaunchUrl);
-      console.log("[JoinExamPage] The .seb file's Start URL should be configured to: YOUR_APP_DOMAIN/seb/entry");
-      console.log("[JoinExamPage] The /seb/entry page will then read #entryToken from window.location.hash");
+      console.log("[JoinExamPage] Final SEB Launch URL:", sebLaunchUrl);
       
       toast({
         title: "Launching Exam in SEB",
-        description: "Safe Exam Browser should start. Ensure SEB is installed and handles sebs:// links and that the .seb file is correctly served by your hosting.",
+        description: "Safe Exam Browser should start. Ensure SEB is installed. Your .seb configuration file must be correctly served by the website.",
         duration: 15000,
       });
       
       window.location.href = sebLaunchUrl;
-      // It's good to give some time for SEB to launch before resetting loading state
       setTimeout(() => setIsLoading(false), 5000);
 
     } catch (e: any) {
@@ -117,12 +132,12 @@ export default function JoinExamPage() {
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setIsLoading(false);
     }
-  }, [examCode, supabase, toast, studentUser, authLoading]);
+  }, [examCode, supabase, toast, studentUser, authLoading, supabaseInitializationError, router]);
 
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-foreground">Join Exam</h1>
-      <Card className="w-full max-w-lg mx-auto shadow-xl modern-card">
+      <Card className="w-full max-w-lg mx-auto modern-card shadow-xl border-border/30">
         <form onSubmit={handleSubmit}>
           <CardHeader>
             <CardTitle className="text-2xl font-semibold text-foreground">Enter Exam Code</CardTitle>
@@ -144,12 +159,12 @@ export default function JoinExamPage() {
                 autoComplete="off"
               />
             </div>
-            <Alert variant="default" className="mt-6 bg-primary/10 border-primary/20 text-primary dark:text-blue-300 dark:bg-blue-500/10 dark:border-blue-500/30">
-              <ExternalLink className="h-5 w-5 text-primary dark:text-blue-400" />
-              <AlertTitle className="font-semibold text-primary dark:text-blue-300">SEB Required</AlertTitle>
-              <AlertDescription className="text-primary/90 dark:text-blue-400/90 text-sm">
-                This exam will open in Safe Exam Browser (SEB). Ensure SEB is installed and configured with the settings provided by ZenTest.
-                The system will attempt to launch SEB automatically.
+            <Alert variant="default" className="mt-6 bg-primary/10 border-primary/20 text-primary dark:text-primary/80 dark:bg-primary/15 dark:border-primary/40">
+              <ShieldAlert className="h-5 w-5 text-primary" />
+              <AlertTitle className="font-semibold text-primary">SEB Required</AlertTitle>
+              <AlertDescription className="text-primary/90 dark:text-primary/80 text-sm">
+                This exam will open in Safe Exam Browser (SEB). Ensure SEB is installed.
+                The system will attempt to launch SEB automatically by pointing it to the exam configuration file.
               </AlertDescription>
             </Alert>
           </CardContent>
