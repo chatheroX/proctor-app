@@ -25,7 +25,7 @@ export default function TeacherDashboardLayout({
     await signOut();
   }, [signOut]);
 
-  if (authLoading) { // Primary loading state check
+  if (authLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -35,6 +35,7 @@ export default function TeacherDashboardLayout({
   }
   
   if (!user) { // Auth loading is false, but no user
+    // Middleware should have redirected to /auth.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
             <Card className="p-6 modern-card text-center shadow-xl">
@@ -46,7 +47,7 @@ export default function TeacherDashboardLayout({
                  <p className="text-sm text-muted-foreground">
                   {authError ? authError : "Your session may have expired or is invalid."}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Redirecting to login...</p>
+                 <p className="text-xs text-muted-foreground mt-1">Please try logging in again.</p>
               </CardContent>
             </Card>
         </div>
@@ -62,7 +63,7 @@ export default function TeacherDashboardLayout({
                     <CardTitle className="text-xl text-foreground">Access Denied</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">Your role ({user.role || 'Unknown'}) does not permit access to this dashboard.</p>
+                    <p className="text-sm text-muted-foreground">Your role ({user.role || 'Unknown'}) does not permit access to this teacher dashboard.</p>
                 </CardContent>
             </Card>
         </div>
@@ -72,14 +73,14 @@ export default function TeacherDashboardLayout({
   return (
     <SidebarProvider 
         defaultOpen 
-        className="bg-slate-100 dark:bg-slate-900 min-h-screen"
+        className="bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900 min-h-screen"
     > 
       <SidebarElements
         navItems={teacherNavItems}
         userRoleDashboard="teacher"
         user={user}
         signOut={handleSignOut}
-        authLoading={authLoading} // Pass this down
+        authLoading={authLoading}
       />
       <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 bg-transparent min-w-0"> 
         {children}
