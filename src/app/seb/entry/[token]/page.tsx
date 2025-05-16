@@ -1,33 +1,29 @@
 
 // src/app/seb/entry/[token]/page.tsx
-// This page is now effectively DEPRECATED for the primary SEB flow.
-// The /seb/entry page (without [token]) will handle reading token from hash.
-// This page could be removed or redirect.
-'use client';
+import React, { Suspense } from 'react';
+import { SebEntryClient } from '@/components/seb/seb-entry-client';
+import { Loader2, ShieldAlert } from 'lucide-react';
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
-
-export default function DeprecatedSebEntryTokenPage({ params }: { params: { token: string } }) {
-  const router = useRouter();
-
-  useEffect(() => {
-    console.warn(`[DeprecatedSebEntryTokenPage] Accessed with token ${params.token}. This page is deprecated. Redirecting to /seb/entry (which reads from hash)...`);
-    // Redirect to the new SEB entry page which reads token from hash.
-    // If a token was in the path, it means the old .seb StartURL might have been used.
-    // For robustness, try to pass it as a hash if needed, or just redirect.
-    router.replace(`/seb/entry#entryToken=${encodeURIComponent(params.token)}`);
-  }, [params.token, router]);
-
+// This is the Server Component part of the page.
+// It receives the token from the URL path and passes it to the client component.
+export default function SebEntryTokenPage({ params }: { params: { token: string } }) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 to-slate-950">
-      <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-      <p className="text-lg text-slate-300">This SEB entry URL format is deprecated.</p>
-      <p className="text-sm text-muted-foreground mt-2">
-        Redirecting to the new SEB entry flow...
-      </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+      <Suspense fallback={
+        <div className="flex flex-col items-center justify-center text-center">
+          <Loader2 className="h-16 w-16 text-primary animate-spin mb-6" />
+          <h2 className="text-xl font-medium text-slate-200 mb-2">
+            Initializing Secure Exam Session...
+          </h2>
+          <div className="flex items-center text-yellow-400">
+            <ShieldAlert className="h-5 w-5 mr-2" />
+            <p className="text-sm">Please wait, validating secure entry via token...</p>
+          </div>
+        </div>
+      }>
+        <SebEntryClient entryTokenFromPath={params.token} />
+      </Suspense>
     </div>
   );
 }
-
+    

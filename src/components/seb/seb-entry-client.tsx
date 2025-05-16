@@ -1,3 +1,4 @@
+
 // src/components/seb/seb-entry-client.tsx
 'use client';
 
@@ -7,26 +8,29 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, XCircle, Info, LogOut, ServerCrash } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'; // Direct import for this client-only component
 import type { Exam, CustomUser } from '@/types/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { format, isValid as isValidDate, parseISO, differenceInMinutes } from 'date-fns';
+import { format, isValid as isValidDate, parseISO } from 'date-fns';
 import { isSebEnvironment, isOnline, areDevToolsLikelyOpen, isWebDriverActive, isVMLikely } from '@/lib/seb-utils';
 import { useAuth } from '@/contexts/AuthContext';
 
-const TOKEN_VALIDITY_MINUTES_FROM_API_PERSPECTIVE = 10; // How long a token is valid after creation for API claim
+const TOKEN_VALIDITY_MINUTES_FROM_API_PERSPECTIVE = 10;
+
+interface SebEntryClientProps {
+  entryTokenFromPath: string | null;
+}
 
 interface ValidatedSessionData {
   student_user_id: string;
   exam_id: string;
 }
 
-export function SebEntryClient() {
+export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { supabase: authSupabase, user: authContextUser, isLoading: authContextLoading } = useAuth(); // Use supabase from AuthContext if needed for consistency after validation
+  // Use supabase from AuthContext for fetching student name AFTER token validation
+  const { supabase: authSupabase, user: authContextUser, isLoading: authContextLoading } = useAuth(); 
 
-  // Local state for this component
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
@@ -34,19 +38,17 @@ export function SebEntryClient() {
   const [sessionData, setSessionData] = useState<ValidatedSessionData | null>(null);
   const [performingChecks, setPerformingChecks] = useState(false);
   const [currentStatusMessage, setCurrentStatusMessage] = useState("Initializing secure session...");
-  const [entryTokenFromHash, setEntryTokenFromHash] = useState<string | null>(null);
-
-  const supabase = createSupabaseBrowserClient(); // Local instance for initial data fetching not reliant on AuthContext's client
 
   const handleExitSeb = useCallback(() => {
     toast({ title: "Exiting SEB", description: "Safe Exam Browser will attempt to close.", duration: 3000 });
     if (typeof window !== 'undefined') window.location.href = "seb://quit";
   }, [toast]);
 
-  // Step 1: Extract token from hash on mount
+  // Step 1: Initial SEB environment checks and token presence from path
   useEffect(() => {
-    const effectId = `[SebEntryClient HashParseEffect ${Date.now().toString().slice(-4)}]`;
-    console.log(`${effectId} Running. Current hash:`, window.location.hash);
+    const effectId = `[SebEntryClient InitEffect ${Date.now().toString().slice(-4)}]`;
+    console.log(`${effectId} Running. entryTokenFromPath:`, entryTokenFromPath ? entryTokenFromPath.substring(0,10) + "..." : "UNDEFINED");
+    setCurrentStatusMessage("Verifying SEB environment...");
 
     if (typeof window === 'undefined') {
       setError("CRITICAL: Window object not found. Cannot proceed."); setIsLoading(false); return;
@@ -61,46 +63,48 @@ export function SebEntryClient() {
     }
     console.log(`${effectId} SEB Environment Confirmed.`);
 
-    const hash = window.location.hash.substring(1); // Remove #
-    const params = new URLSearchParams(hash);
-    const token = params.get('entryToken');
-
-    if (!token) {
-      const errMsg = "Error: SEB entry token missing from URL hash. This usually means the exam-config.seb file's Start URL was not correctly processed by SEB, or your .seb file Start URL is misconfigured. Ensure the .seb file's Start URL is set to YOUR_APP_DOMAIN/seb/entry (without hash parameters). SEB should append the hash. SEB will quit.";
+    if (!entryTokenFromPath) {
+      const errMsg = "Error: SEB entry token missing from URL path. This indicates a problem with the SEB launch link. SEB will quit.";
       console.error(`${effectId} ${errMsg}`);
       setError(errMsg);
-      toast({ title: "SEB Configuration Error", description: "Exam entry token missing. Quitting SEB.", variant: "destructive", duration: 15000 });
+      toast({ title: "SEB Launch Error", description: "Exam entry token missing from path. Quitting SEB.", variant: "destructive", duration: 15000 });
       setTimeout(handleExitSeb, 14000);
       setIsLoading(false);
       return;
     }
     
-    console.log(`${effectId} Entry token found in hash:`, token);
-    setEntryTokenFromHash(token);
-    setCurrentStatusMessage("Validating entry token...");
-    // Token validation will proceed in the next effect triggered by entryTokenFromHash change
-  }, [router, toast, handleExitSeb]);
+    console.log(`${effectId} Entry token found in path. Proceeding to API validation.`);
+    setCurrentStatusMessage("Validating entry token with server...");
+    // API validation will proceed in the next effect triggered by entryTokenFromPath
+    // No explicit setIsLoading(false) here; it's handled by subsequent effects or error paths.
+  }, [entryTokenFromPath, router, toast, handleExitSeb]);
 
 
-  // Step 2: Validate token via API once extracted
+  // Step 2: Validate token via API once extracted and SEB env confirmed
   useEffect(() => {
     const effectId = `[SebEntryClient TokenValidationEffect ${Date.now().toString().slice(-4)}]`;
 
-    if (!entryTokenFromHash) {
-      if (!isLoading && !error) { // If previous effect finished without token and no error, it's an issue
-         console.warn(`${effectId} Token extraction failed unexpectedly or effect ran too soon. Waiting for token.`);
-      }
+    if (!entryTokenFromPath || error || !isSebEnvironment()) { 
+      if(!entryTokenFromPath && !error) console.log(`${effectId} Waiting for entryTokenFromPath or error state.`);
+      else if(error) console.log(`${effectId} Error already set: ${error}. Halting.`);
+      else if(!isSebEnvironment() && !error) console.log(`${effectId} Not in SEB environment. Halting.`);
+      setIsLoading(false); // Ensure loading stops if prerequisites not met
       return;
     }
-    if (error) { setIsLoading(false); return; } // Stop if error from previous step
+    
+    // Only proceed if isLoading is still true (meaning we haven't completed this stage or errored out)
+    if (!isLoading) {
+        console.log(`${effectId} isLoading is false, skipping API validation as it might have already run or an error occurred.`);
+        return;
+    }
 
-    console.log(`${effectId} Validating entry token via API:`, entryTokenFromHash);
-    setCurrentStatusMessage("Validating entry token with server...");
+    console.log(`${effectId} Validating entry token via API:`, entryTokenFromPath);
+    setCurrentStatusMessage("Contacting server to validate entry token...");
 
     fetch('/api/seb/validate-entry-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: entryTokenFromHash }),
+      body: JSON.stringify({ token: entryTokenFromPath }),
     })
     .then(async res => {
       if (!res.ok) {
@@ -112,18 +116,9 @@ export function SebEntryClient() {
     .then(data => {
       if (data.error) throw new Error(data.error);
       console.log(`${effectId} Token validated by API. Session data:`, data);
-      
-      // Client-side check to ensure the token is for the student currently logged into the AuthContext.
-      // This adds an extra layer, though the primary validation is on the API side.
-      // AuthContext might still be loading, so we might defer this check or make it optional here.
-      if (!authContextLoading && authContextUser && authContextUser.user_id !== data.student_user_id) {
-        // This case is less likely now due to token binding, but good as a sanity check.
-        throw new Error("Token-User Mismatch: The exam token is not for the currently signed-in ZenTest user. Please ensure you initiated the exam from your account.");
-      }
-      
       setSessionData({ student_user_id: data.student_user_id, exam_id: data.exam_id });
       setCurrentStatusMessage("Fetching exam and student details...");
-      // Data fetching will proceed in the next effect triggered by sessionData change
+      // setIsLoading(false) will be handled by the next effect or if an error occurs here
     })
     .catch(e => {
       console.error(`${effectId} Entry token validation error:`, e.message, e);
@@ -132,48 +127,66 @@ export function SebEntryClient() {
       setTimeout(handleExitSeb, 9000);
       setIsLoading(false);
     });
-  }, [entryTokenFromHash, toast, handleExitSeb, authContextUser, authContextLoading, error, isLoading]); // Added isLoading to dependencies
+  }, [entryTokenFromPath, error, toast, handleExitSeb, isLoading]);
 
 
-  // Step 3: Fetch exam and student details once sessionData is available
+  // Step 3: Fetch exam and student details once sessionData is available AND authSupabase client is ready
   useEffect(() => {
     const effectId = `[SebEntryClient DataFetchEffect ${Date.now().toString().slice(-4)}]`;
 
-    if (!sessionData?.exam_id || !sessionData?.student_user_id) {
-      if (!isLoading && !error && entryTokenFromHash && !sessionData) {
-         console.warn(`${effectId} Waiting for session data after token validation.`);
+    if (!sessionData?.exam_id || !sessionData?.student_user_id || error) {
+      if (!isLoading && !error && entryTokenFromPath && !sessionData) {
+         console.warn(`${effectId} Waiting for session data after token validation, or error exists.`);
       }
+      // If sessionData is missing but no error yet, and still loading, let it continue.
+      // If error is present, isLoading should be false from previous effect.
       return;
     }
-    if (error) { setIsLoading(false); return; }
-    if (!supabase) {
-      setError("CRITICAL: Supabase client not available for data fetching. SEB will quit.");
+    
+    if (authContextLoading) {
+      console.log(`${effectId} AuthContext still loading. Waiting to fetch data.`);
+      setCurrentStatusMessage("Loading user session details...");
+      return; // Wait for AuthContext to finish loading
+    }
+
+    if (!authSupabase) {
+      setError("CRITICAL: Supabase client (from AuthContext) not available for data fetching. SEB will quit.");
       toast({ title: "Internal Error", description: "Service connection failed. Quitting SEB.", variant: "destructive", duration: 8000 });
       setTimeout(handleExitSeb, 7000);
       setIsLoading(false);
       return;
     }
+    
+    // Only proceed if isLoading is still true (meaning we haven't completed this stage or errored out)
+     if (!isLoading && examDetails) { // If examDetails are already loaded, don't re-fetch
+        console.log(`${effectId} isLoading is false and examDetails exist, skipping data fetch.`);
+        return;
+    }
+
 
     console.log(`${effectId} Fetching exam details for exam_id: ${sessionData.exam_id} and student: ${sessionData.student_user_id}`);
     setCurrentStatusMessage("Fetching exam and student information...");
+    setIsLoading(true); // Explicitly set loading for this async operation
 
     Promise.all([
-      supabase.from('ExamX').select('*').eq('exam_id', sessionData.exam_id).single(),
-      supabase.from('proctorX').select('name, user_id').eq('user_id', sessionData.student_user_id).single()
+      authSupabase.from('ExamX').select('*').eq('exam_id', sessionData.exam_id).single(),
+      authSupabase.from('proctorX').select('name, user_id').eq('user_id', sessionData.student_user_id).single()
     ])
     .then(([examRes, studentRes]) => {
       if (examRes.error || !examRes.data) {
         throw new Error(examRes.error?.message || `Exam with ID ${sessionData.exam_id} not found.`);
       }
       if (studentRes.error || !studentRes.data) {
+        // This could happen if the token validation was somehow for a student not in proctorX
+        // or if AuthContext's studentUser doesn't match. The API validation should be the source of truth for student_user_id.
         throw new Error(studentRes.error?.message || `Student profile for ID ${sessionData.student_user_id} not found.`);
       }
       
       setExamDetails(examRes.data as Exam);
-      setStudentName(studentRes.data.name || "Student"); // Use fetched name
+      setStudentName(studentRes.data.name || "Student"); 
       console.log(`${effectId} Exam details fetched:`, examRes.data, "Student name:", studentRes.data.name);
       setCurrentStatusMessage("Exam details loaded. Ready for system checks.");
-      setError(null); // Clear previous non-fatal errors
+      setError(null); 
     })
     .catch(e => {
       console.error(`${effectId} Error fetching exam/student details:`, e);
@@ -182,18 +195,18 @@ export function SebEntryClient() {
       setTimeout(handleExitSeb, 9000);
     })
     .finally(() => setIsLoading(false));
-  }, [sessionData, supabase, toast, handleExitSeb, error, isLoading]); // Added isLoading to dependencies
+  }, [sessionData, authSupabase, error, toast, handleExitSeb, authContextLoading, isLoading, examDetails]);
 
 
   const handleStartSystemChecksAndExam = useCallback(async () => {
-    const operationId = `[SebEntryClient handleStartSystemChecksAndExam ${Date.now().toString().slice(-4)}]`;
-    if (!examDetails || !sessionData?.student_user_id || !entryTokenFromHash) {
+    const operationId = `[SebEntryClient StartChecks ${Date.now().toString().slice(-4)}]`;
+    if (!examDetails || !sessionData?.student_user_id || !entryTokenFromPath) {
       setError("Cannot start: Missing essential exam/session information for checks.");
       return;
     }
     setPerformingChecks(true);
     setCurrentStatusMessage("Performing system checks...");
-    setError(null); // Clear previous errors before new checks
+    setError(null);
     console.log(`${operationId} Performing system checks...`);
 
     const checks = [
@@ -210,7 +223,6 @@ export function SebEntryClient() {
     if (allCriticalPass) {
       toast({ title: "System Checks Passed!", description: "Proceeding to live exam environment.", duration: 3000 });
       console.log(`${operationId} System checks passed. Navigating to live test.`);
-      // Pass examId and studentId to the live test page. Token is no longer needed here.
       router.push(`/seb/live-test?examId=${examDetails.exam_id}&studentId=${sessionData.student_user_id}`);
     } else {
       const errorMessages = failedChecks.map(fc => `${fc.label}: ${fc.details || 'Failed'}`).join('; ');
@@ -219,7 +231,7 @@ export function SebEntryClient() {
       setTimeout(handleExitSeb, 14000);
     }
     setPerformingChecks(false);
-  }, [examDetails, sessionData, entryTokenFromHash, router, toast, handleExitSeb]);
+  }, [examDetails, sessionData, entryTokenFromPath, router, toast, handleExitSeb]);
   
 
   if (isLoading && !error) {
@@ -261,13 +273,29 @@ export function SebEntryClient() {
             <CardTitle className="text-2xl text-slate-300">{currentStatusMessage || "Loading exam information..."}</CardTitle>
           </CardHeader>
           <CardContent className="pb-6">
-            <p className="text-sm text-muted-foreground">Please wait while we finalize details for your exam. If this takes too long, there might be an issue with the exam setup or your connection. Check console for errors.</p>
+            <p className="text-sm text-muted-foreground">Please wait while we finalize details for your exam. If this takes too long, there might be an issue with the exam setup or your connection.</p>
           </CardContent>
         </Card>
       </div>
     );
   }
   
+  function getEffectiveExamStatus(exam: Exam | null | undefined, currentTime?: Date): Exam['status'] | 'Upcoming' {
+    if (!exam) return 'Published';
+    const now = currentTime || new Date();
+    if (exam.status === 'Completed') return 'Completed';
+    if (exam.status === 'Published' || exam.status === 'Ongoing') {
+      if (!exam.start_time || !exam.end_time) return 'Published';
+      const startTime = parseISO(exam.start_time);
+      const endTime = parseISO(exam.end_time);
+      if (!isValidDate(startTime) || !isValidDate(endTime)) return 'Published';
+      if (now > endTime) return 'Completed';
+      if (now >= startTime && now <= endTime) return 'Ongoing';
+      if (now < startTime) return 'Upcoming';
+    }
+    return exam.status as Exam['status'];
+  }
+
   const effectiveStatus = getEffectiveExamStatus(examDetails);
   const canStartExam = effectiveStatus === 'Ongoing';
   const examEnded = effectiveStatus === 'Completed';
@@ -324,9 +352,9 @@ export function SebEntryClient() {
             <Button 
               onClick={handleStartSystemChecksAndExam} 
               className="btn-gradient w-full sm:w-auto py-3 text-base order-1 sm:order-2"
-              disabled={isLoading || performingChecks || !canStartExam || examNotReadyForStart}
+              disabled={authContextLoading || isLoading || performingChecks || !canStartExam || examNotReadyForStart}
             >
-              {performingChecks || isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
+              {performingChecks || isLoading || authContextLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
               {examNotReadyForStart ? "No Questions in Exam" :
               !canStartExam ? `Exam is ${effectiveStatus}` : 
               "Start Exam & System Checks"}
@@ -337,29 +365,4 @@ export function SebEntryClient() {
     </div>
   );
 }
-// Helper function (can be moved to a utils file if used elsewhere)
-// This is a simplified version, as the one in details/page.tsx might not be directly accessible here.
-function getEffectiveExamStatus(exam: Exam | null | undefined, currentTime?: Date): Exam['status'] | 'Upcoming' {
-  if (!exam) return 'Published'; // Default or handle as error
-
-  const now = currentTime || new Date();
-
-  if (exam.status === 'Completed') return 'Completed';
-
-  if (exam.status === 'Published' || exam.status === 'Ongoing') {
-    if (!exam.start_time || !exam.end_time) {
-      return 'Published'; // Needs scheduling
-    }
-    const startTime = parseISO(exam.start_time);
-    const endTime = parseISO(exam.end_time);
-
-    if (!isValidDate(startTime) || !isValidDate(endTime)) {
-      return 'Published'; // Invalid dates
-    }
-
-    if (now > endTime) return 'Completed';
-    if (now >= startTime && now <= endTime) return 'Ongoing';
-    if (now < startTime) return 'Upcoming'; // Custom status for UI
-  }
-  return exam.status as Exam['status'];
-}
+    

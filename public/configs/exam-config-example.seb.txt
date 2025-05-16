@@ -1,72 +1,103 @@
 
-This is an EXAMPLE of what settings your ACTUAL `exam-config.seb` file should contain.
-You MUST create your `exam-config.seb` file using the Safe Exam Browser (SEB) Configuration Tool.
-Place the generated `exam-config.seb` file in your project at: `public/configs/exam-config.seb`
+# ZenTest - Safe Exam Browser (SEB) Configuration Example
+# Last Updated: [Date of last update to this example text file]
 
-===============================================================================
-CRITICAL: TEST YOUR .SEB FILE SERVING!
-===============================================================================
-Before troubleshooting SEB client behavior, open this URL in a REGULAR BROWSER:
-https://YOUR_APP_DOMAIN/configs/exam-config.seb
-(Replace YOUR_APP_DOMAIN with your actual deployed application domain, e.g., https://proctorx.netlify.app)
+# This file provides INSTRUCTIONS and EXAMPLES for configuring your ACTUAL `exam-config.seb` file
+# using the official SEB Configuration Tool (available from safeexambrowser.org).
+# You MUST create your `exam-config.seb` with the tool and place it in your project's
+# `public/configs/exam-config.seb` directory.
 
-This URL **MUST** trigger a download of the `exam-config.seb` file.
-If it shows your website's 404 page, login page, or any other HTML,
-your Netlify (or other hosting) serving configuration for this .seb file is
-incorrect, and SEB will fail to load the configuration.
-Ensure your `_headers` and `_redirects` files in the `public` directory are
-correctly configured and deployed for Netlify to serve `.seb` files with
-the `Content-Type: application/seb` or `application/octet-stream`.
-===============================================================================
+# ZenTest's web application NO LONGER forces a download of this .seb file during exam launch.
+# Instead, it launches SEB directly to a specific secure entry URL within the application:
+#   `sebs://YOUR_APP_DOMAIN/seb/entry/[GENERATED_TOKEN]`
+#
+# This means the settings below are RECOMMENDATIONS for how students/institutions
+# should configure their SEB client *before* navigating to ZenTest to take an exam,
+# to ensure the highest level of security. ZenTest's in-app pages (`/seb/*`) will
+# perform JavaScript-based checks, but a well-configured SEB client provides deeper OS-level security.
 
-Key Settings to Configure in SEB Configuration Tool for `exam-config.seb`:
+# --- CRITICAL: Start URL (if user starts SEB manually with this config) ---
+# If a student starts SEB by manually opening this .seb file (or an institution deploys it),
+# this Start URL will be used. It should point to your application's main student login or exam joining page.
+# Replace `YOUR_APP_DOMAIN` with your actual deployed application domain (e.g., https://proctorx.netlify.app).
+#
+# Example Start URL (for manual SEB launch):
+# startURL = https://YOUR_APP_DOMAIN/auth
+# OR
+# startURL = https://YOUR_APP_DOMAIN/student/dashboard/join-exam
 
-1.  **Start URL**:
-    *   This is the MOST CRITICAL setting for this flow to work.
-    *   Set this to: `https://YOUR_APP_DOMAIN/seb/entry`
-    *   Replace `YOUR_APP_DOMAIN` with your actual deployed application domain (e.g., `https://proctorx.netlify.app`).
-    *   IMPORTANT: Do NOT add any hash parameters (like #entryToken=...) or query parameters (like ?examId=...) to this Start URL setting *within the SEB Configuration Tool*.
-    *   Your web application will launch SEB pointing to this `.seb` file and will append the `#entryToken=...` to the URL *of the .seb file itself*. SEB is designed to then take this hash and append it to the Start URL defined here.
+# --- General Settings ---
+# examSessionClearCookiesOnEnd = True
+# examSessionClearCookiesOnStart = True
+# showTaskBar = False
+# showReloadButton = True  (Consider carefully - app has no in-exam reload button)
+# showTime = True
+# allowPreferencesWindow = False (For exam takers)
+# allowQuit = True (Controls if the quit button in SEB UI is enabled; app can still force quit via seb://quit)
 
-2.  **Browser Exam Key (BEK)**:
-    *   Consider generating and using a Browser Exam Key.
-    *   Your `/seb/live-test` page can be configured to check for this key via JavaScript if SEB provides an API (advanced).
+# --- Browser Exam Key & Config Key (For validating SEB client settings against a server - Advanced) ---
+# If you use an SEB Server or a Learning Management System that supports SEB keys:
+# browserExamKey = [Generate a unique key]
+# configKey = [Generate a unique key, derived from browserExamKey and Start URL]
+# sendBrowserExamKey = True
+# These are crucial for verifying the integrity of the SEB environment if your backend supports it.
+# ZenTest's current client-side JavaScript checks are a supplement/alternative if SEB Server is not used.
 
-3.  **Config Key (CK)**:
-    *   Consider generating and using a Config Key to ensure the settings haven't been tampered with.
-    *   Your `/seb/live-test` page can be configured to check for this.
+# --- Security Settings ---
+# allowDeveloperConsole = False
+# allowVirtualMachine = False (Or "Detect and Quit")
+# allowScreenCapture = False
+# allowAudioCapture = False (If not needed for your exam type)
+# enableSafeMode = True (If applicable for your SEB version/OS)
 
-4.  **Security Settings (In SEB Configuration Tool)**:
-    *   **General Tab**:
-        *   Enable "Use Browser Exam Key".
-        *   Enable "Use Config Key".
-    *   **Config File Tab**:
-        *   Set an administrator password for editing the SEB settings.
-        *   Set a quit password (or allow quitting without password *after* the exam is submitted).
-    *   **Browser Tab**:
-        *   Enable "Enable JavaScript".
-        *   Enable "Enable plug-ins" if your exam content needs them (generally not for web apps).
-        *   Disable "Enable Java".
-        *   Disable "Block pop-up windows" (or configure allowed pop-ups if your exam legitimately uses them, but your current app flow tries to open the exam in a new window/tab from `initiate` page which is outside SEB initially).
-    *   **Exam Tab**:
-        *   Enable "Allow quitting SEB" - decide if "using quit password" or "without restriction" (only after exam submission logic).
-        *   Configure "Link to quit SEB": `seb://quit` (or `sebs://quit`).
-    *   **Network Tab -> URL Filter**:
-        *   You might not need extensive URL filtering if using the token-based entry, as the token validates access to the specific exam.
-        *   However, you might want to allow your application's domain: `https://YOUR_APP_DOMAIN/*`
-    *   **Applications Tab -> Prohibited Processes**:
-        *   Add common screen sharing, communication, and virtual machine processes.
-    *   **User Interface Tab**:
-        *   Customize SEB browser user interface elements (e.g., show/hide reload button, URL bar, etc.). Your app has a "Refresh" button placeholder, so you might allow the SEB reload button or rely on your app's.
-    *   **Keys Tab**:
-        *   Enable "Enable ESC key to quit" (only if a quit password is set or if quitting is generally allowed).
-        *   Enable "Enable Ctrl-Q to quit" (same conditions).
-        *   Disable function keys (F1-F12).
-        *   Disable right-click (context menu).
-        *   Disable Ctrl-Alt-Del, Alt-Tab, Windows/Cmd key, etc.
+# --- Allowed/Prohibited Processes ---
+# List any applications that are explicitly allowed or prohibited.
+# Example:
+# prohibitedProcesses = [
+#   {
+#     "executable": "TeamViewer.exe",
+#     "originalName": "TeamViewer.exe",
+#     "description": "Remote Desktop"
+#   },
+#   {
+#     "executable": "Discord.exe",
+#     "description": "Communication App"
+#   }
+# ]
 
-Remember to save your configuration as `exam-config.seb` and place it in `public/configs/exam-config.seb` in your project.
-The JavaScript code in `join-exam/page.tsx` dynamically determines `window.location.origin` and constructs the launch URL for SEB correctly.
-The critical part is that the `Start URL` *inside* your generated `exam-config.seb` file points to `https://YOUR_APP_DOMAIN/seb/entry`.
-The hash containing the `entryToken` is appended by your web app to the URL of the `.seb` file when launching SEB. SEB should then carry this hash over when it loads the `Start URL` defined within the `.seb` file.
-Your `/seb/entry` page (and `SebEntryClient.tsx`) is designed to read this `entryToken` from `window.location.hash`.
+# --- Keyboard Shortcuts ---
+# allow préférencesWindow = False (To prevent users from changing SEB settings)
+# allowDeveloperConsole = False
+# allowPageInspect = False
+# enableEsc = False (Or only allow seb://quit)
+# enableCtrlN = False (New Window)
+# enableCtrlR = False (Reload - SEB's reload button can be used if enabled)
+# enableCtrlTab = False (Switch Tabs)
+# ... and other shortcuts (F1-F12, Alt+Tab, Cmd+C, Cmd+V etc.) should be disabled.
+# SEB usually has profiles for this ("Disable All Function Keys", etc.)
+
+# --- URL Filtering (If needed, though token auth reduces direct need for complex filters) ---
+# This can restrict SEB to only navigate to your application's domain.
+# Example:
+# urlFilterRules = [
+#   { "expression": "https://YOUR_APP_DOMAIN/*", "action": "allow" },
+#   { "expression": "*", "action": "block" } // Block everything else
+# ]
+
+# --- Browser Window ---
+# newBrowserWindowByLinkPolicy = 2 (Block links opening new windows, or configure as needed)
+# newBrowserWindowByScriptPolicy = 2 (Block scripts opening new windows)
+
+# --- Quit Link ---
+# quitURL = seb://quit (Ensures the "Exit SEB" buttons in your app work)
+
+# --- Remember ---
+# This `.seb.txt` file is a TEMPLATE/GUIDE.
+# You must use the SEB Configuration Tool to create the actual `exam-config.seb` file.
+# Place the final `exam-config.seb` in `public/configs/exam-config.seb` in your project.
+# However, for the CURRENT ZenTest flow (launching directly to /seb/entry/[token]), this external
+# .seb file is primarily for users/institutions to pre-configure their SEB for enhanced security.
+# The application does not force its download at exam launch anymore.
+# The critical "Start URL" for the app-initiated flow is what the app launches SEB with.
+# The "Start URL" inside THIS .seb file is for when SEB is started by opening THIS .seb file directly.
+    

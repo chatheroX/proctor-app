@@ -9,27 +9,23 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, ExternalLink, ShieldAlert, LogIn } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, SebEntryTokenInsert, CustomUser } from '@/types/supabase';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { useAuth } from '@/contexts/AuthContext';
-import { encryptData } from '@/lib/crypto-utils'; // For SEB token encryption
 
-const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb'; // Critical: This file MUST exist in /public/configs/
-const TOKEN_EXPIRY_MINUTES = 5; // Short-lived token for SEB entry
+// TOKEN_EXPIRY_MINUTES defines how long the server-side token is valid for claiming.
+const TOKEN_EXPIRY_MINUTES = 5; 
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   
-  const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const { user: studentUser, isLoading: authLoading, supabase: authSupabase } = useAuth();
   const router = useRouter();
 
-  // Generate a pseudo-random string for SEB entry token (server validation is key)
   const generateRandomToken = (length = 64) => {
     const array = new Uint8Array(length / 2);
     window.crypto.getRandomValues(array);
@@ -38,7 +34,8 @@ export default function JoinExamPage() {
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("[JoinExamPage] Handle submit initiated.");
+    const operationId = `[JoinExamPage handleSubmit ${Date.now().toString().slice(-5)}]`;
+    console.log(`${operationId} Initiated.`);
     setLocalError(null);
 
     if (!examCode.trim()) {
@@ -50,7 +47,7 @@ export default function JoinExamPage() {
       setIsLoading(false);
       return;
     }
-    if (!authSupabase) { // Use supabase client from AuthContext
+    if (!authSupabase) {
       toast({ title: "Connection Error", description: "Cannot connect to services. Please try again later.", variant: "destructive" });
       setIsLoading(false);
       return;
@@ -59,7 +56,7 @@ export default function JoinExamPage() {
     setIsLoading(true);
 
     try {
-      console.log(`[JoinExamPage] Fetching exam with code: ${examCode.trim().toUpperCase()}`);
+      console.log(`${operationId} Fetching exam with code: ${examCode.trim().toUpperCase()}`);
       const { data: exam, error: examFetchError } = await authSupabase
         .from('ExamX')
         .select('exam_id, title, description, duration, questions, allow_backtracking, status, teacher_id, start_time, end_time, exam_code')
@@ -71,10 +68,10 @@ export default function JoinExamPage() {
         toast({ title: "Invalid Code", description: errMsg, variant: "destructive" });
         setLocalError(errMsg);
         setIsLoading(false);
-        console.error("[JoinExamPage] Error fetching exam or exam not found:", examFetchError);
+        console.error(`${operationId} Error fetching exam or exam not found:`, examFetchError);
         return;
       }
-      console.log("[JoinExamPage] Exam details fetched:", exam);
+      console.log(`${operationId} Exam details fetched:`, exam);
 
       const effectiveStatus = getEffectiveExamStatus(exam as Exam);
       if (effectiveStatus !== 'Ongoing') {
@@ -103,53 +100,51 @@ export default function JoinExamPage() {
         created_at: new Date().toISOString(),
         expires_at: expiresAt,
       };
-      console.log("[JoinExamPage] Generated SEB entry token record:", tokenRecord);
+      console.log(`${operationId} Generated SEB entry token record:`, tokenRecord);
 
       const { error: tokenInsertError } = await authSupabase.from('SebEntryTokens').insert(tokenRecord);
 
       if (tokenInsertError) {
-        console.error("[JoinExamPage] Error inserting SEB entry token:", tokenInsertError);
+        console.error(`${operationId} Error inserting SEB entry token:`, tokenInsertError);
         const tokenErrorMsg = "Could not create secure entry token: " + tokenInsertError.message;
         toast({ title: "Launch Error", description: tokenErrorMsg, variant: "destructive" });
         setLocalError(tokenErrorMsg);
         setIsLoading(false);
         return;
       }
-      console.log("[JoinExamPage] SEB entry token inserted successfully.");
+      console.log(`${operationId} SEB entry token inserted successfully.`);
 
-      // The URL to the .seb file, including the app's origin and the hash parameters for SEB
-      // SEB is expected to download this .seb file, parse it, and then use the Start URL
-      // defined *inside* the .seb file, appending the hash parameters from this configUrl.
-      // The Start URL inside your .seb file should be YOUR_APP_DOMAIN/seb/entry
+      // Construct the direct SEB launch URL
+      // The Start URL configured INSIDE SEB should be YOUR_APP_DOMAIN/seb/entry/[token]
+      // However, SEB typically doesn't support dynamic path segments in its Start URL via config file easily.
+      // So, we launch SEB directly to the /seb/entry/[token_value] page.
       const appDomain = window.location.origin;
-      const configUrlWithHash = `${appDomain}${SEB_CONFIG_FILE_RELATIVE_PATH}#entryToken=${encodeURIComponent(sebEntryTokenValue)}`;
-      console.log("[JoinExamPage] Generated configUrlWithHash (for SEB to download .seb file and get parameters):", configUrlWithHash);
+      const directSebPageUrl = `${appDomain}/seb/entry/${sebEntryTokenValue}`;
       
       // Remove http(s):// prefix and prepend sebs://
-      const domainAndPathForSeb = configUrlWithHash.replace(/^https?:\/\//, '');
+      const domainAndPathForSeb = directSebPageUrl.replace(/^https?:\/\//, '');
       const sebLaunchUrl = `sebs://${domainAndPathForSeb}`;
       
-      console.log("[JoinExamPage] FINAL SEB LAUNCH URL:", sebLaunchUrl);
+      console.log(`${operationId} FINAL SEB LAUNCH URL (Direct to entry page with token in path):`, sebLaunchUrl);
       
       toast({
         title: "Launching Exam in SEB",
-        description: "Safe Exam Browser should start. Ensure SEB is installed and your .seb configuration file is correctly served by this website and configured with the correct Start URL pointing to /seb/entry.",
+        description: "Safe Exam Browser should start. Ensure SEB is installed and configured to allow navigation to this application. Your browser will ask for permission to open SEB.",
         duration: 15000,
       });
       
       window.location.href = sebLaunchUrl;
-      // Don't set isLoading to false immediately to give SEB time to launch.
-      // User will navigate away. If it fails, they are still on this page.
+
       setTimeout(() => {
-        if (window.location.pathname.includes('join-exam')) { // Check if still on this page
+        if (window.location.pathname.includes('join-exam')) { 
           setIsLoading(false); 
           setLocalError("SEB launch may have been blocked or failed. If SEB did not start, check your browser's pop-up settings or SEB installation.");
           toast({ title: "SEB Launch Issue?", description: "If SEB did not open, please check pop-up blockers and ensure SEB is installed correctly.", variant: "destructive", duration: 10000});
         }
-      }, 8000); // 8 seconds timeout
+      }, 8000);
 
     } catch (e: any) {
-      console.error("[JoinExamPage] Exception during handleSubmit:", e);
+      console.error(`${operationId} Exception during handleSubmit:`, e);
       const exceptionMsg = e.message || "An unexpected error occurred.";
       toast({ title: "Error", description: exceptionMsg, variant: "destructive" });
       setLocalError(exceptionMsg);
@@ -159,8 +154,6 @@ export default function JoinExamPage() {
 
 
   useEffect(() => {
-    // If user is not authenticated and auth is not loading, redirect to login.
-    // This is a client-side safeguard; middleware should handle primary protection.
     if (!authLoading && !studentUser) {
       console.log("[JoinExamPage] User not authenticated, redirecting to login.");
       router.replace('/auth');
@@ -219,7 +212,7 @@ export default function JoinExamPage() {
                 value={examCode}
                 onChange={(e) => {
                   setExamCode(e.target.value.toUpperCase());
-                  if(localError) setLocalError(null); // Clear error on new input
+                  if(localError) setLocalError(null); 
                 }}
                 placeholder="e.g., EXMCD123"
                 required
@@ -239,7 +232,7 @@ export default function JoinExamPage() {
               <ShieldAlert className="h-5 w-5 text-primary" />
               <AlertTitle className="font-semibold text-primary">SEB Required</AlertTitle>
               <AlertDescription className="text-primary/90 dark:text-primary/80 text-sm">
-                This exam will open in Safe Exam Browser (SEB). Ensure SEB is installed.
+                This exam will open in Safe Exam Browser (SEB). Ensure SEB is installed and configured.
                 Your browser will ask for permission to open SEB.
               </AlertDescription>
             </Alert>
@@ -268,4 +261,4 @@ export default function JoinExamPage() {
     </div>
   );
 }
-
+    
