@@ -1,7 +1,7 @@
 
 // src/app/seb/entry/[token]/page.tsx
 import React, { Suspense } from 'react';
-import { SebEntryClient } from '@/components/seb/seb-entry-client';
+import { SebEntryClient } from '@/components/seb/seb-entry-client'; // Adjusted path
 import { Loader2, ShieldAlert } from 'lucide-react';
 
 export default function SebEntryPage({ params }: { params: { token: string } }) {

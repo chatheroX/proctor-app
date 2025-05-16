@@ -14,7 +14,8 @@ import type { Exam, SebEntryTokenInsert } from '@/types/supabase';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { useAuth } from '@/contexts/AuthContext';
 
-const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb'; // Relative to public folder
+// The SEB_CONFIG_FILE_RELATIVE_PATH is no longer used to construct the configUrl parameter for seb://open
+// Instead, we directly launch sebs://YOUR_DOMAIN/seb/entry/[token]
 const TOKEN_EXPIRY_MINUTES = 5; // Short-lived token for SEB entry
 
 export default function JoinExamPage() {
@@ -24,8 +25,8 @@ export default function JoinExamPage() {
   const { toast } = useToast();
   const { user: studentUser, isLoading: authLoading } = useAuth();
 
-  const generateRandomToken = (length = 32) => {
-    const array = new Uint8Array(length);
+  const generateRandomToken = (length = 64) => { // Increased token length
+    const array = new Uint8Array(length / 2);
     window.crypto.getRandomValues(array);
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   };
@@ -90,18 +91,23 @@ export default function JoinExamPage() {
         return;
       }
 
-      const configUrlWithHash = `${window.location.origin}${SEB_CONFIG_FILE_RELATIVE_PATH}#entryToken=${sebEntryToken}`;
-      const domainAndPathWithHash = configUrlWithHash.replace(/^https?:\/\//, '');
-      const sebLaunchUrl = `sebs://${domainAndPathWithHash}`;
+      // Construct direct SEB launch URL to the /seb/entry/[token] page
+      const appDomain = window.location.origin;
+      const directSebStartUrl = `${appDomain}/seb/entry/${sebEntryToken}`;
+      
+      // Remove http(s):// prefix and prepend sebs://
+      const domainAndPathForSeb = directSebStartUrl.replace(/^https?:\/\//, '');
+      const sebLaunchUrl = `sebs://${domainAndPathForSeb}`;
 
-      console.log("[JoinExamPage] Attempting to launch SEB with URL:", sebLaunchUrl);
+      console.log("[JoinExamPage] Attempting to launch SEB with direct URL:", sebLaunchUrl);
       toast({
         title: "Launching Exam in SEB",
-        description: "Safe Exam Browser should start. If not, ensure it's installed and handles sebs:// links.",
+        description: "Safe Exam Browser should start. Ensure SEB is installed and handles sebs:// links.",
         duration: 10000,
       });
       
       window.location.href = sebLaunchUrl;
+      // It's good to give some time for SEB to launch before resetting loading state
       setTimeout(() => setIsLoading(false), 5000);
 
     } catch (e: any) {
@@ -120,7 +126,7 @@ export default function JoinExamPage() {
             <CardTitle className="text-2xl font-semibold text-foreground">Enter Exam Code</CardTitle>
             <CardDescription className="text-muted-foreground">
               Please enter the unique code provided by your teacher to join the exam.
-              This will attempt to launch the exam in Safe Exam Browser.
+              This will attempt to launch the exam directly in Safe Exam Browser.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -161,3 +167,4 @@ export default function JoinExamPage() {
     </div>
   );
 }
+

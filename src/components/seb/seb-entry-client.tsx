@@ -3,26 +3,26 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation'; // useParams to get token from path
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, XCircle, Info, LogOut } from 'lucide-react';
+import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, XCircle, Info, LogOut, ServerCrash } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Exam } from '@/types/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { format, isValid, parseISO } from 'date-fns';
 import { isSebEnvironment, isOnline, areDevToolsLikelyOpen, isWebDriverActive, isVMLikely } from '@/lib/seb-utils';
-import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page'; // Re-use this
+import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 
 interface SebEntryClientProps {
-  entryTokenFromPath: string | null; // From path param if URL is rewritten
+  entryTokenFromPath: string | null; // From path param
 }
 
 interface ValidatedSessionData {
   student_user_id: string;
   exam_id: string;
-  student_name?: string; // To be fetched
+  student_name?: string; 
 }
 
 export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
@@ -36,50 +36,39 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
   const [sessionData, setSessionData] = useState<ValidatedSessionData | null>(null);
   const [systemChecksPassed, setSystemChecksPassed] = useState(false);
   const [performingChecks, setPerformingChecks] = useState(false);
-  const [examLocallyStarted, setExamLocallyStarted] = useState(false); // To show "Exam Finished" state
+  const [examLocallyStarted, setExamLocallyStarted] = useState(false); 
+  const [currentStatusMessage, setCurrentStatusMessage] = useState("Initializing secure session...");
 
-  const parseHashParams = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    const hash = window.location.hash.substring(1); // Remove #
-    const params = new URLSearchParams(hash);
-    return params.get('entryToken');
-  }, []);
 
-  // Step 1: Validate SEB environment and Entry Token
+  // Step 1: Validate SEB environment and Entry Token from path
   useEffect(() => {
     setIsLoading(true);
     setError(null);
+    setCurrentStatusMessage("Validating SEB environment...");
 
     if (!isSebEnvironment()) {
-      setError("CRITICAL: This page can only be accessed within Safe Exam Browser.");
+      setError("CRITICAL: This page must be accessed within Safe Exam Browser.");
       toast({ title: "SEB Required", description: "Redirecting to unsupported browser page...", variant: "destructive", duration: 5000 });
       setTimeout(() => router.replace('/unsupported-browser'), 4000);
       setIsLoading(false);
       return;
     }
     console.log("[SebEntryClient] SEB Environment Confirmed.");
+    setCurrentStatusMessage("Validating entry token...");
 
-    const tokenFromHash = parseHashParams();
-    const currentToken = entryTokenFromPath || tokenFromHash;
-
-    if (!currentToken) {
-      setError("Exam entry token missing. Cannot start exam. Please re-initiate from the dashboard.");
+    if (!entryTokenFromPath) {
+      setError("Exam entry token missing from URL path. Cannot start exam. Please re-initiate from the dashboard. SEB will quit.");
       setIsLoading(false);
+      toast({ title: "Invalid Session", description: "Token missing. Quitting SEB.", variant: "destructive", duration: 8000 });
+      setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 7000);
       return;
     }
     
-    // Hide token from address bar if it was in hash
-    if (tokenFromHash && !entryTokenFromPath) {
-        router.replace(`/seb/entry/${tokenFromHash}`, { scroll: false });
-        // The component will re-render with entryTokenFromPath set, skip current execution
-        return; 
-    }
-
-    console.log("[SebEntryClient] Validating entry token:", currentToken);
+    console.log("[SebEntryClient] Validating entry token from path:", entryTokenFromPath);
     fetch('/api/seb/validate-entry-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: currentToken }),
+      body: JSON.stringify({ token: entryTokenFromPath }),
     })
     .then(async res => {
       if (!res.ok) {
@@ -90,8 +79,9 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
     })
     .then(data => {
       if (data.error) throw new Error(data.error);
-      console.log("[SebEntryClient] Token validated. Session data:", data);
+      console.log("[SebEntryClient] Token validated. Session data from API:", data);
       setSessionData({ student_user_id: data.student_user_id, exam_id: data.exam_id });
+      setCurrentStatusMessage("Fetching exam and student details...");
     })
     .catch(e => {
       console.error("[SebEntryClient] Token validation API error:", e);
@@ -100,13 +90,13 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
       setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 7000);
       setIsLoading(false);
     });
-  }, [entryTokenFromPath, router, toast, parseHashParams]);
+  }, [entryTokenFromPath, router, toast]);
 
   // Step 2: Fetch exam and student details once sessionData is available
   useEffect(() => {
     if (!sessionData?.exam_id || !sessionData?.student_user_id) {
-      if (sessionData) { // if sessionData is set but incomplete
-        setError("Incomplete session data after token validation.");
+      if (sessionData && pageIsLoading) { // if sessionData is set but incomplete and still loading
+        setError("Incomplete session data after token validation. Cannot proceed.");
         setIsLoading(false);
       }
       return;
@@ -121,12 +111,12 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
         throw new Error(examRes.error?.message || "Exam not found.");
       }
       if (studentRes.error || !studentRes.data) {
-        // Non-critical if name is missing, but log it
         console.warn("[SebEntryClient] Student name not found for ID:", sessionData.student_user_id, studentRes.error?.message);
       }
       setExamDetails(examRes.data as Exam);
       setSessionData(prev => prev ? ({ ...prev, student_name: studentRes.data?.name || "Student" }) : null);
       console.log("[SebEntryClient] Exam details fetched:", examRes.data);
+      setCurrentStatusMessage("Exam details loaded. Ready for system checks.");
       setError(null);
     })
     .catch(e => {
@@ -136,15 +126,16 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
       setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 7000);
     })
     .finally(() => setIsLoading(false));
-  }, [sessionData?.exam_id, sessionData?.student_user_id, supabase, toast]);
+  }, [sessionData?.exam_id, sessionData?.student_user_id, supabase, toast, pageIsLoading]); // Added pageIsLoading
 
 
   const handleStartSystemChecksAndExam = useCallback(async () => {
-    if (!examDetails || !sessionData?.student_user_id) {
-      setError("Cannot start: Missing exam details or student session information.");
+    if (!examDetails || !sessionData?.student_user_id || !entryTokenFromPath) {
+      setError("Cannot start: Missing exam details, student session, or token information.");
       return;
     }
     setPerformingChecks(true);
+    setCurrentStatusMessage("Performing system checks...");
     setError(null);
     console.log("[SebEntryClient] Performing system checks...");
 
@@ -162,6 +153,8 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
 
     if (allPass) {
       toast({ title: "System Checks Passed!", description: "Proceeding to live exam environment.", duration: 3000 });
+      // Pass examId and studentId as query parameters to /seb/live-test
+      // Token is not needed further as it's been validated.
       router.push(`/seb/live-test?examId=${examDetails.exam_id}&studentId=${sessionData.student_user_id}`);
     } else {
       const errorMessages = failedChecks.map(fc => `${fc.label}: ${fc.details || 'Failed'}`).join('; ');
@@ -170,7 +163,7 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
       setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 9000);
     }
     setPerformingChecks(false);
-  }, [examDetails, sessionData, router, toast]);
+  }, [examDetails, sessionData, entryTokenFromPath, router, toast]);
 
   const handleExitSeb = useCallback(() => {
     toast({ title: "Exiting SEB", description: "Safe Exam Browser will attempt to close.", duration: 3000 });
@@ -178,11 +171,10 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
   }, [toast]);
 
   useEffect(() => {
-    // Check if exam was finished (e.g., user navigated back after submission)
     const examFinishedFlag = typeof window !== 'undefined' ? sessionStorage.getItem(`exam-${sessionData?.exam_id}-finished`) : null;
     if (examFinishedFlag === 'true') {
-      setExamLocallyStarted(true); // Treat as started to show finished message
-      setError(null); // Clear other errors
+      setExamLocallyStarted(true); 
+      setError(null); 
       setIsLoading(false);
     }
   }, [sessionData?.exam_id]);
@@ -193,7 +185,7 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
       <div className="flex flex-col items-center justify-center text-center">
         <Loader2 className="h-16 w-16 text-primary animate-spin mb-6" />
         <h2 className="text-xl font-medium text-slate-200 mb-2">
-          Validating Session & Loading Exam Info...
+          {currentStatusMessage}
         </h2>
       </div>
     );
@@ -216,7 +208,7 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
     );
   }
   
-  if (examLocallyStarted && examDetails) { // Show "Exam Finished" message
+  if (examLocallyStarted && examDetails) { 
     return (
          <Card className="w-full max-w-lg modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-green-500">
             <CardHeader className="pt-8 pb-4">
@@ -235,12 +227,12 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
     );
   }
 
-  if (!examDetails || !sessionData) {
+  if (!examDetails || !sessionData?.student_name) { // Wait for student_name too
     return (
       <Card className="w-full max-w-lg modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg">
         <CardHeader className="pt-8 pb-4">
           <Loader2 className="h-16 w-16 text-primary animate-spin mx-auto mb-5" />
-          <CardTitle className="text-2xl text-slate-300">Loading Exam Information...</CardTitle>
+          <CardTitle className="text-2xl text-slate-300">{currentStatusMessage}</CardTitle>
         </CardHeader>
         <CardContent className="pb-6">
           <p className="text-sm text-muted-foreground">Please wait while we fetch the details for your exam.</p>
@@ -250,7 +242,7 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
   }
   
   const effectiveStatus = getEffectiveExamStatus(examDetails);
-  const canStartExam = effectiveStatus === 'Ongoing' && systemChecksPassed;
+  const canStartExam = effectiveStatus === 'Ongoing';
   const examEnded = effectiveStatus === 'Completed';
 
   return (
@@ -259,7 +251,7 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
         <ShieldCheck className="h-12 w-12 text-primary mx-auto mb-4" />
         <CardTitle className="text-3xl font-bold text-foreground">{examDetails.title}</CardTitle>
         <CardDescription className="text-muted-foreground mt-2">
-          Student: {sessionData.student_name || sessionData.student_user_id}
+          Student: {sessionData.student_name || "Loading..."} (ID: {sessionData.student_user_id})
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
@@ -297,10 +289,10 @@ export function SebEntryClient({ entryTokenFromPath }: SebEntryClientProps) {
           <Button 
             onClick={handleStartSystemChecksAndExam} 
             className="btn-primary-solid w-full sm:w-auto py-3 text-base order-1 sm:order-2"
-            disabled={isLoading || performingChecks || effectiveStatus !== 'Ongoing' || !examDetails.questions || examDetails.questions.length === 0}
+            disabled={isLoading || performingChecks || !canStartExam || !examDetails.questions || examDetails.questions.length === 0}
           >
-            {performingChecks ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
-            {effectiveStatus !== 'Ongoing' ? `Exam is ${effectiveStatus}` : 
+            {performingChecks || isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
+            {!canStartExam ? `Exam is ${effectiveStatus}` : 
              (!examDetails.questions || examDetails.questions.length === 0) ? "No Questions in Exam" :
              "Start Exam & System Checks"}
           </Button>
