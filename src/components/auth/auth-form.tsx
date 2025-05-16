@@ -33,7 +33,7 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role'] | ''>('');
+  const [role, setRole] = useState<CustomUser['role'] | ''>(''); // Role is mandatory, so it shouldn't be '' after selection
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); // For form's own submission attempt
@@ -44,7 +44,7 @@ export function AuthForm() {
     setPassword('');
     setConfirmPassword('');
     setFullName('');
-    setRole('');
+    setRole(''); // Reset role as well
     setShowPassword(false);
     setShowConfirmPassword(false);
     setFormError(null);
@@ -63,22 +63,6 @@ export function AuthForm() {
     }
   }, [searchParams, action, role, resetFormFields]);
   
-  useEffect(() => {
-    const effectId = `[AuthForm Effect - User State Check ${Date.now().toString().slice(-4)}]`;
-    console.log(`${effectId} Running. authContextLoading: ${authContextLoading}, User (from context): ${user?.email}, Path: ${pathname}`);
-    
-    // AuthContext's own useEffect will handle redirecting them.
-    // This form primarily shows a "finalizing" message or the form if not logged in.
-    if (!authContextLoading && user && pathname === AUTH_ROUTE) {
-      console.log(`${effectId} User IS authenticated and on /auth page. AuthContext should redirect.`);
-    } else if (!authContextLoading && !user && pathname === AUTH_ROUTE) {
-      console.log(`${effectId} User is NOT authenticated and on /auth page. Displaying form.`);
-    } else if (authContextLoading && pathname === AUTH_ROUTE && user === null) {
-       console.log(`${effectId} AuthContext is loading initial user state on /auth page. Displaying form loader.`);
-    }
-  }, [user, authContextLoading, pathname]);
-
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -101,7 +85,7 @@ export function AuthForm() {
         setIsSubmitting(false);
         return;
       }
-      const selectedRole = role as CustomUser['role'];
+      const selectedRole = role as CustomUser['role']; // Type assertion, ensure role is not empty
       if (!selectedRole) {
         setFormError("Please select a role (Student or Teacher).");
         setIsSubmitting(false);
@@ -121,7 +105,7 @@ export function AuthForm() {
       result = await signUp(trimmedEmail, password, trimmedFullName, selectedRole);
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        // AuthContext will handle the redirect based on user state change
+        // AuthContext will handle the redirect
       } else {
         setFormError(result.error || "An unknown error occurred during registration.");
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
@@ -131,7 +115,7 @@ export function AuthForm() {
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        // AuthContext will handle the redirect based on user state change
+        // AuthContext will handle the redirect
       } else {
         setFormError(result.error || "Invalid credentials or server error.");
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
@@ -140,28 +124,46 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
-  if (authContextLoading && pathname === AUTH_ROUTE && user === null) { 
+  // If AuthContext is still loading initial state and user is null, show a page loader
+  // This prevents flashing the form if user is quickly identified as logged in by AuthContext
+  if (authContextLoading && user === null && pathname === AUTH_ROUTE) {
     console.log('[AuthForm] AuthContext loading initial user state, user is null, on /auth. Showing AuthForm loader.');
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-3 text-muted-foreground">Verifying session...</p>
-      </div>
-    );
-  }
-
-  if (user && !authContextLoading && pathname === AUTH_ROUTE) {
-    console.log('[AuthForm] User authenticated, on /auth. AuthContext should redirect soon. Showing finalizing message.');
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
         <Card className="p-6 glass-card text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-3"/>
-          <p className="text-md font-medium text-foreground">Finalizing session & redirecting to dashboard...</p>
-          <p className="mt-1 text-xs text-muted-foreground">User: {user.email}</p>
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-3"/>
+            <p className="text-md font-medium text-foreground">Verifying session...</p>
         </Card>
       </div>
     );
   }
+
+  // If AuthContext has loaded, user is authenticated, and we are somehow still on /auth page
+  // AuthContext's route guard should handle this redirect. Show a "Finalizing" message.
+  if (!authContextLoading && user && pathname === AUTH_ROUTE) {
+    console.log(`[AuthForm] User is authenticated (${user.email}), on /auth. Expecting redirect from AuthContext.`);
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
+        <Card className="p-6 glass-card text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-3"/>
+          <p className="text-md font-medium text-foreground">Finalizing session for {user.email}...</p>
+          <p className="mt-1 text-xs text-muted-foreground">Redirecting to dashboard.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  // If AuthContext has loaded, user is not authenticated, and we are on /auth page, show the form
+  if (!authContextLoading && !user && pathname === AUTH_ROUTE) {
+    // Proceed to render the form
+  } else if (pathname !== AUTH_ROUTE) {
+    // This case should ideally not be reached if AuthContext and middleware are working.
+    // It means we are on a non-auth page but somehow AuthForm is rendered.
+    // AuthContext should redirect to AUTH_ROUTE if user is null and on a protected page.
+    console.warn(`[AuthForm] Rendered on unexpected path ${pathname} without user. AuthContext should handle redirection.`);
+    return null; // Or a generic loading/error, but AuthContext should take precedence.
+  }
+
 
   const handleTabChange = (value: string) => {
     setAction(value as AuthAction);
@@ -172,6 +174,7 @@ export function AuthForm() {
     const currentRoleParam = searchParams.get('role');
     if (value === 'register' && currentRoleParam) {
       newUrl.searchParams.set('role', currentRoleParam);
+      setRole(currentRoleParam as CustomUser['role']); // Pre-fill role if in URL
     } else if (value === 'login') {
       newUrl.searchParams.delete('role');
     }
@@ -200,14 +203,14 @@ export function AuthForm() {
           </CardHeader>
           
           <form onSubmit={handleAuth}>
-            { (formError || contextAuthError) && ( // Display contextAuthError as well
+            { (formError || (contextAuthError && action === 'login')) && ( 
               <div className="p-4 pt-0 sm:px-6 sm:pt-0">
                 <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-md text-sm flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0"/>
                   <div>
                     <p className="font-medium">Authentication Error</p>
                     {formError && <p>{formError}</p>}
-                    {contextAuthError && !formError && <p>{contextAuthError}</p>}
+                    {contextAuthError && action === 'login' && !formError && <p>{contextAuthError}</p>}
                   </div>
                 </div>
               </div>
