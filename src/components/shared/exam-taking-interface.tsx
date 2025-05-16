@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Ensure this is imported
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -25,7 +25,7 @@ interface ExamTakingInterfaceProps {
   initialAnswers?: Record<string, string>;
   parentIsLoading: boolean;
   examLoadingError: string | null;
-  persistentError: string | null;
+  persistentError: string | null; 
   cantStartReason: string | null;
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
@@ -130,7 +130,9 @@ export function ExamTakingInterface({
 
   const handleInternalAnswerChange = useCallback((questionId: string, optionId: string) => {
     setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: optionId }));
-    onAnswerChange(questionId, optionId);
+    if (onAnswerChange) { // Check if onAnswerChange is provided
+        onAnswerChange(questionId, optionId);
+    }
   }, [onAnswerChange]);
 
   const handleNextQuestion = useCallback(() => {
@@ -169,7 +171,7 @@ export function ExamTakingInterface({
     } catch (e: any) {
       toast({ title: "Submission Error", description: e.message || "Could not submit exam.", variant: "destructive" });
     } finally {
-      setIsSubmitting(false); // Even if error, allow retry or see error message
+      setIsSubmitting(false);
     }
   }, [answers, activityFlags, examFinished, toast]);
 
@@ -189,6 +191,7 @@ export function ExamTakingInterface({
   
   const totalQuestions = questions?.length || 0;
 
+  // Loading states and error handling
   if (parentIsLoading) {
     return (
       <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
@@ -210,13 +213,12 @@ export function ExamTakingInterface({
   }
 
   if (!examDetails || !examStarted) {
-     console.log('[ExamTakingInterface] Rendering error: examDetails or examStarted is false.', { examDetailsExists: !!examDetails, examStarted });
      return (
       <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-amber-500/10 backdrop-blur-sm p-6 text-center">
         <AlertTriangle className="h-20 w-20 text-amber-500 mb-5" />
         <h2 className="text-2xl font-semibold text-amber-700 dark:text-amber-300 mb-3">Exam Session Not Properly Initiated</h2>
         <p className="text-md text-amber-600 dark:text-amber-400 mb-8 max-w-md">
-          The exam details could not be loaded or the session is invalid. Please close this tab and try re-initiating the exam.
+          {cantStartReason || "The exam details could not be loaded or the session is invalid. Please close this tab and try re-initiating the exam."}
         </p>
         <Button onClick={() => window.close()} className="bg-amber-500 hover:bg-amber-600 text-white px-8 py-3 text-base rounded-lg shadow-xl">Close Tab</Button>
       </div>
@@ -266,7 +268,7 @@ export function ExamTakingInterface({
   return (
     <div className="flex flex-col min-h-screen bg-slate-100 dark:bg-slate-900 text-foreground">
       {/* Top Bar */}
-      <header className="bg-white dark:bg-slate-800 shadow-md px-4 sm:px-6 py-3 flex justify-between items-center sticky top-0 z-40 border-b dark:border-slate-700">
+      <header className="bg-white dark:bg-slate-800 shadow-md px-4 sm:px-6 py-2 flex justify-between items-center sticky top-0 z-40 border-b dark:border-slate-700">
         <div className="flex items-center gap-2">
           <Image src={logoAsset} alt="ZenTest Logo" width={28} height={28} className="h-7 w-auto" />
           <span className="font-semibold text-lg text-slate-700 dark:text-slate-200">ZenTest</span>
@@ -301,8 +303,8 @@ export function ExamTakingInterface({
       </div>
 
       {/* Main Content Area - Full Screen */}
-      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto">
-        <div className="w-full max-w-3xl bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6 sm:p-8">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto">
+        <div className="w-full max-w-4xl bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6 sm:p-8"> {/* Increased max-width */}
           <div className="mb-6 text-center">
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
               Question {currentQuestionIndex + 1} of {totalQuestions}
@@ -319,10 +321,9 @@ export function ExamTakingInterface({
               onValueChange={memoizedOnRadioValueChange}
               className={cn(
                 "grid gap-3 sm:gap-4",
-                 // Adjust grid columns based on number of options for better centering
                 currentQuestion.options.length <= 2 ? "grid-cols-1" :
                 currentQuestion.options.length <= 4 ? "grid-cols-1 sm:grid-cols-2" :
-                "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" // Fallback for more options
+                "grid-cols-1 sm:grid-cols-2" 
               )}
               disabled={isSubmitting}
             >
@@ -392,7 +393,7 @@ export function ExamTakingInterface({
           className={cn(
             currentQuestionIndex < totalQuestions - 1 
               ? "bg-slate-800 dark:bg-slate-200 hover:bg-slate-700 dark:hover:bg-slate-300 text-white dark:text-slate-900" 
-              : "bg-red-600 hover:bg-red-700 text-white" // Submit button style
+              : "bg-red-600 hover:bg-red-700 text-white" 
           )}
         >
           {currentQuestionIndex < totalQuestions - 1 ? 'Next' : 'Submit Exam'}
@@ -402,3 +403,4 @@ export function ExamTakingInterface({
     </div>
   );
 }
+
