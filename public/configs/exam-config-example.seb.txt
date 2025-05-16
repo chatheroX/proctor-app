@@ -1,103 +1,54 @@
 
-# ZenTest SEB Configuration File Example
-# This file provides guidance on how to configure your actual exam-config.seb file
-# using the Safe Exam Browser Configuration Tool.
+This is an EXAMPLE instruction file for creating your 'exam-config.seb'.
+You MUST use the Safe Exam Browser (SEB) Configuration Tool to create the actual 'exam-config.seb' file.
 
-# ------------------------------------------------------------------------------
-# IMPORTANT: How this integrates with ZenTest
-# ------------------------------------------------------------------------------
-# 1. ZenTest Application (Regular Browser):
-#    - Student enters an exam code.
-#    - ZenTest generates a unique, short-lived 'entryToken'.
-#    - ZenTest launches SEB using a URL like:
-#      sebs://YOUR_APP_DOMAIN/configs/exam-config.seb#entryToken=UNIQUE_GENERATED_TOKEN
-#      (YOUR_APP_DOMAIN is your Netlify/Vercel domain, e.g., proctorx.netlify.app)
-#
-# 2. Safe Exam Browser (SEB):
-#    - SEB downloads and processes THIS `exam-config.seb` file from the URL above.
-#    - SEB reads the "Start URL" configured *below* within this file.
-#    - SEB then navigates its internal browser to that Start URL, AND
-#      IT APPENDS THE ORIGINAL HASH PARAMETERS.
-#      So, SEB will load: Start URL + #entryToken=UNIQUE_GENERATED_TOKEN
-#
-# 3. ZenTest SEB Entry Page (Inside SEB):
-#    - The page at the "Start URL" (e.g., https://YOUR_APP_DOMAIN/seb/entry)
-#      will read `window.location.hash` to get the `entryToken`.
-#    - It then validates this token with the ZenTest backend to get exam details.
-# ------------------------------------------------------------------------------
+CRITICAL INSTRUCTIONS FOR YOUR 'exam-config.seb' FILE:
 
-# General Settings:
-# - Start URL:
-#   !!! CRITICAL !!! Set this to your application's SEB entry page.
-#   Example: https://proctorx.netlify.app/seb/entry
-#   Replace `proctorx.netlify.app` with YOUR actual deployed application domain.
-#   DO NOT include any query parameters or hash parameters here in the Start URL itself.
-#   The #entryToken=... will be appended by SEB automatically.
+1.  **PLACEMENT**:
+    *   After creating 'exam-config.seb' with the SEB Configuration Tool, you MUST place this file in your Next.js project at the following exact path:
+        `public/configs/exam-config.seb`
+    *   Ensure this file is committed to your repository and deployed with your application.
 
-# - Quit/Restart Password: Set a strong password if you want to allow quitting with a password.
-#   Or, disable quit password and rely on seb://quit link after exam submission.
+2.  **START URL (Inside your 'exam-config.seb' settings)**:
+    *   In the SEB Configuration Tool, go to the "General" tab.
+    *   Set the "Start URL" to: `https://YOUR_APP_DOMAIN/seb/entry`
+    *   **IMPORTANT**:
+        *   Replace `YOUR_APP_DOMAIN` with the actual, publicly accessible domain where your ZenTest application is deployed (e.g., `https://proctorx.netlify.app`).
+        *   The Start URL should point to `/seb/entry` WITHOUT any hash parameters or query strings initially. Your application will dynamically add the necessary `#entryToken=...` to the URL of the `.seb` file itself when launching SEB. SEB will then append this hash to the Start URL.
 
-# - Allow User to Quit SEB:
-#   - Before exam starts: Yes (via a button on your /seb/entry page that links to seb://quit)
-#   - During exam: No (this is a primary security feature)
-#   - After exam finished/submitted: Yes (your /seb/live-test page should trigger seb://quit)
+3.  **SECURITY SETTINGS (Inside your 'exam-config.seb' settings)**:
+    *   **Browser Exam Key (BEK)**: Generate and use a strong Browser Exam Key. Your application's `/seb/entry` page might perform a conceptual check for this via headers if SEB is configured to send it (advanced setup).
+    *   **Config Key (CK)**: Generate and use a strong Config Key.
+    *   **Prohibited Processes**: Add common screen sharing, communication, and virtual machine processes to the prohibited list.
+    *   **Allowed Processes**: Typically, only SEB itself.
+    *   **Keyboard Shortcuts**: Disable Ctrl, Alt, Cmd/Win, Function keys (F1-F12), PrintScreen, Esc (unless quit link is used), Tab (unless specifically needed for accessibility within a form element if SEB allows).
+    *   **Clipboard**: Disable.
+    *   **Developer Tools**: Disable browser developer tools.
+    *   **URL Filtering**:
+        *   For a token-based approach, extensive URL filtering might be less critical for the initial page load, as the token validates the session.
+        *   However, you might want to restrict navigation away from your application's domain.
+        *   Allow your application's domain: `https://YOUR_APP_DOMAIN/` (and subpaths).
+        *   Allow Supabase URLs if your app directly communicates for auth status or other client-side fetches (though API routes are better).
+    *   **Quit Link**:
+        *   Enable "Allow user to quit SEB".
+        *   Set the quit link URL to `seb://quit`.
+        *   Optionally, set a quit password.
+    *   **Audio Control**: Enable if needed, disable if not.
+    *   **File Downloads/Uploads**: Configure based on whether your exam requires them (current ZenTest doesn't have uploads). For security, generally disable downloads unless explicitly needed.
+    *   **Browser Window**: Configure to open full screen, hide SEB taskbar initially.
+    *   **Network**: Configure proxies if necessary for your institution.
 
-# Browser Settings:
-# - Enable JavaScript: Yes
-# - Enable localStorage/sessionStorage: Yes (if your app uses it for exam state)
-# - Block Pop-up Windows: Your choice, but exam might open in new tab if not main window.
-# - Enable Browser Exam Key (BEK) and Config Key (CK): Recommended for higher security.
-#   Your application's /seb/exam-view or /seb/live-test page might need to send these keys
-#   in request headers to your backend for validation if your LMS supports it.
-#   (ZenTest currently does not have backend BEK/CK validation built-in, but SEB will send them).
+4.  **SERVING THE .SEB FILE**:
+    *   Ensure your hosting provider (e.g., Netlify) serves the `/configs/exam-config.seb` file with the correct `Content-Type` (e.g., `application/x-seb` or `application/octet-stream`) and does not treat it as an HTML page or redirect it. The `_headers` and `_redirects` files in the `public` directory aim to assist with this on Netlify.
 
-# Exam Settings:
-# - Enable URL Filtering: Yes (Highly Recommended)
-#   - Filter Rules:
-#     - Allow your application domain: `https://YOUR_APP_DOMAIN/*` (replace with your domain)
-#     - Allow Supabase URLs if your app makes direct client-side calls (though API routes are better):
-#       `https://*.supabase.co/*`
-#     - Block everything else by default if possible, or have very restrictive rules.
-#   - Expression for Filter: Use "URL contains" or "URL starts with" for allowed domains.
+Your ZenTest application (`join-exam/page.tsx`) will construct a URL like:
+`sebs://YOUR_APP_DOMAIN/configs/exam-config.seb#entryToken=GENERATED_TOKEN`
+to launch SEB.
 
-# User Interface Settings:
-# - Show SEB Task Bar: Your preference. Can be hidden for a more immersive experience.
-# - Show Reload Button: Yes (as requested in your prompt).
-# - Show Time: Optional (your app has its own timer).
-# - Show Keyboard Layout: Optional.
+SEB will then:
+1. Fetch `https://YOUR_APP_DOMAIN/configs/exam-config.seb`.
+2. Apply its settings.
+3. Navigate to the "Start URL" configured inside it (i.e., `https://YOUR_APP_DOMAIN/seb/entry`), appending the hash: `https://YOUR_APP_DOMAIN/seb/entry#entryToken=GENERATED_TOKEN`.
+4. Your `/seb/entry` page (`SebEntryClient.tsx`) will read the token from the hash.
 
-# Network Settings:
-# - Clear Cache on Start/Exit: Recommended for privacy/security.
-# - Proxy Settings: Usually "Use system proxy settings".
-
-# Security Settings:
-# - Allow Virtual Machine: No (Block if possible, VM detection is not foolproof)
-# - Allow Screen Sharing/Capture: No (Block if possible)
-# - Allow Developer Tools: No (Block in SEB settings and use JS checks)
-# - Enabled prohibited processes: List common screen capture tools, communication apps, etc.
-
-# Applications Settings (Prohibited Processes):
-# - Define processes that should be terminated or prevented from running.
-#   Examples: SnippingTool.exe, Discord.exe, Skype.exe, TeamViewer.exe, etc.
-
-# Down/Uploads Settings:
-# - Allow File Downloads: No (unless specifically required by an exam type).
-# - Allow File Uploads: Yes, if your exam involves file submissions. Configure allowed file types.
-#   (ZenTest currently does not have file upload questions implemented).
-
-# Keyboard Shortcuts:
-# - Enable/Disable specific shortcuts (Ctrl, Alt, Cmd, Function keys, etc.)
-#   Block: Ctrl+C, Ctrl+V, Ctrl+P, Alt+Tab, Cmd+Tab, F1-F12, Esc (unless for quit link), PrintScreen.
-#   Allow: Basic typing keys (A-Z, 0-9, space), Arrow keys.
-#   Your application (`seb-utils.ts`) will also attempt client-side blocking as a secondary measure.
-
-# Creating the .seb file:
-# 1. Download and install the SEB Configuration Tool for your OS (Windows/Mac).
-# 2. Open the tool and configure all the settings above.
-# 3. For "Start URL", enter: https://YOUR_APP_DOMAIN/seb/entry (e.g., https://proctorx.netlify.app/seb/entry)
-# 4. Save the configuration. This will create your `exam-config.seb` file.
-# 5. Place this `exam-config.seb` file into your project's `public/configs/` directory.
-# 6. Ensure your web server (Netlify) serves this `.seb` file correctly with `Content-Type: application/x-seb` or `application/octet-stream`.
-
-# This example provides guidance. You must use the SEB Configuration Tool to create the actual binary .seb file.
-# Test thoroughly!
+This ensures the process is dynamic regarding your application's domain for launching SEB, but the `Start URL` *within* the `.seb` file must be correctly set to your deployed application's public domain.
