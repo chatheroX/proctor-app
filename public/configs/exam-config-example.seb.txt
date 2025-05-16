@@ -1,0 +1,81 @@
+
+This file provides guidance for creating your actual 'exam-config.seb' file
+using the Safe Exam Browser (SEB) Configuration Tool.
+
+Save your actual SEB configuration as 'exam-config.seb' in this same
+'/public/configs/' directory.
+
+Key Settings to Configure in SEB Configuration Tool:
+
+1. General > Start URL:
+   - Set this to the *ABSOLUTE* URL of your application's '/seb/exam-view' page.
+   - IMPORTANT: To pass dynamic parameters like examId and an encrypted token,
+     you need to append them as a HASH to this Start URL. SEB will load the
+     base URL, and your client-side JavaScript on that page can read from `window.location.hash`.
+   - Example: `https://<YOUR_APP_DOMAIN>/seb/exam-view`
+     (Your application will dynamically construct the full seb:// link with the hash, e.g.,
+     `seb://open?configUrl=https://<YOUR_APP_DOMAIN>/configs/exam-config.seb#examId=SOME_EXAM_ID&token=SOME_ENCRYPTED_TOKEN`)
+
+2. Config File > Use SEB settings file for:
+   - Starting an exam (selected)
+
+3. Config File > Applying settings:
+   - Choose "Use these settings" or "Merge with client settings..." as appropriate.
+     "Use these settings" provides stricter control.
+
+4. Security > Browser Exam Key & Config Key:
+   - Generate and note down strong BrowserExamKey and ConfigKey.
+   - Your '/seb/exam-view' and '/seb/live-test' pages should ideally verify these keys
+     via request headers sent by SEB, if your server setup allows reading them.
+     Client-side JavaScript cannot securely verify these keys.
+
+5. Browser > Enable Browser Engine:
+   - Typically "Firefox" or "Chromium" depending on SEB version.
+
+6. Browser > Enable JavaScript (selected)
+7. Browser > Enable localStorage and sessionStorage (selected for potential auto-save)
+
+8. Browser Features > Security:
+   - Enable JavaScript (selected)
+   - Block pop-up windows (selected, unless your exam content needs them for a specific reason)
+   - Block plug-ins (selected)
+   - Block Java (selected)
+   - Block file downloads (selected)
+   - Block navigating to other URLs (selected - SEB handles this)
+
+9. Exam > Enable Quit Link:
+   - URL: `seb://quit`
+   - This allows your application to trigger SEB to quit.
+
+10. Exam > Enforce Single Exam Attempt:
+    - SEB itself doesn't directly enforce this; your application logic must handle it.
+    - You can configure SEB to clear cookies/cache on exit to help.
+
+11. Down/Uploads > File handling:
+    - Configure if students need to upload files (e.g., for subjective answers). Generally, disable for MCQs.
+
+12. Network > URL Filter:
+    - If possible, whitelist only YOUR_APP_DOMAIN to prevent navigation to other sites.
+    - Example Rule: `https://<YOUR_APP_DOMAIN>/*` (Allow)
+    - Example Rule: `*` (Block - as a general fallback if specific rules are used)
+
+13. Applications > Prohibited Processes:
+    - Add names of common screen sharing, communication, or cheating tools.
+
+14. User Interface:
+    - Configure SEB's browser UI (e.g., hide address bar, reload button, etc.).
+    - Reload/Refresh: Generally, disable the SEB refresh button. Your app can have a custom refresh if needed carefully.
+    - Context Menu: Disable.
+
+15. Keyboard > Function Keys, Shortcuts:
+    - **Critically Important for Security**
+    - Disable: Ctrl, Alt, Cmd/Win keys for combinations (Ctrl+C, Ctrl+V, Alt+Tab, etc.).
+    - Disable: Function keys (F1-F12).
+    - Disable: Esc (unless tied to a specific SEB quit sequence you configure).
+    - Disable: Print Screen.
+    - Allow: Basic alphanumeric keys (A-Z, 0-9), arrow keys, Space, Enter, Backspace, Delete, Shift (for capitalization). Mouse clicks are generally allowed.
+
+Remember to thoroughly test your `.seb` configuration.
+The effectiveness of these settings depends on the SEB version and client OS.
+This example file is NOT a functional .seb file.
+    
