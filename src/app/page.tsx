@@ -4,27 +4,27 @@ import { AppHeader } from '@/components/shared/header';
 import { AppFooter } from '@/components/shared/footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, BookOpenText, Users, Cpu, ArrowRight } from 'lucide-react';
+import { CircleCheckBig, BookOpenText, Users, Cpu, ArrowRight } from 'lucide-react'; // Changed CheckCircle to CircleCheckBig
 import Link from 'next/link';
 
 const features = [
   {
-    icon: <CheckCircle className="h-8 w-8 text-primary" />,
+    icon: <CircleCheckBig className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
     title: 'Secure Exam Environment',
     description: 'Tight integration with Safe Exam Browser (SEB) for cheat-proof online exams.',
   },
   {
-    icon: <BookOpenText className="h-8 w-8 text-primary" />,
+    icon: <BookOpenText className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
     title: 'Flexible Exam Management',
     description: 'Full CRUD for exams, diverse question upload options, and customizable settings.',
   },
   {
-    icon: <Users className="h-8 w-8 text-primary" />,
+    icon: <Users className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
     title: 'Role-Based Dashboards',
     description: 'Dedicated, intuitive dashboards for both students and teachers.',
   },
   {
-    icon: <Cpu className="h-8 w-8 text-primary" />,
+    icon: <Cpu className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
     title: 'AI-Powered Assistance',
     description: 'Built-in AI assistant to help teachers generate diverse exam questions effortlessly.',
   },
@@ -32,30 +32,27 @@ const features = [
 
 export default function LandingPage() {
   return (
-    // TODO: Add Framer Motion wrapper here for page transitions if desired
     <div className="flex flex-col min-h-screen bg-background">
       <AppHeader />
       <main className="flex-grow">
         {/* Hero Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-b from-muted/50 via-background to-background">
+        <section className="py-20 md:py-28 bg-gradient-to-b from-muted/30 via-background to-background">
           <div className="container px-4 md:px-6">
             <div className="grid gap-8 md:grid-cols-1 md:items-center text-center justify-items-center">
               <div className="space-y-6 max-w-3xl mx-auto">
-                {/* TODO: Add Framer Motion to h1 and p for staggered entrance */}
                 <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl text-foreground">
                   The Future of <span className="text-primary">Secure Online</span> Proctoring
                 </h1>
                 <p className="text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto">
-                  ProctorPrep offers a robust, modern platform for conducting secure online exams, trusted by educators and students alike.
+                  ZenTest offers a robust, modern platform for conducting secure online exams, trusted by educators and students alike.
                 </p>
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-                  {/* TODO: Add Framer Motion to buttons for hover/tap effects */}
                   <Button size="lg" className="btn-primary-solid shadow-sm hover:shadow-md transition-shadow duration-300" asChild>
                     <Link href="/auth?action=register&role=teacher">
                       Get Started as Teacher <ArrowRight className="ml-2 h-5 w-5" />
                     </Link>
                   </Button>
-                  <Button size="lg" variant="outline" className="shadow-sm hover:shadow-md transition-shadow duration-300 border-border hover:bg-accent/10" asChild>
+                  <Button size="lg" variant="outline" className="shadow-sm hover:shadow-md transition-shadow duration-300 border-border hover:bg-primary/10 hover:text-primary" asChild>
                     <Link href="/auth?action=register&role=student">
                       Join as Student
                     </Link>
@@ -67,19 +64,19 @@ export default function LandingPage() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="py-16 md:py-24 bg-muted/30">
+        <section id="features" className="py-16 md:py-24 bg-muted/20">
           <div className="container px-4 md:px-6">
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-foreground">Why Choose ProctorPrep?</h2>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-foreground">Why Choose ZenTest?</h2>
               <p className="mt-4 text-lg text-muted-foreground max-w-xl mx-auto">
                 Empowering education with cutting-edge proctoring technology.
               </p>
             </div>
             <div className="grid gap-6 md:gap-8 sm:grid-cols-2 lg:grid-cols-4">
               {features.map((feature, index) => (
-                 // TODO: Add Framer Motion to Card for staggered reveal or hover effects
                 <Card key={index} className="modern-card p-4 text-center bg-card hover:border-primary/30">
                   <CardHeader className="items-center pt-4 pb-3">
+                     {/* Using React.cloneElement to adjust icon size within the card */}
                     {React.cloneElement(feature.icon, { className: "h-10 w-10 text-primary mb-3" })}
                     <CardTitle className="text-lg font-semibold text-card-foreground">{feature.title}</CardTitle>
                   </CardHeader>
@@ -95,12 +92,11 @@ export default function LandingPage() {
         {/* Call to Action Section */}
         <section className="py-16 md:py-24 bg-background">
           <div className="container px-4 md:px-6 text-center">
-             {/* TODO: Add Framer Motion for reveal */}
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-foreground">
               Ready to Elevate Your Online Exams?
             </h2>
             <p className="mt-4 mb-8 text-lg text-muted-foreground max-w-xl mx-auto">
-              Join ProctorPrep today and experience a seamless, secure, and intelligent proctoring solution.
+              Join ZenTest today and experience a seamless, secure, and intelligent proctoring solution.
             </p>
             <Button size="lg" className="btn-primary-solid shadow-md hover:shadow-lg transition-shadow duration-300 py-3 px-8 text-base" asChild>
               <Link href="/auth?action=register">

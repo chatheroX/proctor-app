@@ -23,7 +23,7 @@ const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE;
 
 
 export function AuthForm() {
-  const pathname = usePathname(); // Moved to top
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -36,10 +36,10 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role'] | ''>(''); // Role for registration
+  const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // For form submission loading state
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
 
   const resetFormFields = useCallback(() => {
@@ -52,7 +52,6 @@ export function AuthForm() {
     setShowConfirmPassword(false);
   }, []);
 
-  // Effect to sync URL action param with local state and reset form
   useEffect(() => {
     const actionFromParams = (searchParams.get('action') as AuthAction) || 'login';
     if (actionFromParams !== action) {
@@ -62,24 +61,12 @@ export function AuthForm() {
   }, [searchParams, action, resetFormFields]);
 
 
-  // Effect to handle redirection if user is already logged in and on /auth page
-  useEffect(() => {
-    console.log(`[AuthForm Effect - User Check] Running. isLoading: ${authContextLoading}, Path: ${pathname}, User: ${user?.email}`);
-    if (!authContextLoading && user && pathname === AUTH_ROUTE) {
-      const targetDashboard = user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
-      console.log(`[AuthForm Effect - User Check] User on /auth, attempting redirect to: ${targetDashboard}`);
-      router.replace(targetDashboard);
-    }
-  }, [user, authContextLoading, router, pathname]);
-
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setFullName(fullName.trim()); // Trim fullName before validation/use
-    setEmail(email.trim()); // Trim email
-
-    const trimmedEmail = email.trim(); // Use this for operations
+    
+    const trimmedEmail = email.trim();
+    const trimmedFullName = fullName.trim();
 
     if (!trimmedEmail || !password) {
       toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
@@ -88,10 +75,8 @@ export function AuthForm() {
     }
 
     let result: { success: boolean; error?: string; user?: CustomUser | null };
-    let targetDashboard = DEFAULT_DASHBOARD_ROUTE;
     
     if (action === 'register') {
-      const trimmedFullName = fullName.trim();
       if (!trimmedFullName) {
         toast({ title: "Error", description: "Full name is required for registration.", variant: "destructive" });
         setIsSubmitting(false);
@@ -117,7 +102,6 @@ export function AuthForm() {
       result = await signUp(trimmedEmail, password, trimmedFullName, selectedRole);
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        // Redirection logic is now primarily handled by AuthContext effect
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -126,16 +110,13 @@ export function AuthForm() {
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        // Redirection logic is now primarily handled by AuthContext effect
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
     }
     setIsSubmitting(false);
-    // No direct router.push here; AuthContext's useEffect will handle redirection based on user state change.
   };
   
-  // Loader for when AuthContext is initializing and we are on /auth page AND user state is not yet determined
   if (authContextLoading && pathname === AUTH_ROUTE && user === null) { 
     console.log('[AuthForm] AuthContext loading, user is null, on /auth. Showing full page loader.');
     return (
@@ -145,7 +126,6 @@ export function AuthForm() {
     );
   }
 
-  // Message if user is already authenticated and somehow lands on /auth page (AuthContext should redirect quickly)
   if (user && !authContextLoading && pathname === AUTH_ROUTE) {
     console.log('[AuthForm] User authenticated, on /auth. AuthContext should redirect. Showing finalizing message.');
     return (
@@ -162,7 +142,6 @@ export function AuthForm() {
   const handleTabChange = (value: string) => {
     setAction(value as AuthAction);
     resetFormFields();
-    // Update URL query param without full page reload
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('action', value);
     router.replace(newUrl.toString(), { scroll: false });
@@ -172,24 +151,23 @@ export function AuthForm() {
     <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 px-4">
       <Card className="w-full max-w-md modern-card shadow-xl border-border/50">
         <Tabs value={action} onValueChange={handleTabChange} className="w-full">
-          <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-3"> {/* Provide padding for TabsList */}
-            <TabsList className="grid w-full grid-cols-2 bg-muted p-1 rounded-md"> {/* Removed m-4 */}
+          <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-3">
+            <TabsList className="grid w-full grid-cols-2 bg-muted p-1 rounded-md">
               <TabsTrigger 
                 value="login" 
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary-foreground data-[state=inactive]:hover:bg-primary/20 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary data-[state=inactive]:hover:bg-primary/10 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
               >
                 Login
               </TabsTrigger>
               <TabsTrigger 
                 value="register" 
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary-foreground data-[state=inactive]:hover:bg-primary/20 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary data-[state=inactive]:hover:bg-primary/10 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
               >
                 Register
               </TabsTrigger>
             </TabsList>
           </CardHeader>
           
-          {/* Form wraps the TabsContent to handle submission for both login and register */}
           <form onSubmit={handleAuth}>
             <TabsContent value="login">
               <CardHeader className="text-center pt-4 sm:pt-6 pb-3">
@@ -326,14 +304,14 @@ export function AuthForm() {
                 <div className="space-y-1.5">
                   <Label htmlFor="register-role">Register as</Label>
                   <div className="relative">
-                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                     <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                     <Select value={role || ''} onValueChange={(value) => setRole(value as CustomUser['role'])} required>
                       <SelectTrigger id="register-role" className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border shadow-lg rounded-md">
-                        <SelectItem value="student" className="py-2 text-sm hover:bg-primary/10 focus:bg-primary/10">Student</SelectItem>
-                        <SelectItem value="teacher" className="py-2 text-sm hover:bg-primary/10 focus:bg-primary/10">Teacher</SelectItem>
+                        <SelectItem value="student" className="py-2 text-sm hover:bg-primary/10 focus:bg-primary/10 text-popover-foreground">Student</SelectItem>
+                        <SelectItem value="teacher" className="py-2 text-sm hover:bg-primary/10 focus:bg-primary/10 text-popover-foreground">Teacher</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -359,5 +337,3 @@ export function AuthForm() {
     </div>
   );
 }
-
-    

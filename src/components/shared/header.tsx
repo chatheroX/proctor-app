@@ -6,11 +6,11 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Loader2, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import logoAsset from '../../../logo.png'; // Import the logo
+import logoAsset from '../../../logo.png';
 
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE; // Fallback for now
+const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE;
 
 export function AppHeader() {
   const { user, signOut, isLoading } = useAuth();
@@ -25,7 +25,7 @@ export function AppHeader() {
     <header className="sticky top-0 z-50 w-full border-b border-border/30 bg-background/80 dark:bg-slate-900/80 backdrop-blur-lg shadow-sm">
       <div className="container flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center space-x-2 group">
-          <Image src={logoAsset} alt="ZenTest Logo" width={114} height={32} priority className="h-8 w-auto" />
+          <Image src={logoAsset} alt="ZenTest Logo" width={100} height={28} priority className="h-7 w-auto" />
         </Link>
         <nav className="flex items-center space-x-1 sm:space-x-2">
           {isLoading ? (
@@ -34,7 +34,7 @@ export function AppHeader() {
              </div>
           ) : isAuthenticated && user ? (
             <>
-              <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-foreground hover:bg-accent/50 hover:text-accent-foreground px-2 sm:px-3 py-1.5 rounded-md">
+              <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-foreground hover:bg-primary/10 hover:text-primary px-2 sm:px-3 py-1.5 rounded-md">
                 <Link href={getDashboardRoute()}>
                  <LayoutDashboard className="mr-1.5 h-4 w-4" /> Dashboard
                 </Link>
@@ -50,7 +50,7 @@ export function AppHeader() {
             </>
           ) : (
             <>
-              <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-foreground hover:bg-accent/50 hover:text-accent-foreground px-2 sm:px-3 py-1.5 rounded-md">
+              <Button variant="ghost" asChild className="text-xs sm:text-sm font-medium text-foreground hover:bg-primary/10 hover:text-primary px-2 sm:px-3 py-1.5 rounded-md">
                 <Link href="/auth?action=login">
                   <LogIn className="mr-1.5 h-4 w-4" /> Login
                 </Link>
