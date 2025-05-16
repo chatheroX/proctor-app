@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image'; // Ensured Image is imported
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   Sidebar,
@@ -21,13 +21,8 @@ import { LogOut, Settings, Loader2, UserCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from '@/lib/utils'; // Import cn utility
-
-const ZenTestLogo = () => (
-  // Assuming logo.png is in the public folder
-  <Image src="/logo.png" alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
-);
-
+import { cn } from '@/lib/utils';
+import logoAsset from '../../../logo.png'; // Import the logo
 
 export interface NavItem {
   href: string;
@@ -107,7 +102,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
       <SidebarHeader className="p-3 border-b border-sidebar-border/60 h-16 flex items-center">
         <div className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            <ZenTestLogo />
+            <Image src={logoAsset} alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
           </Link>
            <SidebarTrigger className="text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:hidden" />
            <SidebarTrigger className="text-muted-foreground hover:text-foreground hidden group-data-[collapsible=icon]:flex" />

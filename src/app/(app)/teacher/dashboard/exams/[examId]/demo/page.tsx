@@ -25,7 +25,7 @@ export default function TeacherDemoExamPage() {
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [pageIsLoading, setPageIsLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [examLocallyStarted, setExamLocallyStarted] = useState(false); 
 
@@ -36,22 +36,22 @@ export default function TeacherDemoExamPage() {
 
   const fetchExamData = useCallback(async () => {
     console.log(`[TeacherDemoPage] fetchExamData triggered. examId: ${examId}, teacherUserId: ${teacherUserId}`);
-    if (!examId || !supabase || !teacherUserId) { // Ensure teacherUserId is present
+    if (!examId || !supabase || !teacherUserId) { 
       const errorMsg = !examId ? "Exam ID is missing for demo." : 
                        !supabase ? "Supabase client not available for demo." : 
                        "Teacher details not available for demo.";
       console.warn(`[TeacherDemoPage] Aborting fetch: ${errorMsg}`);
       setPageError(errorMsg);
-      setIsLoading(false);
+      setPageIsLoading(false);
       return;
     }
     
-    // setIsLoading(true); // Already set or managed by initial state
+    setPageIsLoading(true);
     setPageError(null);
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('*') // Fetches all columns, including questions
+        .select('*') 
         .eq('exam_id', examId)
         .single();
 
@@ -65,7 +65,6 @@ export default function TeacherDemoExamPage() {
 
       if (!currentExam.questions || currentExam.questions.length === 0) {
         setPageError("This exam has no questions. Please add questions to run a demo.");
-        // Keep examDetails and questions as they are to display info, error will prevent start
       }
     } catch (e: any) {
       console.error("[TeacherDemoPage] Failed to fetch exam data for demo:", e);
@@ -73,26 +72,26 @@ export default function TeacherDemoExamPage() {
       setQuestions([]);
       setExamDetails(null);
     } finally {
-      setIsLoading(false);
+      setPageIsLoading(false);
     }
   }, [examId, supabase, teacherUserId]);
 
 
   useEffect(() => {
-    console.log("[TeacherDemoPage] Fetch Effect. authIsLoading:", authIsLoading, "teacherUserId:", teacherUserId, "examId:", examId, "examDetails:", !!examDetails, "pageError:", pageError, "isLoading (page):", isLoading);
-    if (!authIsLoading && teacherUserId && examId) { // Ensure teacherUserId before fetching
-      if (!examDetails && !pageError && isLoading) { // Only fetch if not already fetched, no error, and in loading state
+    console.log("[TeacherDemoPage] Fetch Effect. authIsLoading:", authIsLoading, "teacherUserId:", teacherUserId, "examId:", examId, "examDetails:", !!examDetails, "pageError:", pageError, "pageIsLoading:", pageIsLoading);
+    if (!authIsLoading && teacherUserId && examId) { 
+      if (!examDetails && !pageError && pageIsLoading) { 
         console.log("[TeacherDemoPage] Conditions met, calling fetchExamData.");
         fetchExamData();
-      } else if (examDetails || pageError) { // If data already fetched or error exists
-         if(isLoading) setIsLoading(false); // Ensure loading is false
+      } else if (examDetails || pageError) { 
+         if(pageIsLoading) setPageIsLoading(false); 
       }
-    } else if (!isLoading && (!teacherUserId || !examId) && !authIsLoading) { // If not loading, but missing critical info
+    } else if (!pageIsLoading && (!teacherUserId || !examId) && !authIsLoading) { 
       if (!teacherUserId) setPageError("Teacher details not available for demo.");
       else if (!examId) setPageError("Exam ID missing for demo.");
-      if(isLoading) setIsLoading(false); // Ensure loading is false
+      if(pageIsLoading) setPageIsLoading(false); 
     }
-  }, [examId, authIsLoading, teacherUserId, examDetails, pageError, isLoading, fetchExamData]);
+  }, [examId, authIsLoading, teacherUserId, examDetails, pageError, pageIsLoading, fetchExamData]);
 
 
   const handleStartDemoExam = useCallback(() => {
@@ -104,7 +103,7 @@ export default function TeacherDemoExamPage() {
     if (!questions || questions.length === 0) {
       console.log('[TeacherDemoPage] Aborting demo start: No questions for demo.');
       toast({ title: "No Questions", description: "This exam has no questions to demo.", variant: "destructive" });
-      setPageError("This exam has no questions. Add questions to run a demo."); // Ensure this error is shown
+      setPageError("This exam has no questions. Add questions to run a demo."); 
       return;
     }
     console.log('[TeacherDemoPage] Starting demo locally.');
@@ -122,7 +121,6 @@ export default function TeacherDemoExamPage() {
     console.log('[TeacherDemoPage] Demo flagged events:', flaggedEvents);
     toast({ title: "Demo Exam Ended", description: "The demo exam has been submitted (simulated)." });
     setExamLocallyStarted(false); 
-    // No need to redirect, just stay on the pre-exam screen
   }, [toast]);
 
   const handleDemoTimeUp = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -133,7 +131,7 @@ export default function TeacherDemoExamPage() {
   }, [toast]);
 
 
-  if (authIsLoading || (isLoading && !examDetails && !pageError)) {
+  if (authIsLoading || (pageIsLoading && !examDetails && !pageError)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -142,7 +140,6 @@ export default function TeacherDemoExamPage() {
     );
   }
 
-  // Shows if examDetails is null AND pageError is set (e.g. exam not found, or teacher not auth'd)
   if (pageError && !examDetails && !examLocallyStarted) {
      return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
@@ -160,8 +157,7 @@ export default function TeacherDemoExamPage() {
     );
   }
   
-  // Shows if not loading, no examDetails, and not yet started locally (should be rare if pageError is caught above)
-  if (!examDetails && !isLoading && !examLocallyStarted) {
+  if (!examDetails && !pageIsLoading && !examLocallyStarted) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
@@ -178,10 +174,8 @@ export default function TeacherDemoExamPage() {
     );
   }
 
-  // Pre-exam start screen
   if (!examLocallyStarted && examDetails) {
-    // pageError here might be "no questions" but examDetails are still present
-    const cantStartReason = pageError; 
+    const cantStartReasonForDemo = pageError; 
     
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
@@ -211,12 +205,11 @@ export default function TeacherDemoExamPage() {
                 This is a simulation of the student exam environment. Activity monitoring will be noted for informational purposes in the console and via toasts.
               </AlertDescription>
             </Alert>
-            {/* Display cantStartReason if it exists (e.g., "no questions") */}
-            {cantStartReason && (
+            {cantStartReasonForDemo && (
               <Alert variant="destructive" className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>{cantStartReason.includes("no questions") ? "Cannot Start Demo" : "Error"}</AlertTitle>
-                <AlertDescription>{cantStartReason}</AlertDescription>
+                <AlertTitle>{cantStartReasonForDemo.includes("no questions") ? "Cannot Start Demo" : "Error"}</AlertTitle>
+                <AlertDescription>{cantStartReasonForDemo}</AlertDescription>
               </Alert>
             )}
           </CardContent>
@@ -224,9 +217,9 @@ export default function TeacherDemoExamPage() {
             <Button
               onClick={handleStartDemoExam}
               className="w-full btn-primary-solid py-3 text-lg"
-              disabled={isLoading || !examDetails || !!cantStartReason } // Button disabled if there's a cantStartReason
+              disabled={pageIsLoading || !examDetails || !!cantStartReasonForDemo } 
             >
-              {isLoading ? <Loader2 className="animate-spin mr-2" /> : <PlayCircle className="mr-2" />}
+              {pageIsLoading ? <Loader2 className="animate-spin mr-2" /> : <PlayCircle className="mr-2" />}
               Start Demo Exam
             </Button>
             <Button variant="outline" onClick={() => router.back()} className="w-full">
@@ -238,14 +231,15 @@ export default function TeacherDemoExamPage() {
     );
   }
   
-  // Exam is locally started and examDetails are present
   if (examLocallyStarted && examDetails) {
     return (
       <ExamTakingInterface
         examDetails={examDetails}
         questions={questions || []} 
-        isLoading={isLoading && !examDetails} // Pass specific loading state
-        examLoadingError={pageError} // Pass any loading error
+        parentIsLoading={pageIsLoading && !examDetails} 
+        examLoadingError={pageError} 
+        persistentError={null} 
+        cantStartReason={pageError && questions.length === 0 ? pageError : null}
         onAnswerChange={handleDemoAnswerChange}
         onSubmitExam={handleDemoSubmitExam}
         onTimeUp={handleDemoTimeUp}
@@ -254,11 +248,11 @@ export default function TeacherDemoExamPage() {
         studentName={teacherName}
         studentRollNumber={teacherUserId} 
         studentAvatarUrl={teacherAvatarUrl}
+        examStarted={true}
       />
     );
   }
 
-  // Fallback error display if none of the above conditions match (should be rare)
   return (
      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">

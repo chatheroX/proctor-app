@@ -2,34 +2,29 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image'; // Ensured Image is imported
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Loader2, LogIn, LogOut, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Loader2, LogIn, LogOut, UserPlus, Settings, UserCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import logoAsset from '../../../logo.png'; // Import the logo
 
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE; // Fallback for now
-
-const ZenTestLogo = () => (
-  // Assuming logo.png is in the public folder
-  <Image src="/logo.png" alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" priority />
-);
 
 export function AppHeader() {
   const { user, signOut, isLoading } = useAuth();
   const isAuthenticated = !!user;
 
   const getDashboardRoute = () => {
-    if (!user || !user.role) return DEFAULT_DASHBOARD_ROUTE;
+    if (!user || !user.role) return STUDENT_DASHBOARD_ROUTE; // Default to student if role is somehow null
     return user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/30 bg-background/90 dark:bg-slate-900/90 backdrop-blur-lg shadow-sm">
+    <header className="sticky top-0 z-50 w-full border-b border-border/30 bg-background/80 dark:bg-slate-900/80 backdrop-blur-lg shadow-sm">
       <div className="container flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center space-x-2 group">
-          <ZenTestLogo />
+          <Image src={logoAsset} alt="ZenTest Logo" width={100} height={28} priority className="h-7 w-auto" />
         </Link>
         <nav className="flex items-center space-x-1 sm:space-x-2">
           {isLoading ? (
@@ -59,7 +54,7 @@ export function AppHeader() {
                   <LogIn className="mr-1.5 h-4 w-4" /> Login
                 </Link>
               </Button>
-              <Button asChild className="btn-gradient text-xs sm:text-sm px-3 sm:px-4 py-1.5 rounded-md">
+              <Button asChild className="btn-primary-solid text-xs sm:text-sm px-3 sm:px-4 py-1.5 rounded-md">
                 <Link href="/auth?action=register">
                   <UserPlus className="mr-1.5 h-4 w-4" /> Register
                 </Link>
