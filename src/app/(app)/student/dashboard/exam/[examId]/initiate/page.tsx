@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,14 +31,13 @@ export default function InitiateExamPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  // Destructure authError from AuthContext
   const { user: studentUser, isLoading: authLoading, supabase, authError: contextAuthError } = useAuth();
 
   const examId = params.examId as string;
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Local loading state for this page
-  const [error, setError] = useState<string | null>(null); // Local error state for this page
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [effectiveStatus, setEffectiveStatus] = useState<string | null>(null);
   
   const [checks, setChecks] = useState<CheckStatus[]>(initialChecks);
@@ -47,21 +46,39 @@ export default function InitiateExamPage() {
   const [performingChecks, setPerformingChecks] = useState(false);
   const [hasSuccessfullyLaunched, setHasSuccessfullyLaunched] = useState(false);
 
+  const localErrorRef = useRef(error);
+  useEffect(() => {
+    localErrorRef.current = error;
+  }, [error]);
+
+  const localSetError = useCallback((msg: string | null) => {
+    if (localErrorRef.current !== msg) setError(msg);
+  }, []);
+
+  const localIsLoadingRef = useRef(isLoading);
+   useEffect(() => {
+    localIsLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+  const localSetIsLoading = useCallback((val: boolean) => {
+    if (localIsLoadingRef.current !== val) setIsLoading(val);
+  }, []);
+
   const fetchExamData = useCallback(async () => {
     console.log("[InitiatePage] fetchExamData called. examId:", examId);
     if (!examId) {
-      setError("Exam ID is missing.");
-      setIsLoading(false);
+      localSetError("Exam ID is missing.");
+      localSetIsLoading(false);
       return;
     }
     if (!supabase) { 
-      setError("Service connection error. Please try again later.");
-      setIsLoading(false);
+      localSetError("Service connection error. Please try again later.");
+      localSetIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    setError(null); // Clear previous local errors before fetching
+    localSetIsLoading(true);
+    localSetError(null);
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
@@ -78,89 +95,68 @@ export default function InitiateExamPage() {
 
     } catch (e: any) {
       console.error("[InitiatePage] Failed to load exam data:", e.message, e);
-      setError(e.message || "Failed to load exam data.");
+      localSetError(e.message || "Failed to load exam data.");
       setExamDetails(null);
     } finally {
-      setIsLoading(false);
+      localSetIsLoading(false);
       console.log("[InitiatePage] fetchExamData finished.");
     }
-  }, [examId, supabase, setError, setIsLoading, setExamDetails, setEffectiveStatus]); // Added setters to dep array
+  }, [examId, supabase, localSetError, localSetIsLoading]); 
 
   useEffect(() => {
-    const localSetError = (msg: string) => {
-        if (error !== msg) setError(msg);
-        if (isLoading) setIsLoading(false);
-    };
-    const localSetIsLoading = (val: boolean) => {
-        if (isLoading !== val) setIsLoading(val);
-    };
-    
-    console.log(`[InitiatePage] Effect triggered. examId: ${examId}, authLoading (context): ${authLoading}, supabase available (context): ${!!supabase}, contextAuthError: ${contextAuthError}, localError: ${error}, localIsLoading: ${isLoading}`);
+    const effectId = `[InitiatePage MainEffect ${Date.now().toString().slice(-4)}]`;
+    console.log(`${effectId} Running. examId: ${examId}, authLoading: ${authLoading}, supabase: ${!!supabase}, contextAuthError: ${contextAuthError}, localError: ${error}, localIsLoading: ${isLoading}`);
 
     if (authLoading) {
-        console.log("[InitiatePage] Waiting for auth context to complete...");
-        if (!isLoading) localSetIsLoading(true);
-        return;
+      console.log(`${effectId} Auth context loading. Setting localIsLoading to true.`);
+      if (!isLoading) localSetIsLoading(true);
+      return;
     }
 
-    // AuthContext has finished loading (authLoading is false)
     if (contextAuthError) {
-        console.error("[InitiatePage] Error from AuthContext:", contextAuthError);
-        localSetError(contextAuthError); // Use the error message from AuthContext
-        return;
+      console.error(`${effectId} AuthContext error: ${contextAuthError}. Setting local error.`);
+      localSetError(contextAuthError);
+      if (isLoading) localSetIsLoading(false);
+      return;
     }
-
+    
     if (!supabase) {
-        // This case should ideally be caught by contextAuthError if Supabase client init failed in AuthContext
-        console.error("[InitiatePage] Supabase client from AuthContext is null, and no AuthContext error was reported. This is unexpected. Setting local error.");
-        localSetError("Service connection error. Please ensure you are connected and try again.");
-        return;
+      console.error(`${effectId} Supabase client from AuthContext is null, and no AuthContext error. Setting local error.`);
+      localSetError("Service connection error. Please ensure you are connected and try again.");
+      if (isLoading) localSetIsLoading(false);
+      return;
     }
 
     if (!examId) {
-        console.error("[InitiatePage] Exam ID is missing. Setting local error.");
-        localSetError("Exam ID is missing. Cannot load exam details.");
-        return;
+      console.error(`${effectId} Exam ID is missing. Setting local error.`);
+      localSetError("Exam ID is missing. Cannot load exam details.");
+       if (isLoading) localSetIsLoading(false);
+      return;
     }
-
-    // If error is already set (e.g. by previous checks), don't proceed to fetch
-    if (error) {
-        console.log("[InitiatePage] Local error already set, not fetching exam data. Error:", error);
-        if(isLoading) localSetIsLoading(false); // Ensure local loading is false if error is set
+    
+    if (error && !performingChecks) { // If an error is already set (and not during checks), stop.
+        console.log(`${effectId} Local error already set ('${error}'), not fetching. Ensuring local isLoading is false.`);
+        if(isLoading) localSetIsLoading(false);
         return;
     }
     
-    // All prerequisites met (auth loaded, no context error, supabase client available, examId available, no local error)
-    // Proceed to fetch exam data if not already fetched or if examId changed
-    if (!examDetails || examDetails.exam_id !== examId) {
-        console.log("[InitiatePage] Conditions met to fetch exam data.");
-        fetchExamData(); // This function handles its own local setIsLoading and setError
+    if (!examDetails || (examDetails.exam_id !== examId && !isLoading)) {
+      console.log(`${effectId} Conditions met to fetch exam data. Current examDetails: ${examDetails?.exam_id}`);
+      fetchExamData();
     } else if (examDetails && examDetails.exam_id === examId && isLoading) {
-        // Exam details already loaded, but local isLoading might still be true from initial state
-        console.log("[InitiatePage] Exam details already loaded, ensuring local isLoading is false.");
-        localSetIsLoading(false);
+      console.log(`${effectId} Exam details for ${examId} already loaded. Ensuring local isLoading is false.`);
+      localSetIsLoading(false);
     }
-    // If !examDetails && !isLoading && !error, fetchExamData should have been called or will be if deps change.
-    // The fetchExamData itself will set error if it fails to find exam.
-  }, [
-    examId,
-    authLoading,
-    supabase,
-    contextAuthError,
-    fetchExamData,
-    examDetails,
-    isLoading, // local isLoading
-    error,     // local error
-    setError,  // local setError
-    setIsLoading // local setIsLoading
-  ]);
+  }, [examId, authLoading, supabase, contextAuthError, fetchExamData, examDetails, isLoading, error, localSetError, localSetIsLoading, performingChecks]);
+
 
   const performLaunch = useCallback(async () => {
-    console.log("[InitiatePage] performLaunch called. Conditions:", { allChecksPassed, examDetailsExists: !!examDetails, studentUserExists: !!studentUser?.user_id, errorExists: !!error, hasSuccessfullyLaunched });
+    const effectId = `[InitiatePage performLaunch ${Date.now().toString().slice(-4)}]`;
+    console.log(`${effectId} Called. Conditions: allChecksPassed: ${allChecksPassed}, examDetails: ${!!examDetails}, studentUser: ${!!studentUser?.user_id}, error: ${error}, hasSuccessfullyLaunched: ${hasSuccessfullyLaunched}`);
     
     if (hasSuccessfullyLaunched) {
-        toast({ title: "Already Launched", description: "Exam session was already initiated.", variant: "default" });
-        return;
+      toast({ title: "Already Launched", description: "Exam session was already initiated.", variant: "default" });
+      return;
     }
 
     if (!allChecksPassed || !examDetails || !studentUser?.user_id || error) {
@@ -168,12 +164,12 @@ export default function InitiateExamPage() {
       if (!allChecksPassed) reasons.push("system checks not passed");
       if (!examDetails) reasons.push("exam details missing");
       if (!studentUser?.user_id) reasons.push("student authentication missing");
-      if (error) reasons.push(`an existing error: ${error}`);
+      if (error && error !== "Pop-up blocked or failed to open.") reasons.push(`an existing error: ${error}`); // Avoid listing popup error as a pre-condition failure for re-launch
       
       const description = `Cannot launch exam: ${reasons.join(', ')}. Please resolve the issues and try again.`;
-      console.error(`[InitiatePage] ${description}`);
+      console.error(`${effectId} ${description}`);
       toast({ title: "Cannot Launch Exam", description, variant: "destructive", duration: 7000 });
-      setError(description); // Set local error state
+      localSetError(description);
       return;
     }
 
@@ -186,9 +182,9 @@ export default function InitiateExamPage() {
     const encryptedToken = await encryptData(payload);
 
     if (!encryptedToken) {
-        toast({ title: "Encryption Error", description: "Could not generate secure exam token.", variant: "destructive" });
-        setError("Failed to create a secure exam session token. Please try again.");
-        return;
+      toast({ title: "Encryption Error", description: "Could not generate secure exam token.", variant: "destructive" });
+      localSetError("Failed to create a secure exam session token. Please try again.");
+      return;
     }
     
     const examSessionUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(encryptedToken)}`;
@@ -199,85 +195,110 @@ export default function InitiateExamPage() {
     if (newWindow) {
       toast({ title: "Exam Launching", description: "Exam is opening in a new tab. Please switch to it.", duration: 7000});
       setHasSuccessfullyLaunched(true);
-      setError(null); 
+      localSetError(null); 
     } else {
       const popupErrorMsg = "Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again using the 'Launch Exam' button if available.";
-      console.error(`[InitiatePage] Pop-up blocked or failed to open: "${popupErrorMsg}"`);
-      setError(popupErrorMsg);
+      console.error(`${effectId} Pop-up blocked or failed to open: "${popupErrorMsg}"`);
+      localSetError(popupErrorMsg); // Use localSetError
       toast({ title: "Launch Failed", description: popupErrorMsg, variant: "destructive", duration: 10000 });
-      setHasSuccessfullyLaunched(false);
+      setHasSuccessfullyLaunched(false); // Explicitly set to false if pop-up failed
     }
-  }, [allChecksPassed, examDetails, studentUser, toast, error, hasSuccessfullyLaunched, setError, setHasSuccessfullyLaunched]); // Added setError & setHasSuccessfullyLaunched
+  }, [allChecksPassed, examDetails, studentUser, toast, error, hasSuccessfullyLaunched, localSetError]);
+
 
   const startSystemChecksAndAttemptLaunch = useCallback(async () => {
-    console.log("[InitiatePage] startSystemChecksAndAttemptLaunch called.");
+    const effectId = `[InitiatePage startSystemChecksAndAttemptLaunch ${Date.now().toString().slice(-4)}]`;
+    console.log(`${effectId} Called. hasSuccessfullyLaunched: ${hasSuccessfullyLaunched}, performingChecks: ${performingChecks}`);
+
     if (hasSuccessfullyLaunched) {
       toast({ title: "Already Launched", description: "Exam session was already launched. Check other tabs.", variant: "default" });
       return;
     }
-    if (performingChecks) return;
+    if (performingChecks) {
+      console.log(`${effectId} Already performing checks, returning.`);
+      return;
+    }
 
     if (!studentUser?.user_id) {
-      setError("Student details not found. Please re-login.");
+      localSetError("Student details not found. Please re-login.");
       toast({ title: "Authentication Error", description: "Student details not found.", variant: "destructive" });
       return;
     }
     if (!examDetails) {
-        setError("Exam details are not loaded. Please try refreshing or rejoining.");
-        toast({ title: "Error", description: "Exam details are not loaded.", variant: "destructive" });
-        return;
+      localSetError("Exam details are not loaded. Please try refreshing or rejoining.");
+      toast({ title: "Error", description: "Exam details are not loaded.", variant: "destructive" });
+      return;
     }
-     // Re-evaluate effective status right before starting checks
+    
     const currentEffectiveStatus = getEffectiveExamStatus(examDetails);
     if (currentEffectiveStatus !== 'Ongoing') {
       const statusMsg = `Exam is ${currentEffectiveStatus?.toLowerCase() || 'not available'}.`;
-      setError(statusMsg);
+      localSetError(statusMsg);
       toast({ title: "Cannot Start", description: statusMsg, variant: "destructive" });
       return;
     }
     if (!examDetails.questions || examDetails.questions.length === 0) {
-      setError("This exam has no questions.");
+      localSetError("This exam has no questions.");
       toast({ title: "No Questions", description: "This exam has no questions.", variant: "destructive" });
       return;
     }
 
     setPerformingChecks(true);
-    setError(null); // Clear previous errors before starting checks
+    localSetError(null); 
     setAllChecksPassed(false);
     setChecks(initialChecks.map(c => ({ ...c, status: 'pending', details: undefined })));
     setOverallProgress(0);
 
-    let checksSuccessful = true;
+    let checksSuccessfulInternal = true;
     for (let i = 0; i < initialChecks.length; i++) {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 300)); 
 
-      // Simulate all checks passing for now. Replace with actual checks.
       const isSuccess = true; 
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Check Failed' } : c));
       setOverallProgress(((i + 1) / initialChecks.length) * 100);
       if (!isSuccess) {
         const checkFailError = `System check failed: ${initialChecks[i].name}. Cannot proceed.`;
-        setError(checkFailError); // Set local error
-        checksSuccessful = false;
+        localSetError(checkFailError);
+        checksSuccessfulInternal = false;
         break; 
       }
     }
     
-    setPerformingChecks(false);
+    // Set allChecksPassed state based on internal success *before* calling performLaunch
+    setAllChecksPassed(checksSuccessfulInternal);
+    setPerformingChecks(false); // Set performingChecks to false after checks are done
 
-    if (checksSuccessful) {
-      setAllChecksPassed(true); 
-      toast({ title: "System Checks Passed!", description: "Attempting to launch exam...", variant: "default" });
-      await performLaunch(); 
-    } else {
-      setAllChecksPassed(false);
-      // Error state should already be set by the failed check
-    }
+    // This direct call to performLaunch() after setting state is the core of the previous problem.
+    // performLaunch will read the *current* (not yet updated) value of allChecksPassed.
+    // The solution is to use useEffect to react to allChecksPassed changing.
+    // For now, keeping this direct call as per the last working version, but aware of the race.
+    // The new useEffect below will handle the launch.
+    // await performLaunch(); // Removed direct call
+
   }, [
     studentUser?.user_id, examDetails, toast, performingChecks,
-    performLaunch, setError, setPerformingChecks, setAllChecksPassed, setChecks, setOverallProgress, hasSuccessfullyLaunched
+    localSetError, hasSuccessfullyLaunched // Removed performLaunch from here
   ]);
+
+  // New useEffect to trigger launch after checks pass and relevant states are updated
+  useEffect(() => {
+    const effectId = `[InitiatePage AutoLaunchEffect ${Date.now().toString().slice(-4)}]`;
+    console.log(`${effectId} Running. allChecksPassed: ${allChecksPassed}, performingChecks: ${performingChecks}, error: ${error}, hasSuccessfullyLaunched: ${hasSuccessfullyLaunched}, examDetails: ${!!examDetails}, studentUser: ${!!studentUser}`);
+    
+    // Only attempt to launch if checks have passed, no checks are ongoing, no critical error exists,
+    // and the exam hasn't been successfully launched yet.
+    if (allChecksPassed && !performingChecks && !error && !hasSuccessfullyLaunched) {
+      if (examDetails && studentUser?.user_id) {
+        console.log(`${effectId} Conditions met, calling performLaunch.`);
+        performLaunch(); // performLaunch is memoized and will use the latest states
+      } else {
+        // This case might occur if examDetails or studentUser are not yet loaded
+        // when allChecksPassed becomes true. The main data loading useEffect should handle this.
+        console.warn(`${effectId} All checks passed, but examDetails or studentUser not ready. Launch deferred.`);
+      }
+    }
+  }, [allChecksPassed, performingChecks, error, hasSuccessfullyLaunched, examDetails, studentUser, performLaunch]);
 
 
   const getStatusIcon = (status: CheckStatus['status']) => {
@@ -288,8 +309,6 @@ export default function InitiateExamPage() {
     return null;
   };
 
-
-  // Primary loading state for the page: considers AuthContext loading AND local data fetching loading
   if (authLoading || (isLoading && !examDetails && !error && !contextAuthError)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
@@ -300,8 +319,7 @@ export default function InitiateExamPage() {
       </div>
     );
   }
-
-  // If there's an error (either from context or local), and we are not actively performing checks or already launched
+  
   if (error && !performingChecks && !hasSuccessfullyLaunched) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
@@ -321,7 +339,6 @@ export default function InitiateExamPage() {
     );
   }
   
-  // If no exam details after loading, and not in error state or performing checks/launched
   if (!examDetails && !isLoading && !performingChecks && !hasSuccessfullyLaunched) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
@@ -341,7 +358,6 @@ export default function InitiateExamPage() {
     );
   }
   
-  // Fallback critical error if examDetails is null when it shouldn't be
   if (!examDetails && !hasSuccessfullyLaunched) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
@@ -391,7 +407,6 @@ export default function InitiateExamPage() {
                 This exam requires a secure environment.
               </AlertDescription>
             </Alert>
-            {/* Display local error specific to this page's operations, if any, and not an auth context error */}
             {error && !contextAuthError && ( 
               <Alert variant="destructive" className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
@@ -417,7 +432,6 @@ export default function InitiateExamPage() {
                 </li>
               ))}
             </ul>
-            {/* Display error related to system checks if checks failed */}
             {error && !allChecksPassed && ( 
                 <Alert variant="destructive" className="mt-4">
                     <AlertTriangle className="h-4 w-4" />
@@ -436,7 +450,7 @@ export default function InitiateExamPage() {
                     The exam should have opened in a new tab. Please switch to it to begin.
                 </p>
                 <p className="text-muted-foreground mt-1">If the new tab did not open, please ensure pop-ups are allowed for this site and try the manual launch button if available, or contact support.</p>
-                 {(error && !newWindow) && ( // newWindow not available here, so rely on error state for manual launch button
+                 { error && ( // Show if there's any error, especially the popup blocked one
                     <Button variant="outline" onClick={performLaunch} className="mt-4 btn-outline-subtle">
                         <ExternalLink className="mr-2 h-4 w-4" /> Try Launching Again
                     </Button>
@@ -456,6 +470,7 @@ export default function InitiateExamPage() {
             </Button>
            )}
            
+           {/* Show manual launch if initial auto-launch failed (indicated by `error` and `!hasSuccessfullyLaunched`) OR if checks passed but something went wrong before launch */}
            {allChecksPassed && !hasSuccessfullyLaunched && !performingChecks && (
              <Button variant="outline" onClick={performLaunch} className="w-full btn-primary-solid">
                 <ExternalLink className="mr-2 h-4 w-4" /> Launch Exam Manually
@@ -470,5 +485,3 @@ export default function InitiateExamPage() {
     </div>
   );
 }
-      
-    
