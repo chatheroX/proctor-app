@@ -7,15 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Loader2, ExternalLink } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, SebEntryTokenInsert } from '@/types/supabase';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { useAuth } from '@/contexts/AuthContext';
 
-// The SEB_CONFIG_FILE_RELATIVE_PATH is no longer used to construct the configUrl parameter for seb://open
-// Instead, we directly launch sebs://YOUR_DOMAIN/seb/entry/[token]
+const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb'; // Relative to public folder
 const TOKEN_EXPIRY_MINUTES = 5; // Short-lived token for SEB entry
 
 export default function JoinExamPage() {
@@ -25,7 +24,7 @@ export default function JoinExamPage() {
   const { toast } = useToast();
   const { user: studentUser, isLoading: authLoading } = useAuth();
 
-  const generateRandomToken = (length = 64) => { // Increased token length
+  const generateRandomToken = (length = 64) => {
     const array = new Uint8Array(length / 2);
     window.crypto.getRandomValues(array);
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
@@ -91,19 +90,22 @@ export default function JoinExamPage() {
         return;
       }
 
-      // Construct direct SEB launch URL to the /seb/entry/[token] page
+      // Construct the URL to the .seb file with entryToken in the hash
       const appDomain = window.location.origin;
-      const directSebStartUrl = `${appDomain}/seb/entry/${sebEntryToken}`;
+      const configUrlWithHash = `${appDomain}${SEB_CONFIG_FILE_RELATIVE_PATH}#entryToken=${encodeURIComponent(sebEntryToken)}`;
       
       // Remove http(s):// prefix and prepend sebs://
-      const domainAndPathForSeb = directSebStartUrl.replace(/^https?:\/\//, '');
+      const domainAndPathForSeb = configUrlWithHash.replace(/^https?:\/\//, '');
       const sebLaunchUrl = `sebs://${domainAndPathForSeb}`;
 
-      console.log("[JoinExamPage] Attempting to launch SEB with direct URL:", sebLaunchUrl);
+      console.log("[JoinExamPage] Attempting to launch SEB by pointing to .seb config file with hash token:", sebLaunchUrl);
+      console.log("[JoinExamPage] The .seb file's Start URL should be configured to: YOUR_APP_DOMAIN/seb/entry");
+      console.log("[JoinExamPage] The /seb/entry page will then read #entryToken from window.location.hash");
+      
       toast({
         title: "Launching Exam in SEB",
-        description: "Safe Exam Browser should start. Ensure SEB is installed and handles sebs:// links.",
-        duration: 10000,
+        description: "Safe Exam Browser should start. Ensure SEB is installed and handles sebs:// links and that the .seb file is correctly served by your hosting.",
+        duration: 15000,
       });
       
       window.location.href = sebLaunchUrl;
@@ -146,7 +148,7 @@ export default function JoinExamPage() {
               <ExternalLink className="h-5 w-5 text-primary dark:text-blue-400" />
               <AlertTitle className="font-semibold text-primary dark:text-blue-300">SEB Required</AlertTitle>
               <AlertDescription className="text-primary/90 dark:text-blue-400/90 text-sm">
-                This exam will open in Safe Exam Browser (SEB). Ensure SEB is installed and configured.
+                This exam will open in Safe Exam Browser (SEB). Ensure SEB is installed and configured with the settings provided by ZenTest.
                 The system will attempt to launch SEB automatically.
               </AlertDescription>
             </Alert>
@@ -167,4 +169,3 @@ export default function JoinExamPage() {
     </div>
   );
 }
-

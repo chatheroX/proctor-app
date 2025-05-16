@@ -1,125 +1,95 @@
 
-# ZenTest - Example SEB Configuration File Instructions
-#
-# This file provides guidance on how to configure Safe Exam Browser (SEB)
-# for use with the ZenTest platform. You need to use the SEB Configuration Tool
-# to create an actual `exam-config.seb` file based on these recommendations and
-# place it in your project's `/public/configs/` directory.
-#
-# The ZenTest application will launch SEB and direct it to YOUR_APP_DOMAIN/seb/entry/[token].
-# SEB will use its currently active or default settings unless a student manually
-# loads a specific .seb configuration file like the one described below.
-#
-# ==============================================================================
-# CRITICAL SETTINGS for your `exam-config.seb` file:
-# ==============================================================================
-#
-# 1. Start URL:
-#    - This is the MOST IMPORTANT setting inside your `.seb` file.
-#    - Set this to: https://YOUR_APP_DOMAIN/seb/entry
-#    - Replace `YOUR_APP_DOMAIN` with your actual deployed application domain 
-#      (e.g., `https://proctorx.netlify.app` if that's your live site).
-#    - DO NOT include any query parameters or hash parameters like examId or token here.
-#      The application will pass the token as part of the path when SEB is launched
-#      (e.g., sebs://YOUR_APP_DOMAIN/seb/entry/GENERATED_TOKEN).
-#
-# 2. General -> Use Browser Exam Key:
-#    - Recommended: Enable this and generate a unique key.
-#    - The `/seb/live-test` page in your ZenTest app would ideally send this key back in
-#      a request header (e.g., `X-SafeExamBrowser-BrowserExamKey`) for server-side validation.
-#      (Note: This server-side validation part is not implemented in the current ZenTest AI prompt version).
-#
-# 3. Config File -> Use Config Key:
-#    - Recommended: Enable this and generate a unique key.
-#    - Similar to Browser Exam Key, this can be used for server-side validation of the config file.
-#      (Note: Also not implemented for server-side validation in current ZenTest AI prompt version).
-#
-# 4. Browser -> Security:
-#    - Enable "Block pop-up windows"
-#    - Enable "Block any file download/upload" (unless your exam specifically needs uploads)
-#    - Enable "Enable JavaScript"
-#    - Enable "Block plug-ins"
-#    - Enable "Block Java"
-#    - Enable "Block general downloads"
-#
-# 5. Browser -> Browser User Agent:
-#    - Select "SEB for Windows" or "SEB for macOS" or "SEB for iOS" as appropriate.
-#    - Enable "Append SEB version to user agent".
-#
-# 6. Exam -> Prohibited Processes:
-#    - Add common screen sharing, remote desktop, communication, and virtual machine processes.
-#      Examples: TeamViewer, AnyDesk, Skype, Discord, vmware.exe, VirtualBox.exe.
-#
-# 7. Exam -> Allowed Processes:
-#    - Generally, leave this empty unless absolutely necessary.
-#
-# 8. Exam -> Permitted Keys:
-#    - Uncheck "Enable Ctrl-N (New Window)"
-#    - Uncheck "Enable F1, F2, ..., F12" (Function Keys)
-#    - Uncheck "Enable Ctrl-Alt-Del"
-#    - Uncheck "Enable Alt-Tab and Win/Cmd-Tab"
-#    - Uncheck "Enable Alt-Esc"
-#    - Uncheck "Enable Alt-F4"
-#    - Uncheck "Enable Esc" (except for quit link)
-#    - Uncheck "Enable right mouse button"
-#    - Consider what input is needed for your exam (A-Z, 0-9, Space, Enter, Backspace, Arrow Keys usually).
-#      The ZenTest exam interface primarily uses mouse clicks for MCQs.
-#
-# 9. Exam -> Quit/Restart Password:
-#    - Set a quit password if you want to prevent easy exits.
-#    - Alternatively, enable "Allow user to quit SEB" and use `seb://quit` links.
-#      (The ZenTest `/seb/live-test` page will attempt to trigger `seb://quit` after submission).
-#
-# 10. Network -> URL Filter:
-#     - This is advanced. For a simpler setup, ensure your `Start URL` is correct.
-#     - If you use URL filtering, ensure you allow:
-#       - `YOUR_APP_DOMAIN` (e.g., `https://proctorx.netlify.app`)
-#       - Any CDNs or services your app uses (e.g., for fonts, Supabase API).
-#       - Block all other URLs by default (`*://*/*` with action "Block").
-#
-# ==============================================================================
-# How ZenTest Launches SEB with this Simplified Approach:
-# ==============================================================================
-#
-# 1. Student enters exam code in the regular browser on YOUR_APP_DOMAIN.
-# 2. ZenTest app generates a secure, temporary token.
-# 3. ZenTest app constructs a launch URL: `sebs://YOUR_APP_DOMAIN/seb/entry/THE_GENERATED_TOKEN`
-# 4. This URL tells SEB to open YOUR_APP_DOMAIN/seb/entry/THE_GENERATED_TOKEN.
-# 5. The page `/seb/entry/[token]` (running inside SEB) then:
-#    a. Validates the token with the ZenTest server.
-#    b. Fetches exam details.
-#    c. Performs client-side system checks.
-#    d. If all good, navigates to `/seb/live-test` to start the actual exam.
-#
-# The security settings active during the exam will be those configured in the SEB
-# instance on the student's computer. If they have loaded your recommended `.seb` file
-# (created from these instructions), then those settings will apply. Otherwise,
-# SEB's default or last used settings will apply. The client-side JavaScript checks
-# in ZenTest provide an additional layer of security.
-#
-# ==============================================================================
-# Creating Your `exam-config.seb` File:
-# ==============================================================================
-#
-# - Download and install the SEB Configuration Tool for your operating system
-#   from https://safeexambrowser.org/download_en.html.
-# - Use the tool to apply the settings recommended above, especially the Start URL.
-# - Save the configuration as `exam-config.seb`.
-# - Place this `exam-config.seb` file into the `/public/configs/` directory of your
-#   ZenTest Next.js project.
-# - Deploy your application.
-#
-# Your students would ideally configure their SEB client by opening this
-# `exam-config.seb` file (e.g., by downloading it from an instruction page you provide,
-# or if distributed by an institution) before taking an exam to ensure all security
-# measures are active. The direct launch from ZenTest will then open the exam within
-# this pre-configured SEB environment.
-#
-# For the most secure setup, consider using SEB Server or an LMS integration,
-# which allows for dynamic delivery and enforcement of SEB configurations.
-# The current ZenTest AI prompt implements a client-launched SEB approach.
-#
-################################################################################
-# This file is an EXAMPLE and INSTRUCTION GUIDE.
-# You MUST use the SEB Configuration Tool to create the actual .seb file.
-################################################################################
+This is an EXAMPLE instruction file for creating your actual exam-config.seb file
+using the Safe Exam Browser (SEB) Configuration Tool.
+
+--------------------------------------------------------------------------------
+IMPORTANT:
+- Replace 'YOUR_APP_DOMAIN' below with your actual deployed application domain
+  (e.g., https://proctorx.netlify.app or http://localhost:9002 for local dev).
+- The ZenTest application dynamically generates the full URL to this .seb file
+  AND appends necessary parameters (like #entryToken=...) to that URL when
+  launching SEB.
+- SEB is expected to download this config file, parse it, and then navigate to
+  the Start URL specified BELOW, appending the hash parameters from the initial
+  config URL.
+--------------------------------------------------------------------------------
+
+Key Settings to Configure in SEB Configuration Tool:
+
+1. General:
+   - Start URL: https://YOUR_APP_DOMAIN/seb/entry
+     *** THIS IS CRITICAL. It must be exactly this path. ***
+     *** DO NOT add any query parameters or hash here. The app adds the token. ***
+   - Quit/Restart Password: Set a strong password if desired.
+   - Allow user to quit SEB: Check this and set a quit password for emergencies.
+     Alternatively, if your app's seb://quit link works, this can be disabled.
+
+2. Config File:
+   - Use SEB settings file for: Starting an exam.
+   - Applying settings: Choose "Use local settings" or "Use settings from SEB file"
+     as appropriate. "Use settings from SEB file" is generally more secure.
+
+3. Browser:
+   - Browser Exam Key (BEK): Generate and copy this if your exam platform requires it
+     (ZenTest currently does not validate BEK in its client-side checks, but it's good practice).
+   - Enable JavaScript.
+   - Enable localStorage/sessionStorage if your app uses them for exam state.
+   - Block pop-up windows unless your exam legitimately uses them.
+   - Enable "Block content (JavaScript, Plugins)" for specific elements if needed,
+     but ensure your application's core functionalities are not blocked.
+
+4. Network:
+   - Filters:
+     - General: Start with "Permit all network traffic" for simplicity.
+     - For higher security, you'd configure specific URL filters to only allow
+       access to YOUR_APP_DOMAIN and any necessary CDNs or API endpoints.
+       Example allowed expression: ^https?://YOUR_APP_DOMAIN/.*
+
+5. Applications:
+   - Prohibited Processes: Add common screen sharing, communication, and cheating tools.
+     (e.g., Discord, TeamViewer, OBS, SnippingTool, etc.)
+   - Permitted Processes: Usually none needed unless your exam specifically
+     integrates with another allowed application.
+
+6. Security:
+   - Enable "Allow screen sharing/recording detection" if your SEB version supports it.
+   - Enable "Allow virtual machine detection".
+   - Enable "Allow developer mode detection".
+
+7. User Interface:
+   - Show SEB taskbar: Optional, can be useful for reload/quit buttons.
+   - Enable reload button: Useful.
+   - Enable quit button: Link to `seb://quit`.
+
+8. Down/Uploads:
+   - Block file downloads unless explicitly needed.
+   - Configure upload settings if your exam involves file uploads.
+
+9. Browser Security:
+   - Block "Developer Tools".
+   - Block "Find".
+   - Block "Plug-ins".
+   - Block "View Source".
+   - Block "Printing".
+   - Block "Downloads".
+
+10. Keyboard Shortcuts:
+    - Disable specific shortcuts (Ctrl+C, Ctrl+V, PrintScreen, Alt+Tab, Win Key, etc.).
+    - SEB provides extensive options here. Prioritize blocking anything that allows
+      leaving the exam or accessing external resources/tools.
+
+After configuring, save this as `exam-config.seb` in your project's
+`public/configs/` directory.
+
+The ZenTest application, when launching SEB, will use a URL like:
+`sebs://YOUR_DEPLOYED_APP_DOMAIN/configs/exam-config.seb#entryToken=GENERATED_SECURE_TOKEN`
+
+SEB should then:
+1. Download `exam-config.seb`.
+2. Apply its settings.
+3. Navigate its internal browser to the `Start URL` (which is `https://YOUR_APP_DOMAIN/seb/entry`)
+   AND append the hash from the original configUrl.
+   So, the browser inside SEB should land on:
+   `https://YOUR_APP_DOMAIN/seb/entry#entryToken=GENERATED_SECURE_TOKEN`
+
+The `/seb/entry` page in your ZenTest app will then read this token from `window.location.hash`.
