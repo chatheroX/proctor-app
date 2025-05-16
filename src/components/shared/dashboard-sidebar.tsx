@@ -2,6 +2,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image'; // Added import
 import { usePathname } from 'next/navigation';
 import {
   Sidebar,
@@ -15,24 +16,15 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button'; // Ensure Button is imported
 import { LogOut, Settings, Loader2, UserCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-// Placeholder ZenTest SVG Logo
+// Updated ZenTestLogo component
 const ZenTestLogo = () => (
-  <svg width="100" height="28" viewBox="0 0 100 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-7 w-auto text-primary group-hover:text-primary/90 transition-colors">
-    <text x="0" y="20" fontFamily="Arial, Helvetica, sans-serif" fontSize="20" fontWeight="bold" fill="currentColor">
-      Zen<tspan fill="hsl(var(--accent))">●</tspan>Test<tspan fill="hsl(var(--accent))">●</tspan>
-    </text>
-     {/* Replace this SVG with:
-    <Image src="/images/zentest-logo.png" alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
-    once you place your logo in public/images/zentest-logo.png
-    Adjust width and height props as needed.
-    */}
-  </svg>
+  <Image src="/logo.png" alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
 );
 
 
@@ -90,7 +82,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                     className: "group-data-[collapsible=icon]:block hidden bg-popover text-popover-foreground border-border shadow-sm rounded-sm"
                 }}
                 disabled={item.disabled}
-                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-all duration-200 ease-in-out data-[active=true]:hover:bg-sidebar-primary/90"
+                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground data-[active=true]:shadow-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-all duration-200 ease-in-out data-[active=true]:hover:bg-sidebar-primary/90"
                 data-sidebar="menu-button"
               >
                 <Link href={item.href} className="gap-2.5">
@@ -109,7 +101,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
   return (
     <Sidebar
         collapsible="icon"
-        className={className}
+        className={cn("sidebar-glass", className)} // Added sidebar-glass for styling
     >
       <SidebarHeader className="p-3 border-b border-sidebar-border/60 h-16 flex items-center">
         <div className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center">
@@ -128,6 +120,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
 
         <div className="mt-auto p-2 border-t border-sidebar-border/60">
              <SidebarMenu className="px-2">
+                {/* "My Profile" link now only from here */}
                 <SidebarMenuItem>
                 <SidebarMenuButton
                     asChild
@@ -177,11 +170,11 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col overflow-hidden">
-                        <p className="text-sm font-medium text-foreground truncate" title={user.name || user.email}>
+                        <p className="text-sm font-medium text-foreground truncate" title={user.name || user.email || undefined}>
                         {user.name || user.email}
                         </p>
-                        <p className="text-xs text-muted-foreground capitalize truncate" title={`${user.role} - ID: ${user.user_id}`}>
-                          {user.role || 'N/A'} - ID: {user.user_id}
+                        <p className="text-xs text-muted-foreground capitalize truncate" title={user.role && user.user_id ? `${user.role} - ID: ${user.user_id}` : user.role || 'N/A'}>
+                          {user.role || 'N/A'} {user.user_id && `- ID: ${user.user_id}`}
                         </p>
                     </div>
                 </div>

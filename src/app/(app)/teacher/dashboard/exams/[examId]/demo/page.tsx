@@ -31,23 +31,27 @@ export default function TeacherDemoExamPage() {
 
   const teacherUserId = teacherUser?.user_id;
   const teacherName = teacherUser?.name;
+  const teacherAvatarUrl = teacherUser?.avatar_url;
+
 
   const fetchExamData = useCallback(async () => {
     console.log(`[TeacherDemoPage] fetchExamData triggered. examId: ${examId}, teacherUserId: ${teacherUserId}`);
-    if (!examId || !supabase) {
-      const errorMsg = examId ? "Supabase client not available for demo." : "Exam ID is missing for demo.";
+    if (!examId || !supabase || !teacherUserId) { // Ensure teacherUserId is present
+      const errorMsg = !examId ? "Exam ID is missing for demo." : 
+                       !supabase ? "Supabase client not available for demo." : 
+                       "Teacher details not available for demo.";
       console.warn(`[TeacherDemoPage] Aborting fetch: ${errorMsg}`);
       setPageError(errorMsg);
       setIsLoading(false);
       return;
     }
     
-    setIsLoading(true);
+    // setIsLoading(true); // Already set or managed by initial state
     setPageError(null);
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('*')
+        .select('*') // Fetches all columns, including questions
         .eq('exam_id', examId)
         .single();
 
@@ -55,11 +59,13 @@ export default function TeacherDemoExamPage() {
       if (!data) throw new Error("Exam not found for demo.");
       
       const currentExam = data as Exam;
+      console.log("[TeacherDemoPage] Exam data fetched for demo:", currentExam);
       setExamDetails(currentExam);
       setQuestions(currentExam.questions || []);
 
       if (!currentExam.questions || currentExam.questions.length === 0) {
         setPageError("This exam has no questions. Please add questions to run a demo.");
+        // Keep examDetails and questions as they are to display info, error will prevent start
       }
     } catch (e: any) {
       console.error("[TeacherDemoPage] Failed to fetch exam data for demo:", e);
@@ -69,21 +75,22 @@ export default function TeacherDemoExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, teacherUserId]); // Added teacherUserId
+  }, [examId, supabase, teacherUserId]);
+
 
   useEffect(() => {
-    console.log("[TeacherDemoPage] Fetch Effect. authIsLoading:", authIsLoading, "teacherUserId:", teacherUserId, "examId:", examId, "examDetails:", !!examDetails, "pageError:", pageError, "isLoading:", isLoading);
-    if (!authIsLoading && teacherUserId && examId) {
-      if (!examDetails && !pageError && isLoading) {
+    console.log("[TeacherDemoPage] Fetch Effect. authIsLoading:", authIsLoading, "teacherUserId:", teacherUserId, "examId:", examId, "examDetails:", !!examDetails, "pageError:", pageError, "isLoading (page):", isLoading);
+    if (!authIsLoading && teacherUserId && examId) { // Ensure teacherUserId before fetching
+      if (!examDetails && !pageError && isLoading) { // Only fetch if not already fetched, no error, and in loading state
         console.log("[TeacherDemoPage] Conditions met, calling fetchExamData.");
         fetchExamData();
-      } else if (examDetails || pageError) {
-        if(isLoading) setIsLoading(false);
+      } else if (examDetails || pageError) { // If data already fetched or error exists
+         if(isLoading) setIsLoading(false); // Ensure loading is false
       }
-    } else if (!isLoading && (!teacherUserId || !examId) && !authIsLoading) {
+    } else if (!isLoading && (!teacherUserId || !examId) && !authIsLoading) { // If not loading, but missing critical info
       if (!teacherUserId) setPageError("Teacher details not available for demo.");
       else if (!examId) setPageError("Exam ID missing for demo.");
-      if(isLoading) setIsLoading(false);
+      if(isLoading) setIsLoading(false); // Ensure loading is false
     }
   }, [examId, authIsLoading, teacherUserId, examDetails, pageError, isLoading, fetchExamData]);
 
@@ -97,7 +104,7 @@ export default function TeacherDemoExamPage() {
     if (!questions || questions.length === 0) {
       console.log('[TeacherDemoPage] Aborting demo start: No questions for demo.');
       toast({ title: "No Questions", description: "This exam has no questions to demo.", variant: "destructive" });
-      setPageError("This exam has no questions. Add questions to run a demo.");
+      setPageError("This exam has no questions. Add questions to run a demo."); // Ensure this error is shown
       return;
     }
     console.log('[TeacherDemoPage] Starting demo locally.');
@@ -108,7 +115,6 @@ export default function TeacherDemoExamPage() {
 
   const handleDemoAnswerChange = useCallback((questionId: string, optionId: string) => {
     console.log(`[TeacherDemoPage] Demo Answer for QID ${questionId}: OptionID ${optionId}`);
-    // No actual state change needed for demo answers unless you want to track them locally for demo
   }, []);
 
   const handleDemoSubmitExam = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -116,6 +122,7 @@ export default function TeacherDemoExamPage() {
     console.log('[TeacherDemoPage] Demo flagged events:', flaggedEvents);
     toast({ title: "Demo Exam Ended", description: "The demo exam has been submitted (simulated)." });
     setExamLocallyStarted(false); 
+    // No need to redirect, just stay on the pre-exam screen
   }, [toast]);
 
   const handleDemoTimeUp = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -135,6 +142,7 @@ export default function TeacherDemoExamPage() {
     );
   }
 
+  // Shows if examDetails is null AND pageError is set (e.g. exam not found, or teacher not auth'd)
   if (pageError && !examDetails && !examLocallyStarted) {
      return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
@@ -152,6 +160,7 @@ export default function TeacherDemoExamPage() {
     );
   }
   
+  // Shows if not loading, no examDetails, and not yet started locally (should be rare if pageError is caught above)
   if (!examDetails && !isLoading && !examLocallyStarted) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
@@ -169,11 +178,13 @@ export default function TeacherDemoExamPage() {
     );
   }
 
+  // Pre-exam start screen
   if (!examLocallyStarted && examDetails) {
+    // pageError here might be "no questions" but examDetails are still present
     const cantStartReason = pageError; 
     
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
         <Card className="w-full max-w-lg modern-card shadow-xl">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl md:text-3xl font-bold text-foreground">
@@ -200,6 +211,7 @@ export default function TeacherDemoExamPage() {
                 This is a simulation of the student exam environment. Activity monitoring will be noted for informational purposes in the console and via toasts.
               </AlertDescription>
             </Alert>
+            {/* Display cantStartReason if it exists (e.g., "no questions") */}
             {cantStartReason && (
               <Alert variant="destructive" className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
@@ -212,9 +224,9 @@ export default function TeacherDemoExamPage() {
             <Button
               onClick={handleStartDemoExam}
               className="w-full btn-primary-solid py-3 text-lg"
-              disabled={isLoading || !examDetails || !!cantStartReason }
+              disabled={isLoading || !examDetails || !!cantStartReason } // Button disabled if there's a cantStartReason
             >
-              {(isLoading && !examDetails) ? <Loader2 className="animate-spin mr-2" /> : <PlayCircle className="mr-2" />}
+              {isLoading ? <Loader2 className="animate-spin mr-2" /> : <PlayCircle className="mr-2" />}
               Start Demo Exam
             </Button>
             <Button variant="outline" onClick={() => router.back()} className="w-full">
@@ -226,25 +238,27 @@ export default function TeacherDemoExamPage() {
     );
   }
   
+  // Exam is locally started and examDetails are present
   if (examLocallyStarted && examDetails) {
     return (
       <ExamTakingInterface
         examDetails={examDetails}
         questions={questions || []} 
-        parentIsLoading={isLoading && !examDetails} 
-        examLoadingError={pageError} 
-        examStarted={true} 
+        isLoading={isLoading && !examDetails} // Pass specific loading state
+        examLoadingError={pageError} // Pass any loading error
         onAnswerChange={handleDemoAnswerChange}
         onSubmitExam={handleDemoSubmitExam}
         onTimeUp={handleDemoTimeUp}
         isDemoMode={true}
         userIdForActivityMonitor={teacherUserId || 'anonymous_teacher_demo'}
-        studentName={teacherName || 'Demo Teacher'}
-        studentRollNumber={teacherUserId || 'DEMO001'} 
+        studentName={teacherName}
+        studentRollNumber={teacherUserId} 
+        studentAvatarUrl={teacherAvatarUrl}
       />
     );
   }
 
+  // Fallback error display if none of the above conditions match (should be rare)
   return (
      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
@@ -260,4 +274,3 @@ export default function TeacherDemoExamPage() {
       </div>
   );
 }
-
