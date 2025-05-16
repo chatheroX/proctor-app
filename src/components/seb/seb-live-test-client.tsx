@@ -26,7 +26,7 @@ interface DecryptedTokenPayload {
 
 export function SebLiveTestClient() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // This is now safe here
+  const searchParams = useSearchParams(); 
   const { user: studentUser, isLoading: authLoading } = useAuth();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
@@ -38,7 +38,7 @@ export function SebLiveTestClient() {
   const [isValidSession, setIsValidSession] = useState<boolean | undefined>(undefined);
   const [isClientSide, setIsClientSide] = useState(false);
 
-  const examIdFromUrl = searchParams?.get('examId'); // Safely access searchParams
+  const examIdFromUrl = searchParams?.get('examId'); 
   const encryptedTokenFromUrl = searchParams?.get('token');
 
   useEffect(() => {
@@ -83,14 +83,14 @@ export function SebLiveTestClient() {
         
         const tokenAgeMinutes = (Date.now() - payload.timestamp) / (1000 * 60);
         if (tokenAgeMinutes > TOKEN_VALIDITY_MINUTES_SEB) {
-          throw new Error("SEB session link expired. Please re-initiate.");
+          throw new Error('SEB session link expired. Please re-initiate.');
         }
         console.log("[SebLiveTestClient] Token decrypted and validated for live test.");
         setIsValidSession(true);
         setPageError(null);
       })
       .catch((e: any) => {
-        setPageError(\`Session validation failed: \${e.message}. SEB will attempt to quit.\`);
+        setPageError('Session validation failed: ' + e.message + '. SEB will attempt to quit.');
         toast({ title: "Session Error", description: e.message, variant: "destructive", duration: 7000 });
         setIsValidSession(false);
         setPageIsLoading(false);
@@ -107,7 +107,7 @@ export function SebLiveTestClient() {
       return;
     }
     
-    console.log(\`[SebLiveTestClient] Fetching exam data for examId: \${examIdFromUrl}\`);
+    console.log('[SebLiveTestClient] Fetching exam data for examId: ' + examIdFromUrl);
     setPageIsLoading(true);
     setPageError(null);
     try {
@@ -206,7 +206,7 @@ export function SebLiveTestClient() {
         submitted_at: new Date().toISOString(),
     };
 
-    console.log(\`[SebLiveTestClient] \${submissionType === 'submit' ? 'Submitting' : 'Auto-submitting'} exam. Data:\`, submissionData);
+    console.log('[SebLiveTestClient] ' + (submissionType === 'submit' ? 'Submitting' : 'Auto-submitting') + ' exam. Data:', submissionData);
     try {
         const { error: submissionError } = await supabase
             .from('ExamSubmissionsX')
@@ -221,7 +221,7 @@ export function SebLiveTestClient() {
 
         if (submissionError) { 
           console.error("[SebLiveTestClient] Submission Error:", submissionError);
-          toast({ title: "Submission Error", description: \`Failed to save exam: \${submissionError.message}\`, variant: "destructive", duration: 7000 });
+          toast({ title: "Submission Error", description: 'Failed to save exam: ' + submissionError.message, variant: "destructive", duration: 7000 });
         } else {
           toast({ title: submissionType === 'submit' ? "Exam Submitted!" : "Exam Auto-Submitted!", description: "Your responses recorded. SEB will now quit.", duration: 7000 });
         }
@@ -301,7 +301,7 @@ export function SebLiveTestClient() {
       examLoadingError={null}
       persistentError={null} 
       cantStartReason={null} 
-      onAnswerChange={ (qid, oid) => console.log(\`[SebLiveTestClient] Answer changed Q:\${qid} O:\${oid}\`) }
+      onAnswerChange={ (qid, oid) => console.log('[SebLiveTestClient] Answer changed Q:' + qid + ' O:' + oid) }
       onSubmitExam={handleSubmitExamSeb}
       onTimeUp={handleTimeUpSeb}
       isDemoMode={false}
@@ -313,3 +313,4 @@ export function SebLiveTestClient() {
     />
   );
 }
+

@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Keep for parent
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -27,7 +27,6 @@ interface DecryptedTokenPayload {
 
 export function SebExamViewClient() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // Safe here
   const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
   const { user: studentUser, isLoading: authLoading } = useAuth();
@@ -104,7 +103,7 @@ export function SebExamViewClient() {
         
         const tokenAgeMinutes = (Date.now() - payload.timestamp) / (1000 * 60);
         if (tokenAgeMinutes > TOKEN_VALIDITY_MINUTES_SEB) {
-          throw new Error(\`SEB session link expired (valid for \${TOKEN_VALIDITY_MINUTES_SEB} min). Re-initiate.\`);
+          throw new Error('SEB session link expired (valid for ' + TOKEN_VALIDITY_MINUTES_SEB + ' min). Re-initiate.');
         }
         console.log("[SebExamViewClient] Token decrypted and validated. Payload:", payload);
         
@@ -121,20 +120,20 @@ export function SebExamViewClient() {
             console.log("[SebExamViewClient] Exam details fetched:", data);
             setError(null); // Clear previous errors if fetch is successful
           }).catch((e: any) => {
-            setError(\`Failed to load exam details: \${e.message}\`);
+            setError('Failed to load exam details: ' + e.message);
             setExamDetails(null);
           }).finally(() => setIsLoading(false));
       })
       .catch((e: any) => {
-        setError(\`Session validation failed: \${e.message}. Please re-initiate.\`);
+        setError('Session validation failed: ' + e.message + '. Please re-initiate.');
         toast({ title: "Session Error", description: e.message, variant: "destructive" });
         setIsLoading(false);
       });
-  }, [isClientSide, examIdFromToken, tokenFromHash, authLoading, studentUser, supabase, toast, router, isLoading, error]); // Added isLoading and error to deps for safety
+  }, [isClientSide, examIdFromToken, tokenFromHash, authLoading, studentUser, supabase, toast, router, isLoading, error]);
 
 
   const performSystemChecksAndStartExam = useCallback(async () => {
-    if (!examDetails || !examIdFromToken || !tokenFromHash) { // use tokenFromHash
+    if (!examDetails || !examIdFromToken || !tokenFromHash) { 
       setError("Cannot start: Missing exam details or session information.");
       return;
     }
@@ -174,7 +173,7 @@ export function SebExamViewClient() {
 
     if (allChecksPass) {
       toast({ title: "Checks Passed!", description: "Redirecting to live exam...", variant: "default" });
-      router.push(\`/seb/live-test?examId=\${examIdFromToken}&token=\${encodeURIComponent(tokenFromHash)}\`);
+      router.push('/seb/live-test?examId=' + examIdFromToken + '&token=' + encodeURIComponent(tokenFromHash));
     } else {
       setError("One or more system checks failed. Cannot start exam. SEB will attempt to quit.");
       toast({ title: "System Checks Failed", description: "Cannot start exam. SEB will quit.", variant: "destructive", duration: 7000 });
@@ -182,7 +181,7 @@ export function SebExamViewClient() {
         setTimeout(() => { window.location.href = "seb://quit"; }, 6000);
       }
     }
-  }, [examDetails, examIdFromToken, tokenFromHash, router, toast]); // Use tokenFromHash
+  }, [examDetails, examIdFromToken, tokenFromHash, router, toast]); 
 
   const handleExitSeb = () => {
     toast({ title: "Exiting SEB", description: "Safe Exam Browser will attempt to close.", duration: 3000 });
@@ -241,7 +240,7 @@ export function SebExamViewClient() {
   }
   
   const examTimeInfo = examDetails.start_time && examDetails.end_time
-    ? \`\${format(new Date(examDetails.start_time), "dd MMM yyyy, hh:mm a")} - \${format(new Date(examDetails.end_time), "hh:mm a")}\`
+    ? format(new Date(examDetails.start_time), "dd MMM yyyy, hh:mm a") + ' - ' + format(new Date(examDetails.end_time), "hh:mm a")
     : "Timing not specified";
 
   return (
@@ -306,3 +305,4 @@ export function SebExamViewClient() {
     </div>
   );
 }
+
