@@ -13,7 +13,7 @@ const ROLE_COOKIE_NAME = 'zentest-user-role';
 const AUTH_ROUTE = '/auth';
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE; // Fallback if role is unknown
+const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE;
 
 // DiceBear Avatar Configuration
 export const DICEBEAR_STYLES: string[] = ['micah', 'adventurer', 'bottts-neutral', 'pixel-art-neutral'];
@@ -24,10 +24,11 @@ export const generateEnhancedDiceBearAvatar = (role: CustomUser['role'] | null, 
   const selectedKeywords = keywordsOverride || DICEBEAR_TECH_KEYWORDS;
   const randomKeyword = selectedKeywords[Math.floor(Math.random() * selectedKeywords.length)];
   const userRoleStr = role || 'user';
-  const timestamp = Date.now().toString().slice(-5);
-  const seed = `${randomKeyword}-${userRoleStr}-${userId}-${timestamp}`;
+  const timestamp = Date.now().toString().slice(-5); // Add variability
+  const seed = `${randomKeyword}-${userRoleStr}-${userId}-${timestamp}`; // Use a dynamic seed for regeneration
   return `https://api.dicebear.com/8.x/${selectedStyle}/svg?seed=${encodeURIComponent(seed)}`;
 };
+
 
 type AuthContextType = {
   user: CustomUser | null;
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Effect for Supabase client initialization
   useEffect(() => {
     const effectId = `[AuthContext SupabaseClientInitEffect ${Date.now().toString().slice(-4)}]`;
     console.log(`${effectId} Running...`);
@@ -63,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error(`${effectId} ${errorMsg}`);
       setAuthError(errorMsg);
       setSupabase(null);
-      setIsLoading(false);
+      setIsLoading(false); // Critical: ensure loading stops
       return;
     }
     try {
@@ -71,31 +73,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSupabase(client);
       console.log(`${effectId} Supabase client initialized successfully.`);
       setAuthError(null);
+      // setIsLoading will be set to false by loadUserFromCookie or its failure path
     } catch (e: any) {
       const errorMsg = e.message || "Failed to initialize Supabase client.";
       console.error(`${effectId} CRITICAL: ${errorMsg}`, e);
       setAuthError(errorMsg);
       setSupabase(null);
-      setIsLoading(false);
+      setIsLoading(false); // Critical: ensure loading stops
     }
   }, []);
 
-  const getRedirectPathForRole = useCallback((userRole: CustomUser['role']) => {
-    if (userRole === 'teacher') return TEACHER_DASHBOARD_ROUTE;
-    return STUDENT_DASHBOARD_ROUTE; // Default for student or if role is somehow null
-  }, []);
 
   const loadUserFromCookie = useCallback(async () => {
     const effectId = `[AuthContext loadUserFromCookie ${Date.now().toString().slice(-4)}]`;
-    console.log(`${effectId} Starting. Supabase available: ${!!supabase}, Current user state:`, user);
+    console.log(`${effectId} Starting. Supabase available: ${!!supabase}`);
 
     if (!supabase) {
-      console.warn(`${effectId} Aborted: Supabase client not available. Setting isLoading=false if not already.`);
-      if (isLoading) setIsLoading(false); // Ensure loading stops if client isn't there
+      console.warn(`${effectId} Aborted: Supabase client not available. Setting authError and isLoading=false.`);
+      setAuthError("Service connection error (Supabase client missing on load).");
+      setIsLoading(false);
       return;
     }
     
-    if (!isLoading) setIsLoading(true); // Set loading true only if not already loading
+    setIsLoading(true); // Set loading true for this operation
     setAuthError(null);
 
     try {
@@ -103,13 +103,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log(`${effectId} Cookie '${SESSION_COOKIE_NAME}' value:`, userEmailFromCookie);
 
       if (!userEmailFromCookie) {
-        console.log(`${effectId} No session cookie found. Setting user to null.`);
+        console.log(`${effectId} No session cookie found.`);
         setUser(null);
         Cookies.remove(ROLE_COOKIE_NAME);
-        return;
+        return; // Exit, isLoading will be set in finally
       }
       
-      console.log(`${effectId} Session cookie found for email: ${userEmailFromCookie}. Fetching from DB...`);
+      console.log(`${effectId} Session cookie found. Fetching user: ${userEmailFromCookie} from DB...`);
       const { data, error: dbError } = await supabase
         .from('proctorX')
         .select('user_id, email, name, role, avatar_url')
@@ -127,7 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         Cookies.remove(SESSION_COOKIE_NAME);
         Cookies.remove(ROLE_COOKIE_NAME);
-        return;
+        // setAuthError(errorDetail); // Optionally set an error if stale cookie implies a problem
+        return; // Exit, isLoading will be set in finally
       }
       
       const loadedUser: CustomUser = {
@@ -152,26 +153,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log(`${effectId} Finished. Setting isLoading to false.`);
       setIsLoading(false);
     }
-  }, [supabase, isLoading, user]); // Added isLoading and user
+  }, [supabase]); // Removed setAuthError, setIsLoading, setUser from deps as they are setters
 
+
+  // Effect for initial user loading (once Supabase client is ready)
   useEffect(() => {
     const effectId = `[AuthContext Initial User Load Effect ${Date.now().toString().slice(-4)}]`;
     console.log(`${effectId} Running. Supabase: ${!!supabase}, AuthError: ${authError}, InitialLoadAttempted: ${initialLoadAttempted.current}`);
     
     if (authError) {
       console.log(`${effectId} Aborting due to critical authError: '${authError}'. isLoading should already be false.`);
-      if(isLoading) setIsLoading(false);
       return;
     }
     if (supabase && !initialLoadAttempted.current) {
       initialLoadAttempted.current = true;
       console.log(`${effectId} Supabase client available & first attempt. Calling loadUserFromCookie.`);
       loadUserFromCookie();
-    } else if (!supabase && isLoading) {
-        console.log(`${effectId} Supabase client not yet available, initial isLoading is true. Waiting.`);
+    } else if (!supabase) {
+        console.log(`${effectId} Supabase client not yet available. Waiting.`);
     }
-  }, [supabase, authError, loadUserFromCookie, isLoading]);
+  }, [supabase, authError, loadUserFromCookie]);
 
+  const getRedirectPathForRole = useCallback((userRole: CustomUser['role'] | null) => {
+    if (userRole === 'teacher') return TEACHER_DASHBOARD_ROUTE;
+    if (userRole === 'student') return STUDENT_DASHBOARD_ROUTE;
+    return DEFAULT_DASHBOARD_ROUTE; // Fallback
+  }, []);
+
+  // Effect for route protection and redirection
   useEffect(() => {
     const effectId = `[AuthContext Route Guard Effect ${Date.now().toString().slice(-4)}]`;
     console.log(`${effectId} Running. isLoading: ${isLoading}, Path: ${pathname}, User: ${user?.email}, Role: ${user?.role}, ContextAuthError: ${authError}`);
@@ -190,10 +199,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isStudentDashboardArea = pathname?.startsWith('/student/dashboard');
     const isTeacherDashboardArea = pathname?.startsWith('/teacher/dashboard');
     const isExamSessionPage = pathname?.startsWith('/exam-session/');
+    // SEB pages are public-like but may require token validation internally
+    const isSebPage = pathname?.startsWith('/seb/') || pathname === '/unsupported-browser';
 
-    if (user) {
+
+    if (user && user.user_id) { // User is authenticated
       const targetDashboard = getRedirectPathForRole(user.role);
-      console.log(`${effectId} User authenticated (${user.email}, Role: ${user.role}). Target dashboard: ${targetDashboard}, Current path: ${pathname}`);
+      console.log(`${effectId} User authenticated (${user.email}, Role: ${user.role}). Target dashboard: ${targetDashboard}`);
       
       if (isAuthPg) {
         if (pathname !== targetDashboard) {
@@ -201,37 +213,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           router.replace(targetDashboard);
           return; 
         }
+      } else {
+          // Role-based access checks for dashboard areas
+          if (user.role === 'student' && isTeacherDashboardArea) {
+            if (pathname !== STUDENT_DASHBOARD_ROUTE) {
+              console.log(`${effectId} Student on teacher area, redirecting to ${STUDENT_DASHBOARD_ROUTE}`);
+              router.replace(STUDENT_DASHBOARD_ROUTE);
+              return;
+            }
+          }
+          if (user.role === 'teacher' && isStudentDashboardArea) {
+            if (pathname !== TEACHER_DASHBOARD_ROUTE) {
+              console.log(`${effectId} Teacher on student area, redirecting to ${TEACHER_DASHBOARD_ROUTE}`);
+              router.replace(TEACHER_DASHBOARD_ROUTE);
+              return;
+            }
+          }
       }
-      if (user.role === 'student' && isTeacherDashboardArea) {
-        if (pathname !== STUDENT_DASHBOARD_ROUTE) {
-          console.log(`${effectId} Student on teacher area, redirecting to ${STUDENT_DASHBOARD_ROUTE}`);
-          router.replace(STUDENT_DASHBOARD_ROUTE);
-          return;
-        }
-      }
-      if (user.role === 'teacher' && isStudentDashboardArea) {
-        if (pathname !== TEACHER_DASHBOARD_ROUTE) {
-          console.log(`${effectId} Teacher on student area, redirecting to ${TEACHER_DASHBOARD_ROUTE}`);
-          router.replace(TEACHER_DASHBOARD_ROUTE);
-          return;
-        }
-      }
-      console.log(`${effectId} Authenticated user on correct page or non-auth public page: ${pathname}. No redirect needed by context guard.`);
+      console.log(`${effectId} Authenticated user on correct page or non-auth public page: ${pathname}. No redirect needed by context guard this cycle.`);
 
-    } else { 
+    } else { // User is NOT authenticated (user is null)
       console.log(`${effectId} User not authenticated. Path: ${pathname}`);
       const isProtectedRoute = isStudentDashboardArea || isTeacherDashboardArea || isExamSessionPage;
-      if (isProtectedRoute) {
-        if (!isAuthPg) { 
-          console.log(`${effectId} Unauthenticated on protected route ${pathname}, redirecting to ${AUTH_ROUTE}`);
-          router.replace(AUTH_ROUTE);
-          return;
-        }
+      
+      if (isProtectedRoute && !isAuthPg) { 
+        console.log(`${effectId} Unauthenticated on protected route ${pathname}, redirecting to ${AUTH_ROUTE}`);
+        router.replace(AUTH_ROUTE);
+        return;
       }
-      console.log(`${effectId} User not authenticated and on public page or already on /auth: ${pathname}. No redirect needed by context guard.`);
+      console.log(`${effectId} User not authenticated and on public, SEB, or /auth page: ${pathname}. No redirect needed by context guard.`);
     }
-    console.log(`${effectId} End of effect. No redirect initiated by this run or conditions not met.`);
+    console.log(`${effectId} End of effect run. No redirect initiated by this pass or conditions not met.`);
   }, [user, isLoading, pathname, router, authError, getRedirectPathForRole]);
+
 
   const generateShortId = useCallback(() => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -266,8 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         else if (dbError) errorDetail = dbError.message || 'Failed to fetch user data.';
         
         console.warn(`${operationId} Failed to fetch user. Email:`, email, 'Error:', errorDetail);
-        setUser(null); // Ensure user is null on failure
-        setIsLoading(false);
+        setUser(null); 
         return { success: false, error: errorDetail };
       }
       
@@ -282,31 +295,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatar_url: data.avatar_url || generateEnhancedDiceBearAvatar(data.role as CustomUser['role'], data.user_id),
         };
         
-        setUser(userData);
+        setUser(userData); // This will trigger the routing useEffect
         Cookies.set(SESSION_COOKIE_NAME, userData.email, { expires: 7, path: '/' });
         if (userData.role) Cookies.set(ROLE_COOKIE_NAME, userData.role, { expires: 7, path: '/' });
         else Cookies.remove(ROLE_COOKIE_NAME);
         
-        console.log(`${operationId} Success. User set in context: ${userData.email}, Role: ${userData.role}. Navigating...`);
-        const targetDashboard = getRedirectPathForRole(userData.role);
-        router.push(targetDashboard); // Imperative navigation
-        setIsLoading(false); // Set loading false AFTER navigation initiated
+        console.log(`${operationId} Success. User set in context: ${userData.email}, Role: ${userData.role}. Routing effect will handle navigation.`);
         return { success: true, user: userData };
       } else {
         console.warn(`${operationId} Incorrect password for email:`, email);
-        setUser(null); // Ensure user is null on failure
-        setIsLoading(false);
+        setUser(null);
         return { success: false, error: 'Incorrect password.' };
       }
     } catch (e: any) {
       console.error(`${operationId} Exception during sign in:`, e.message);
       const errorMsg = e.message || 'An unexpected error occurred during sign in.';
-      setUser(null); // Ensure user is null on failure
+      setUser(null);
       setAuthError(errorMsg);
-      setIsLoading(false);
       return { success: false, error: errorMsg };
+    } finally {
+        setIsLoading(false); // Ensure loading is false after signIn completes
     }
-  }, [supabase, getRedirectPathForRole, router]);
+  }, [supabase, setAuthError, setIsLoading, setUser]); // Added setUser and other setters
 
   const signUp = useCallback(async (email: string, pass: string, name: string, role: CustomUser['role']): Promise<{ success: boolean; error?: string; user?: CustomUser | null }> => {
     const operationId = `[AuthContext signUp ${Date.now().toString().slice(-4)}]`;
@@ -329,15 +339,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('email', email)
         .maybeSingle();
 
-      if (selectError && selectError.code !== 'PGRST116') {
+      if (selectError && selectError.code !== 'PGRST116') { // PGRST116 means no rows found, which is fine
         const errorMsg = 'Error checking existing user: ' + selectError.message;
         console.error(`${operationId} DB Select Error:`, errorMsg);
-        setIsLoading(false); return { success: false, error: errorMsg };
+        throw new Error(errorMsg);
       }
       if (existingUser) {
         const errorMsg = 'User with this email already exists.';
         console.warn(`${operationId} User Exists:`, email);
-        setIsLoading(false); return { success: false, error: errorMsg };
+        return { success: false, error: errorMsg };
       }
 
       const newUserId = generateShortId();
@@ -355,33 +365,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (insertError || !insertedData) {
         const errorDetail = insertError?.message || "Could not retrieve user data after insert.";
         console.error(`${operationId} Insert Error: ${errorDetail}`);
-        setUser(null); setIsLoading(false); return { success: false, error: `Registration failed: ${errorDetail}` };
+        setUser(null);
+        return { success: false, error: `Registration failed: ${errorDetail}` };
       }
 
       const newUserData: CustomUser = {
         user_id: insertedData.user_id,
         email: insertedData.email,
         name: insertedData.name ?? null,
-        role: insertedData.role as CustomUser['role'],
+        role: insertedData.role as CustomUser['role'], // Should be NOT NULL from DB
         avatar_url: insertedData.avatar_url || defaultAvatar,
       };
       
-      setUser(newUserData);
+      setUser(newUserData); // This will trigger the routing useEffect
       Cookies.set(SESSION_COOKIE_NAME, newUserData.email, { expires: 7, path: '/' });
       Cookies.set(ROLE_COOKIE_NAME, newUserData.role, { expires: 7, path: '/' });
       
-      console.log(`${operationId} Success. User set: ${newUserData.email}. Navigating...`);
-      const targetDashboard = getRedirectPathForRole(newUserData.role);
-      router.push(targetDashboard); // Imperative navigation
-      setIsLoading(false); // Set loading false AFTER navigation initiated
+      console.log(`${operationId} Success. User set: ${newUserData.email}. Routing effect will handle navigation.`);
       return { success: true, user: newUserData };
 
     } catch (e: any) {
       console.error(`${operationId} Exception:`, e.message);
-      setUser(null); setAuthError(e.message || 'Unexpected error during sign up.'); setIsLoading(false);
+      setUser(null); setAuthError(e.message || 'Unexpected error during sign up.');
       return { success: false, error: e.message || 'An unexpected error occurred.' };
+    } finally {
+        setIsLoading(false); // Ensure loading is false after signUp completes
     }
-  }, [supabase, generateShortId, getRedirectPathForRole, router]);
+  }, [supabase, generateShortId, setAuthError, setIsLoading, setUser]); // Added setters
 
   const signOut = useCallback(async () => {
     const operationId = `[AuthContext signOut ${Date.now().toString().slice(-4)}]`;
@@ -391,15 +401,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     Cookies.remove(SESSION_COOKIE_NAME, { path: '/' });
     Cookies.remove(ROLE_COOKIE_NAME, { path: '/' });
     setAuthError(null);
-    setIsLoading(false); 
+    setIsLoading(false); // Ensure loading is false so routing effect can proceed
     
-    if (pathname !== AUTH_ROUTE) {
-        console.log(`${operationId} Not on /auth, redirecting to ${AUTH_ROUTE}`);
-        router.replace(AUTH_ROUTE);
-    } else {
-        console.log(`${operationId} Already on /auth or no redirect needed immediately by signOut.`);
-    }
-  }, [pathname, router]);
+    // Routing effect will handle redirecting to AUTH_ROUTE if necessary
+  }, [pathname, setAuthError, setIsLoading, setUser]); // Added setters
 
   const updateUserProfile = useCallback(async (profileData: { name: string; password?: string; avatar_url?: string }): Promise<{ success: boolean; error?: string }> => {
     const operationId = `[AuthContext updateUserProfile ${Date.now().toString().slice(-4)}]`;
@@ -414,20 +419,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthError(errorMsg); setIsLoading(false); return { success: false, error: errorMsg };
     }
     
-    console.log(`${operationId} Attempting update for user_id: ${user.user_id}`);
+    console.log(`${operationId} Attempting update for user_id: ${user.user_id} with data:`, profileData);
     setIsLoading(true); setAuthError(null);
 
-    const updates: Partial<ProctorXTableType['Update']> = { name: profileData.name };
-    if (profileData.password) {
-      if (profileData.password.length < 6) {
-        const errorMsg = "New password must be at least 6 characters long.";
-        setIsLoading(false); return { success: false, error: errorMsg };
-      }
-      updates.pass = profileData.password;
-    }
-    if (profileData.avatar_url !== undefined) updates.avatar_url = profileData.avatar_url;
-
     try {
+      const updates: Partial<Omit<ProctorXTableType['Update'], 'user_id' | 'email' | 'role'>> = { name: profileData.name };
+      if (profileData.password) {
+        if (profileData.password.length < 6) {
+          setIsLoading(false);
+          return { success: false, error: "New password must be at least 6 characters long." };
+        }
+        updates.pass = profileData.password;
+      }
+      if (profileData.avatar_url !== undefined) updates.avatar_url = profileData.avatar_url;
+
       const { error: updateError } = await supabase
         .from('proctorX')
         .update(updates)
@@ -435,24 +440,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (updateError) {
         console.error(`${operationId} Error updating DB:`, updateError.message);
-        setIsLoading(false); return { success: false, error: `Failed to update profile: ${updateError.message}` };
+        return { success: false, error: `Failed to update profile: ${updateError.message}` };
       }
 
-      const refreshedUser: CustomUser = {
-        ...user,
-        name: updates.name ?? user.name,
-        avatar_url: updates.avatar_url !== undefined ? updates.avatar_url : user.avatar_url,
-      };
-      setUser(refreshedUser);
+      // Update user state in context
+      setUser(prevUser => prevUser ? ({
+        ...prevUser,
+        name: updates.name ?? prevUser.name,
+        avatar_url: updates.avatar_url !== undefined ? updates.avatar_url : prevUser.avatar_url,
+      }) : null);
       console.log(`${operationId} Success. Profile updated and context refreshed.`);
-      setIsLoading(false); return { success: true };
+      return { success: true };
 
     } catch (e: any) {
       console.error(`${operationId} Exception:`, e.message);
-      setAuthError(e.message || 'Unexpected error during profile update.'); setIsLoading(false);
+      setAuthError(e.message || 'Unexpected error during profile update.');
       return { success: false, error: e.message || 'An unexpected error occurred.' };
+    } finally {
+      setIsLoading(false);
     }
-  }, [supabase, user]);
+  }, [supabase, user, setAuthError, setIsLoading, setUser]); // Added setters
 
   const contextValue = useMemo(() => ({
     user, isLoading, authError, supabase, signIn, signUp, signOut, updateUserProfile,
