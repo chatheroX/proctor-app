@@ -12,9 +12,8 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Exam } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
-import { format } from 'date-fns';
-import { encryptData } from '@/lib/crypto-utils'; // Assuming this is already robust
+import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page'; // Ensure this path is correct
+import { encryptData } from '@/lib/crypto-utils';
 
 interface CheckStatus {
   name: string;
@@ -32,13 +31,13 @@ export default function InitiateExamPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const supabase = createSupabaseBrowserClient();
+  const supabase = createSupabaseBrowserClient(); // This initializes a new client instance.
   const { user: studentUser, isLoading: authLoading } = useAuth();
 
   const examId = params.examId as string;
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Local loading state for this page
   const [error, setError] = useState<string | null>(null);
   const [effectiveStatus, setEffectiveStatus] = useState<string | null>(null);
   
@@ -46,16 +45,25 @@ export default function InitiateExamPage() {
   const [overallProgress, setOverallProgress] = useState(0);
   const [allChecksPassed, setAllChecksPassed] = useState(false);
   const [performingChecks, setPerformingChecks] = useState(false);
-  const [sebLinkReady, setSebLinkReady] = useState(false);
+  const [hasSuccessfullyLaunched, setHasSuccessfullyLaunched] = useState(false);
 
 
   const fetchExamData = useCallback(async () => {
-    if (!examId || !supabase) {
-      setError(examId ? "Supabase client not available." : "Exam ID is missing.");
+    console.log("[InitiatePage] fetchExamData called. examId:", examId);
+    if (!examId) {
+      console.error("[InitiatePage] fetchExamData aborted: Exam ID is missing.");
+      setError("Exam ID is missing.");
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
+    if (!supabase) {
+      console.error("[InitiatePage] fetchExamData aborted: Supabase client not available.");
+      setError("Service connection error. Please try again later.");
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true); // For this specific fetch operation
     setError(null);
     try {
       const { data, error: fetchError } = await supabase
@@ -68,32 +76,79 @@ export default function InitiateExamPage() {
       if (!data) throw new Error("Exam not found.");
 
       const currentExam = data as Exam;
+      console.log("[InitiatePage] Exam data fetched:", currentExam);
       setExamDetails(currentExam);
       setEffectiveStatus(getEffectiveExamStatus(currentExam));
 
     } catch (e: any) {
+      console.error("[InitiatePage] Failed to load exam data:", e.message, e);
       setError(e.message || "Failed to load exam data.");
       setExamDetails(null);
     } finally {
       setIsLoading(false);
+      console.log("[InitiatePage] fetchExamData finished. isLoading set to false.");
     }
-  }, [examId, supabase]);
+  }, [examId, supabase, toast, setError, setIsLoading, setExamDetails, setEffectiveStatus]); // Added setters to dep array
 
   useEffect(() => {
-    if (examId && !authLoading && supabase && (!examDetails || examDetails.exam_id !== examId)) {
-       fetchExamData();
+    console.log(`[InitiatePage] Mount/param effect. examId: ${examId}, authLoading: ${authLoading}, supabase available: ${!!supabase}`);
+    // This effect handles conditions where fetching cannot even start or if auth context is still loading
+    if (authLoading) {
+        console.log("[InitiatePage] Waiting for auth to complete...");
+        if (!isLoading) setIsLoading(true); // Ensure local loading is true if auth is loading
+        return; // Wait for auth to finish loading
     }
-  }, [examId, authLoading, supabase, fetchExamData, examDetails]);
+
+    // Auth is done loading now (authLoading is false)
+    if (!supabase) {
+        console.error("[InitiatePage] Supabase client not available after auth load. Setting error.");
+        setError("Service connection error. Cannot load exam details.");
+        if (isLoading) setIsLoading(false);
+        return;
+    }
+    if (!examId) {
+        console.error("[InitiatePage] Exam ID is missing after auth load. Setting error.");
+        setError("Exam ID is missing. Cannot load exam details.");
+        if (isLoading) setIsLoading(false);
+        return;
+    }
+
+    // If we reach here, auth is loaded, supabase client and examId are available.
+    // Fetch if no details yet, or if examId changed.
+    if (!examDetails || examDetails.exam_id !== examId) {
+        console.log("[InitiatePage] Conditions met to fetch exam data.");
+        fetchExamData();
+    } else if (examDetails && examDetails.exam_id === examId && isLoading) {
+        // Exam details already loaded for this ID, but page might be in loading state from previous navigation
+        console.log("[InitiatePage] Exam details already loaded, ensuring isLoading is false.");
+        setIsLoading(false);
+    } else if (!examDetails && !isLoading && !error) {
+        // This case might happen if fetchExamData was called but returned no data without error (e.g. exam not found but no exception)
+        // and then something else triggers a re-render. To be safe, if no details, no error, and not loading, set error.
+        console.warn("[InitiatePage] No exam details, not loading, no error. This might indicate exam not found or other issue. Setting error.");
+        setError("Exam details could not be retrieved. The exam may not exist or is unavailable.");
+        // No need to setIsLoading(false) as it's already false.
+    }
+
+  }, [examId, authLoading, supabase, fetchExamData, examDetails, isLoading, setIsLoading, setError]);
 
 
-  const generateAndLaunchSebLink = useCallback(async () => {
-    if (!allChecksPassed || !examDetails || !studentUser?.user_id) {
+  const performLaunch = useCallback(async () => {
+    console.log("[InitiatePage] performLaunch called. Conditions:", { allChecksPassed, examDetailsExists: !!examDetails, studentUserExists: !!studentUser?.user_id, errorExists: !!error, hasSuccessfullyLaunched });
+
+    if (hasSuccessfullyLaunched) {
+        toast({ title: "Already Launched", description: "Exam session was already initiated.", variant: "default" });
+        return;
+    }
+    if (!allChecksPassed || !examDetails || !studentUser?.user_id || error) {
       const reasons = [];
       if (!allChecksPassed) reasons.push("system checks not passed");
       if (!examDetails) reasons.push("exam details missing");
       if (!studentUser?.user_id) reasons.push("student authentication missing");
-      setError(`Cannot generate SEB link because: ${reasons.join(', ')}.`);
-      toast({ title: "Cannot Launch", description: `Launch aborted: ${reasons.join(', ')}.`, variant: "destructive" });
+      if (error) reasons.push(`an existing error: ${error}`);
+      const description = `Cannot launch because: ${reasons.join(', ')}.`;
+      console.error(`[InitiatePage] Cannot Launch Exam: "${description}"`);
+      toast({ title: "Cannot Launch", description, variant: "destructive" });
       return;
     }
 
@@ -103,6 +158,7 @@ export default function InitiateExamPage() {
       timestamp: Date.now(),
       examCode: examDetails.exam_code 
     };
+    console.log("[InitiatePage] Encrypting payload:", payload);
     const encryptedToken = await encryptData(payload);
 
     if (!encryptedToken) {
@@ -111,28 +167,33 @@ export default function InitiateExamPage() {
         return;
     }
     
-    // Construct the full configUrl with the domain, path to .seb file, and hash parameters
-    // The actual .seb file must be configured to read these hash parameters or be dynamic.
-    const sebConfigPath = "/configs/exam-config.seb"; // Path to your .seb file in /public/configs/
-    const absoluteConfigUrl = `${window.location.origin}${sebConfigPath}#examId=${encodeURIComponent(examDetails.exam_id)}&token=${encodeURIComponent(encryptedToken)}`;
-    const sebLaunchUrl = `seb://open?configUrl=${encodeURIComponent(absoluteConfigUrl)}`;
+    const examSessionUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(encryptedToken)}`;
+    const absoluteExamSessionUrl = `${window.location.origin}${examSessionUrl}`;
 
-    console.log("[InitiatePage] Attempting to launch SEB with URL:", sebLaunchUrl);
-    toast({ title: "Launching SEB", description: "Attempting to open Safe Exam Browser. Please confirm if prompted by your system.", duration: 7000});
+    console.log("[InitiatePage] Attempting to open new tab with URL:", absoluteExamSessionUrl);
+    const newWindow = window.open(absoluteExamSessionUrl, '_blank', 'noopener,noreferrer');
     
-    // Forcing SEB launch. Actual opening depends on SEB being installed and protocol registered.
-    window.location.href = sebLaunchUrl;
-    setSebLinkReady(true); // Indicate launch was attempted
+    if (newWindow) {
+      toast({ title: "Exam Launching", description: "Exam is opening in a new tab. Please switch to it.", duration: 7000});
+      setHasSuccessfullyLaunched(true);
+      setError(null); // Clear any previous non-critical errors
+    } else {
+      const popupErrorMsg = "Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again using the 'Launch Exam' button if available.";
+      console.error(`[InitiatePage] Pop-up blocked or failed to open: "${popupErrorMsg}"`);
+      setError(popupErrorMsg);
+      toast({ title: "Launch Failed", description: popupErrorMsg, variant: "destructive", duration: 10000 });
+      setHasSuccessfullyLaunched(false); // Ensure it's false if launch fails
+    }
+  }, [allChecksPassed, examDetails, studentUser, toast, error, hasSuccessfullyLaunched, setError, setHasSuccessfullyLaunched]);
 
-    // It's hard to know if SEB actually launched from here. The user is expected to switch to SEB.
-    // This page might show a message "If SEB did not open, please ensure it is installed..."
-    // Or redirect to a waiting page. For now, it just triggers.
-
-  }, [allChecksPassed, examDetails, studentUser, toast, setError, setSebLinkReady]);
-
-
-  const startSystemChecks = useCallback(async () => {
+  const startSystemChecksAndAttemptLaunch = useCallback(async () => {
+    console.log("[InitiatePage] startSystemChecksAndAttemptLaunch called.");
+    if (hasSuccessfullyLaunched) {
+      toast({ title: "Already Launched", description: "Exam session was already launched. Check other tabs.", variant: "default" });
+      return;
+    }
     if (performingChecks) return;
+
     if (!studentUser?.user_id) {
       toast({ title: "Authentication Error", description: "Student details not found.", variant: "destructive" });
       setError("Student details not found. Please re-login.");
@@ -159,14 +220,12 @@ export default function InitiateExamPage() {
     setAllChecksPassed(false);
     setChecks(initialChecks.map(c => ({ ...c, status: 'pending', details: undefined })));
     setOverallProgress(0);
-    setSebLinkReady(false);
 
     let checksSuccessful = true;
     for (let i = 0; i < initialChecks.length; i++) {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 300)); 
 
-      // Simulate check success/failure (all pass for this example)
       const isSuccess = true; 
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Check Failed' } : c));
       setOverallProgress(((i + 1) / initialChecks.length) * 100);
@@ -181,16 +240,16 @@ export default function InitiateExamPage() {
 
     if (checksSuccessful) {
       setAllChecksPassed(true); 
-      toast({ title: "System Checks Passed!", description: "Preparing to launch exam in SEB.", variant: "default" });
-      await generateAndLaunchSebLink();
+      toast({ title: "System Checks Passed!", description: "Attempting to launch exam...", variant: "default" });
+      await performLaunch(); // Try to launch immediately after checks
     } else {
       setAllChecksPassed(false);
+      // Error state is already set by the failed check
     }
   }, [
-    studentUser?.user_id, examDetails, effectiveStatus, toast, performingChecks,
-    generateAndLaunchSebLink, setError, setPerformingChecks, setAllChecksPassed, setChecks, setOverallProgress, setSebLinkReady
+    studentUser?.user_id, examDetails, effectiveStatus, toast, performingChecks, error, hasSuccessfullyLaunched, // Added error & hasSuccessfullyLaunched
+    performLaunch, setError, setPerformingChecks, setAllChecksPassed, setChecks, setOverallProgress
   ]);
-
 
   const getStatusIcon = (status: CheckStatus['status']) => {
     if (status === 'pending') return <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />;
@@ -200,7 +259,9 @@ export default function InitiateExamPage() {
     return null;
   };
 
+  // Primary loading state: context still loading, or this page is loading and has no data/error yet
   if (authLoading || (isLoading && !examDetails && !error)) {
+    console.log(`[InitiatePage] Rendering loading screen. authLoading: ${authLoading}, isLoading: ${isLoading}, examDetails: ${!!examDetails}, error: ${!!error}`);
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -209,7 +270,10 @@ export default function InitiateExamPage() {
     );
   }
 
-  if (error && !examDetails && !performingChecks) {
+  // Error display: if there's an error AND we are not currently in a 'performingChecks' or 'data loading' state.
+  // This handles errors from fetching or critical setup issues.
+  if (error && !isLoading && !performingChecks) {
+    console.log(`[InitiatePage] Rendering error screen. Error: ${error}, isLoading: ${isLoading}, performingChecks: ${performingChecks}`);
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
@@ -228,7 +292,10 @@ export default function InitiateExamPage() {
     );
   }
   
+  // If no exam details, not loading, and not performing checks, but also no specific error was set previously
+  // (This case should be rare now with the effect setting error if supabase/examId is missing)
   if (!examDetails && !isLoading && !performingChecks) {
+     console.log(`[InitiatePage] Rendering exam not found screen. examDetails: ${!!examDetails}, isLoading: ${isLoading}, performingChecks: ${performingChecks}`);
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
          <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
@@ -237,7 +304,7 @@ export default function InitiateExamPage() {
             <CardTitle className="text-2xl text-muted-foreground">Exam Details Not Found</CardTitle>
           </CardHeader>
           <CardContent className="pb-6">
-            <p className="text-sm text-muted-foreground mb-6">The exam details could not be retrieved.</p>
+            <p className="text-sm text-muted-foreground mb-6">The exam details could not be retrieved or the exam is unavailable.</p>
             <Button onClick={() => router.push('/student/dashboard/join-exam')} className="w-full btn-primary-solid">
               Back to Join Exam
             </Button>
@@ -247,7 +314,9 @@ export default function InitiateExamPage() {
     );
   }
   
+  // Fallback critical display error if somehow examDetails is null but other conditions didn't catch it.
   if (!examDetails) { 
+    console.error("[InitiatePage] Critical display error: examDetails is null despite passing loading/error checks.");
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
@@ -256,7 +325,7 @@ export default function InitiateExamPage() {
             <CardTitle className="text-2xl text-destructive">Critical Display Error</CardTitle>
           </CardHeader>
           <CardContent className="pb-6">
-            <p className="text-sm text-muted-foreground mb-6">Could not display exam information.</p>
+            <p className="text-sm text-muted-foreground mb-6">Could not display exam information. Please try again.</p>
             <Button onClick={() => router.push('/student/dashboard/join-exam')} className="w-full btn-primary-solid">
               Back to Join Exam
             </Button>
@@ -279,7 +348,7 @@ export default function InitiateExamPage() {
           {examDetails.description && <CardDescription className="text-center text-muted-foreground mt-2">{examDetails.description}</CardDescription>}
         </CardHeader>
         
-        {!sebLinkReady && !performingChecks && (
+        {!hasSuccessfullyLaunched && !performingChecks && (
           <CardContent className="space-y-6">
             <div className="flex items-center justify-center space-x-2 text-muted-foreground bg-background/30 dark:bg-slate-800/50 backdrop-blur-sm p-2 rounded-md text-sm">
               <PlayCircle size={18} /> 
@@ -290,13 +359,13 @@ export default function InitiateExamPage() {
             </div>
             <Alert className="bg-primary/10 border-primary/30 text-primary-foreground dark:text-primary dark:bg-primary/5 dark:border-primary/20">
               <ShieldAlert className="h-4 w-4 text-primary" />
-              <AlertTitle className="text-primary font-semibold">SEB Exam Notice</AlertTitle>
+              <AlertTitle className="text-primary font-semibold">Exam Launch Notice</AlertTitle>
               <AlertDescription className="text-primary/80 dark:text-primary/70">
-                This exam must be taken in Safe Exam Browser (SEB).
-                System checks will be performed. Clicking 'Proceed' will attempt to launch SEB.
+                System checks will be performed. Clicking 'Proceed' will attempt to launch the exam in a new tab.
+                This exam requires a secure environment.
               </AlertDescription>
             </Alert>
-            {error && ( 
+            {error && ( // Show general errors not caught by system check specific error display
               <Alert variant="destructive" className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
@@ -321,7 +390,7 @@ export default function InitiateExamPage() {
                 </li>
               ))}
             </ul>
-            {error && ( 
+            {error && allChecksPassed === false && ( // Only show error here if checks actually failed
                 <Alert variant="destructive" className="mt-4">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>System Check Failed</AlertTitle>
@@ -331,29 +400,39 @@ export default function InitiateExamPage() {
           </CardContent>
         )}
         
-        {sebLinkReady && (
+        {hasSuccessfullyLaunched && (
              <CardContent className="text-center py-8">
                 <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                <p className="text-xl font-semibold text-foreground">SEB Launch Attempted!</p>
+                <p className="text-xl font-semibold text-foreground">Exam Launched!</p>
                 <p className="text-muted-foreground mt-2">
-                    Safe Exam Browser should have been prompted to open. Please switch to SEB to continue.
+                    The exam should have opened in a new tab. Please switch to it to begin.
                 </p>
-                <p className="text-muted-foreground mt-1">If SEB did not launch, ensure it is installed correctly and your browser allows `seb://` links.</p>
-                 <Button variant="outline" onClick={generateAndLaunchSebLink} className="mt-4 btn-outline-subtle">
-                    <ExternalLink className="mr-2 h-4 w-4" /> Try Launching SEB Again
-                </Button>
+                <p className="text-muted-foreground mt-1">If the new tab did not open, please ensure pop-ups are allowed for this site and try the manual launch button if available, or contact support.</p>
+                 {/* Allow re-attempting launch only if there was an error preventing auto-launch initially */}
+                 {error && !newWindow && ( // newWindow is not defined here, maybe check if current error is pop-up related
+                    <Button variant="outline" onClick={performLaunch} className="mt-4 btn-outline-subtle">
+                        <ExternalLink className="mr-2 h-4 w-4" /> Try Launching Again
+                    </Button>
+                 )}
              </CardContent>
         )}
 
         <CardFooter className="flex flex-col items-center gap-3 pt-6 border-t border-border/30 dark:border-border/20">
-          {!sebLinkReady && (
+          {!hasSuccessfullyLaunched && (
             <Button
-              onClick={startSystemChecks}
+              onClick={startSystemChecksAndAttemptLaunch}
               className="w-full btn-gradient py-3 text-lg rounded-md shadow-lg"
-              disabled={performingChecks || !canStartTestProcess || authLoading || !studentUser || isLoading}
+              disabled={performingChecks || !canStartTestProcess || authLoading || !studentUser || isLoading || !!error && !allChecksPassed} // Disable if error from failed checks
             >
               {performingChecks ? <Loader2 className="animate-spin mr-2"/> : <PlayCircle className="mr-2" />}
-              {performingChecks ? 'Running Checks...' : (canStartTestProcess ? 'Start System Checks & Launch in SEB' : `Exam is ${effectiveStatus?.toLowerCase() || 'unavailable'}`)}
+              {performingChecks ? 'Running Checks...' : (canStartTestProcess ? 'Start System Checks & Launch Exam' : `Exam is ${effectiveStatus?.toLowerCase() || 'unavailable'}`)}
+            </Button>
+           )}
+           
+           {/* Show manual launch button if checks passed but auto-launch might have failed or user closed tab */}
+           {allChecksPassed && !hasSuccessfullyLaunched && !performingChecks && (
+             <Button variant="outline" onClick={performLaunch} className="w-full btn-primary-solid">
+                <ExternalLink className="mr-2 h-4 w-4" /> Launch Exam Manually
             </Button>
            )}
            
@@ -365,4 +444,6 @@ export default function InitiateExamPage() {
     </div>
   );
 }
+    
+
     
