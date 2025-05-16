@@ -5,18 +5,19 @@
 // WARNING: THIS IS A DEMONSTRATION AND USES A HARDCODED KEY.
 // DO NOT USE THIS IN PRODUCTION WITHOUT A PROPER KEY MANAGEMENT STRATEGY.
 // A securely managed, non-extractable key is crucial for real security.
-const VERY_INSECURE_HARDCODED_KEY = 'this-is-a-32-byte-long-secret-key!'; // Exactly 32 characters -> 32 bytes
+const VERY_INSECURE_HARDCODED_KEY = 'this-is-a-32-byte-secret-key!!'; // Exactly 32 characters
 
 async function getKeyMaterial(): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyData = enc.encode(VERY_INSECURE_HARDCODED_KEY);
   if (keyData.byteLength !== 32) {
-    console.error("Key material is not 32 bytes. Ensure it's a valid length for AES-256. Actual length:", keyData.byteLength);
+    const errorMessage = `CRITICAL: Encryption key is not 32 bytes long. Expected 32, got ${keyData.byteLength}. Please check configuration.`;
+    console.error(errorMessage, "Key used:", VERY_INSECURE_HARDCODED_KEY);
     // Fallback to a generated key if the hardcoded one is invalid, though this won't allow decryption across sessions.
     // This fallback is problematic for consistent encryption/decryption, the hardcoded key *must* be correct.
     // For the purpose of this error, the primary issue is the hardcoded key's length.
     // A real application would throw a configuration error or have a more robust key provisioning.
-    throw new Error("CRITICAL: Encryption key is not 32 bytes long. Please check configuration.");
+    throw new Error(errorMessage);
   }
   return crypto.subtle.importKey(
     'raw',
