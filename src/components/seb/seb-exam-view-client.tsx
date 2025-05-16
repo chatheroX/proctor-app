@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Corrected import
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -29,7 +29,7 @@ export function SebExamViewClient() {
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
-  const { user: studentUser, isLoading: authLoading } = useAuth();
+  const { user: studentUser, isLoading: authLoading, supabaseInitializationError } = useAuth();
 
   const [pageIsLoading, setPageIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,19 +50,22 @@ export function SebExamViewClient() {
   useEffect(() => {
     if (!isClientSide) return; 
 
-    console.log("[SebExamViewClient] Component mounted. Parsing hash.");
+    console.log("[SebExamViewClient] Component mounted. Parsing hash from window.location.hash:", window.location.hash);
     const hash = window.location.hash.substring(1); 
     const paramsFromHash = new URLSearchParams(hash);
     const examIdParam = paramsFromHash.get('examId');
     const tokenParam = paramsFromHash.get('token');
 
     if (!examIdParam || !tokenParam) {
-      setError("Exam ID or session token missing from SEB launch parameters. Please re-initiate from dashboard.");
-      toast({ title: "Launch Error", description: "Invalid SEB parameters. SEB will quit.", variant: "destructive", duration: 7000 });
+      const errMsg = "Exam ID or session token missing from SEB launch parameters (hash). Please re-initiate from the dashboard.";
+      console.error("[SebExamViewClient] Error:", errMsg, "Hash was:", window.location.hash);
+      setError(errMsg);
+      toast({ title: "Launch Error", description: "Invalid SEB parameters. SEB will quit.", variant: "destructive", duration: 10000 });
       setPageIsLoading(false);
-      setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
+      setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 9000);
       return;
     }
+    console.log("[SebExamViewClient] Parsed from hash - examId:", examIdParam, "token:", tokenParam ? "present" : "missing");
     setExamIdFromHash(examIdParam);
     setTokenFromHash(tokenParam);
     // Next effect handles decryption and data fetching once auth is loaded
@@ -71,32 +74,37 @@ export function SebExamViewClient() {
 
   // Step 2: Decrypt token and fetch exam details (once studentUser and token are available)
   useEffect(() => {
-    if (!isClientSide || !examIdFromHash || !tokenFromHash || authLoading) {
-      if (isClientSide && !authLoading && (!examIdFromHash || !tokenFromHash) && pageIsLoading && !error) {
+    if (!isClientSide || !examIdFromHash || !tokenFromHash || authLoading || supabaseInitializationError) {
+      if (isClientSide && !authLoading && (!examIdFromHash || !tokenFromHash) && pageIsLoading && !error && !supabaseInitializationError) {
            setError("SEB launch parameters missing or invalid after auth load. Cannot proceed.");
            setPageIsLoading(false);
+      }
+      if(supabaseInitializationError && pageIsLoading){
+        setError("Supabase client initialization failed. Cannot proceed. " + supabaseInitializationError);
+        setPageIsLoading(false);
       }
       return;
     }
 
     if (!studentUser || !studentUser.user_id) {
       setError("Student authentication details missing. Cannot validate exam session. SEB will quit.");
-      toast({ title: "Auth Error", description: "Student session invalid for SEB.", variant: "destructive", duration: 7000 });
+      toast({ title: "Auth Error", description: "Student session invalid for SEB.", variant: "destructive", duration: 10000 });
       setPageIsLoading(false);
-      setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
+      setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 9000);
       return;
     }
 
-    console.log("[SebExamViewClient] Decrypting token...");
+    console.log("[SebExamViewClient] Decrypting token for examId:", examIdFromHash, "studentId:", studentUser.user_id);
     decryptData<DecryptedTokenPayload>(tokenFromHash)
       .then(payload => {
-        if (!payload) throw new Error("Invalid or corrupt session token.");
-        if (payload.examId !== examIdFromHash) throw new Error("Token-Exam ID mismatch in hash.");
-        if (payload.studentId !== studentUser.user_id) throw new Error("Token-Student ID mismatch.");
+        if (!payload) throw new Error("Invalid or corrupt session token (decryption failed).");
+        if (payload.examId !== examIdFromHash) throw new Error("Token-Exam ID mismatch. Token was for " + payload.examId);
+        if (payload.studentId !== studentUser.user_id) throw new Error("Token-Student ID mismatch. Token was for student " + payload.studentId);
         
         const tokenAgeMinutes = (Date.now() - payload.timestamp) / (1000 * 60);
         if (tokenAgeMinutes > TOKEN_VALIDITY_MINUTES_SEB) {
-          throw new Error('SEB session link expired (valid for ' + TOKEN_VALIDITY_MINUTES_SEB + ' min). Re-initiate.');
+          const msg = 'SEB session link expired (valid for ' + TOKEN_VALIDITY_MINUTES_SEB + ' min). Re-initiate.';
+          throw new Error(msg);
         }
         console.log("[SebExamViewClient] Token decrypted and validated. Payload:", payload);
         
@@ -107,30 +115,30 @@ export function SebExamViewClient() {
           .single()
           .then(({ data, error: fetchError }) => {
             if (fetchError) throw fetchError;
-            if (!data) throw new Error("Exam not found in database.");
+            if (!data) throw new Error("Exam with ID " + payload.examId + " not found in database.");
             setExamDetails(data as Exam);
             console.log("[SebExamViewClient] Exam details fetched:", data);
             setError(null); 
           }).catch((e: any) => {
             const errorMsg = 'Failed to load exam details: ' + e.message;
             setError(errorMsg);
-            toast({ title: "Exam Load Error", description: errorMsg, variant: "destructive", duration: 7000 });
+            toast({ title: "Exam Load Error", description: errorMsg, variant: "destructive", duration: 10000 });
             setExamDetails(null);
           }).finally(() => setPageIsLoading(false));
       })
       .catch((e: any) => {
         const errorMsg = 'Session validation failed: ' + e.message + '. Please re-initiate from the dashboard.';
         setError(errorMsg);
-        toast({ title: "Session Error", description: errorMsg, variant: "destructive", duration: 7000 });
+        toast({ title: "Session Error", description: errorMsg, variant: "destructive", duration: 10000 });
         setPageIsLoading(false);
-        setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
+        setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 9000);
       });
-  }, [isClientSide, examIdFromHash, tokenFromHash, authLoading, studentUser, supabase, toast, router, pageIsLoading, error]);
+  }, [isClientSide, examIdFromHash, tokenFromHash, authLoading, studentUser, supabase, toast, router, pageIsLoading, error, supabaseInitializationError]);
 
 
   const performSystemChecks = useCallback(async () => {
     if (!examDetails || !examIdFromHash || !tokenFromHash) { 
-      setError("Cannot start: Missing exam details or session information.");
+      setError("Cannot start: Missing exam details or session information for system checks.");
       return;
     }
 
@@ -169,7 +177,7 @@ export function SebExamViewClient() {
       router.push(`/seb/live-test?examId=${examIdFromHash}&token=${encodeURIComponent(tokenFromHash!)}`);
     } else {
       setError("One or more critical system checks failed. Cannot start exam. SEB will attempt to quit.");
-      setTimeout(() => { if (typeof window !== 'undefined') { window.location.href = "seb://quit"; } }, 7000);
+      setTimeout(() => { if (typeof window !== 'undefined') { window.location.href = "seb://quit"; } }, 9000);
     }
   }, [examDetails, examIdFromHash, tokenFromHash, router, toast, setCheckResultsLog, setSystemChecksPassed, setError]); 
 
@@ -290,7 +298,7 @@ export function SebExamViewClient() {
               <li>Do not attempt to exit SEB or switch applications unless instructed or the exam is finished.</li>
               <li>The timer will start once you click "Start Exam" after system checks.</li>
               <li>Read each question carefully before answering.</li>
-              <li>Only A-Z keys, arrow keys, and mouse clicks are permitted for answering. Other shortcuts are disabled.</li>
+              <li>Only A-Z keys, arrow keys, and mouse clicks are permitted for answering. Other shortcuts are disabled. (Enforced by SEB config)</li>
             </ul>
           </div>
 
@@ -315,7 +323,7 @@ export function SebExamViewClient() {
           <Button 
             onClick={performSystemChecks} 
             className="btn-primary-solid w-full sm:w-auto py-3 text-base order-1 sm:order-2"
-            disabled={pageIsLoading || systemChecksPassed === false} // Disable if checks failed or currently loading
+            disabled={pageIsLoading || systemChecksPassed === false || !!error} 
             >
             {pageIsLoading && systemChecksPassed === null ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <PlayCircle className="mr-2 h-5 w-5" />}
             {systemChecksPassed === false ? "Checks Failed - Cannot Start" : (systemChecksPassed === true ? "Checks Passed - Proceed" : "Start System Checks & Exam")}
@@ -325,3 +333,4 @@ export function SebExamViewClient() {
     </div>
   );
 }
+

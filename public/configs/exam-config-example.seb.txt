@@ -1,76 +1,75 @@
 
-This is an EXAMPLE of settings for your exam-config.seb file.
-You MUST create this file using the SEB Configuration Tool.
-Save the actual .seb file as /public/configs/exam-config.seb
+This is an example of settings you should configure in your ACTUAL `exam-config.seb` file
+using the Safe Exam Browser (SEB) Configuration Tool.
 
-Key Settings to Configure in SEB Configuration Tool:
+**CRITICAL SETTINGS:**
 
-1. General > Start URL:
-   Set this to: YOUR_APP_DOMAIN/seb/exam-view
-   Replace YOUR_APP_DOMAIN with your actual application's domain (e.g., https://proctorx.netlify.app).
-   IMPORTANT: The /seb/exam-view page will expect examId and token to be passed in the hash (#) of the Start URL.
-   The application will construct the full configUrl for SEB like:
-   https://YOUR_APP_DOMAIN/configs/exam-config.seb#examId=THE_EXAM_ID&token=THE_ENCRYPTED_TOKEN
+1.  **Start URL**:
+    *   Set this to: `https://YOUR_APP_DOMAIN/seb/exam-view`
+    *   Replace `YOUR_APP_DOMAIN` with your actual deployed application domain (e.g., `https://proctorx.netlify.app`).
+    *   **DO NOT include `#examId=...` or `&token=...` here in the SEB Config Tool.**
+    *   The `examId` and `token` will be passed as part of the hash in the `configUrl` when SEB is launched from your web application. The `/seb/exam-view` page in your app is designed to read these from `window.location.hash`.
 
-2. General > Quit Link:
-   Set to: seb://quit
-   Ensure "Enable quit link" is checked.
+2.  **Permitted Processes/Applications**:
+    *   Generally, block all other applications. Allow only SEB and its subprocesses.
 
-3. Config File > Use "Starting an exam" settings.
+3.  **Browser Exam Key (BEK) & Config Key (CK)**:
+    *   Generate and use strong BrowserExamKey and ConfigKey if your exam platform (your Next.js app's /seb/exam-view page) is set up to validate them. (Currently, our client-side code does not explicitly validate these, but it's good practice for higher security).
+    *   If not validating them, these keys are less critical for the immediate flow but should still be set in the SEB config.
 
-4. Browser > Browser User Agent:
-   Ensure "Append SEB version and OS info to User Agent" is CHECKED.
-   Optionally, you can customize the user agent string if needed for stricter checks, but appending is usually sufficient.
+4.  **URL Filter**:
+    *   Enable the URL filter.
+    *   Allow access to: `https://YOUR_APP_DOMAIN/*` (replace with your domain).
+    *   Potentially allow access to `https://api.dicebear.com/*` if you are loading avatars from there directly within the SEB exam interface (though typically avatars would be loaded before the exam starts or passed as data).
+    *   Block all other URLs by default.
 
-5. Browser > Plug-Ins / Embeds:
-   - Disable Java, Silverlight, Flash (unless specifically needed, which is rare).
-   - Enable "Embed PDF files".
+5.  **Security Options**:
+    *   **Enable General Security**:
+        *   Disable screen capture.
+        *   Disable printing.
+        *   Disable "magic" F11 key.
+    *   **Enable Browser Security**:
+        *   Block plug-ins (Flash, Java, Silverlight).
+        *   Block Java applets.
+        *   Block JavaScript `window.open` and `window.close` if not strictly needed by your exam interface (SEB handles its own window).
+        *   Block pop-up windows.
+        *   Disable developer tools.
+    *   **Enable Kiosk Mode**:
+        *   Choose an appropriate kiosk mode (e.g., "Disable Explorer Shell" or "Create New Desktop").
+        *   Prevent quitting SEB (allow quit link `seb://quit` which will be triggered by your app).
+        *   Disable Ctrl+Alt+Del.
+        *   Disable Alt+Tab / Cmd+Tab.
+        *   Disable other function keys (F1-F12) as needed.
+    *   **Enable Applications**:
+        *   Prevent starting prohibited applications.
+        *   Prevent switching to prohibited applications.
+    *   **Enable Network**:
+        *   Configure allowed network interfaces if necessary (usually not needed).
 
-6. Browser > Security:
-   - Enable "Block pop-up windows".
-   - Enable "Block any file download/upload dialogs" (unless your exam specifically requires uploads handled by SEB, not by JavaScript `input[type=file]`).
-   - Enable "Block content/plugins identified as potentially unsafe".
+6.  **User Interface Options**:
+    *   Show SEB taskbar: Optional, can be hidden for a more immersive experience.
+    *   Enable "Quit" button: Set to show the quit button or use a quit link. Your application will trigger `seb://quit`.
+    *   Enable reload button: Optional. The `/seb/live-test` page in your app has a placeholder for this.
 
-7. Exam > Security:
-   - Enable "Enable screen capture protection" (if available and desired).
-   - Enable "Prevent quitting SEB" (during the exam).
-   - Enable "Enable detection of virtual machines".
-   - Enable "Enable detection of screen sharing / remote desktop".
+7.  **Exam Tab**:
+    *   Enable "Use Browser Exam Key" and "Use Config Key" and enter the generated keys if you are validating them on your server or client.
+    *   "Send Browser Exam Key in HTTP header": Enable if your server expects it.
+    *   "Send Config Key in HTTP header": Enable if your server expects it.
 
-8. Applications > Permitted Processes:
-   - Typically, you want to restrict this significantly. Add any essential helper applications ONLY if absolutely necessary (e.g., specific PDF viewers if not embedded).
-   - For maximum security, allow no other processes or ensure SEB is set to "Create new desktop & hide taskbar".
+**IMPORTANT DEPLOYMENT NOTES FOR `exam-config.seb`:**
 
-9. Network > URL Filtering:
-   - This is crucial.
-   - Action for prohibited URLs: "Block URL and show warning".
-   - Add rules to ALLOW your application domain (YOUR_APP_DOMAIN).
-     Example: `https://YOUR_APP_DOMAIN/*` (Action: Allow)
-   - Add rules to ALLOW Supabase URLs if your app makes direct client-side calls (for auth, storage, database if not proxied).
-     Example: `https://*.supabase.co/*` (Action: Allow)
-     Example: `wss://*.supabase.co/*` (Action: Allow for real-time)
-   - Add rules to ALLOW DiceBear if using it for avatars.
-     Example: `https://api.dicebear.com/*` (Action: Allow)
-   - Block other URLs by default or add specific block rules.
+*   **Location**: This actual `exam-config.seb` file (created with the SEB Configuration Tool) must be placed in your project's `public/configs/` directory.
+*   **Deployment**: Ensure your deployment provider (e.g., Netlify) serves this `.seb` file correctly.
+    *   It MUST be served with a `Content-Type` of `application/seb` or `application/octet-stream`.
+    *   It should NOT be served as an HTML page (e.g., your app's 404 page).
+    *   You might need to configure custom headers in your hosting provider's settings (e.g., in `netlify.toml` for Netlify).
+      Example `netlify.toml` rule:
+      ```toml
+      [[headers]]
+        for = "/configs/*.seb"
+        [headers.values]
+          Content-Type = "application/seb"
+      ```
 
-10. User Interface > Browser Toolbar / Elements:
-    - Hide Address Bar, Back/Forward buttons, Reload button (your app provides a refresh if needed).
-    - Consider showing a minimal status bar or time.
-    - Your application will provide its own "Exit SEB" button logic before the exam starts and after it ends.
-
-11. Security > Browser Exam Key / Config Key:
-    - Generate and use a Browser Exam Key.
-    - Generate and use a Config Key.
-    - These keys are sent in HTTP headers, and your server-side (if you had one for exam content delivery) would validate them. For a client-side only app, this primarily helps ensure the SEB instance is configured with your specific file.
-
-12. Down/Uploads > File Handling:
-    - Configure as needed if your exam involves file uploads/downloads managed by SEB.
-
-IMPORTANT for Placeholders in Start URL (if your SEB version supports it, usually for SEB Server integration):
-Some SEB versions allow query parameters in the Start URL like:
-`YOUR_APP_DOMAIN/seb/exam-view?examId={examIdPlaceholder}&token={tokenPlaceholder}`
-If so, the values from the `configUrl`'s hash might be accessible to SEB to fill these.
-However, the most reliable cross-version method is for the `initiate` page to generate the full `configUrl` including the hash, and for `/seb/exam-view` to parse `window.location.hash`.
-
-Test thoroughly with your SEB version!
-The settings above are general recommendations.
+**Remember to replace `YOUR_APP_DOMAIN` with your actual domain (e.g., `proctorx.netlify.app`).**
+This file is just an example. Use the SEB Configuration Tool for Windows or macOS to create and encrypt your final `exam-config.seb` file with these settings.

@@ -60,7 +60,7 @@ export default function JoinExamPage() {
       const effectiveStatus = getEffectiveExamStatus(exam as Exam);
 
       if (effectiveStatus !== 'Ongoing') {
-         toast({ title: "Exam Not Active", description: `This exam is currently ${effectiveStatus.toLowerCase()} and cannot be joined. Please check the schedule.`, variant: "default", duration: 7000 });
+         toast({ title: "Exam Not Active", description: "This exam is currently " + effectiveStatus.toLowerCase() + " and cannot be joined. Please check the schedule.", variant: "default", duration: 7000 });
          setIsLoading(false);
          return;
       }
@@ -105,15 +105,14 @@ export default function JoinExamPage() {
       // Attempt to launch SEB
       window.location.href = sebLaunchUrl;
 
-      // It's good practice to reset loading state, but direct navigation might make this less critical.
-      // Consider if you want to keep the page interactive or show a persistent "launching" message.
-      setTimeout(() => setIsLoading(false), 5000); // Reset loading state after a delay
+      // Reset loading state after a delay, as direct navigation might make this less critical.
+      setTimeout(() => setIsLoading(false), 5000);
 
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setIsLoading(false);
     }
-  }, [examCode, supabase, toast, studentUser, authLoading, router]); // Added router to dependencies
+  }, [examCode, supabase, toast, studentUser, authLoading, router]);
 
   return (
     <div className="space-y-6">
@@ -165,3 +164,4 @@ export default function JoinExamPage() {
     </div>
   );
 }
+
