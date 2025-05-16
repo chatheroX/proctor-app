@@ -17,10 +17,11 @@ import type { CustomUser } from '@/types/supabase';
 type AuthAction = 'login' | 'register';
 
 const AUTH_ROUTE = '/auth';
-// Redirection targets are now primarily handled by AuthContext's routing effect
+const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
+const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
 
 export function AuthForm() {
-  const pathname = usePathname();
+  const pathname = usePathname(); // Must be at the top
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -33,21 +34,15 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role'] | ''>(''); // Role is mandatory, so it shouldn't be '' after selection
+  const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // For form's own submission attempt
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const resetFormFields = React.useCallback(() => {
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
-    setFullName('');
-    setRole(''); // Reset role as well
-    setShowPassword(false);
-    setShowConfirmPassword(false);
-    setFormError(null);
+    setEmail(''); setPassword(''); setConfirmPassword(''); setFullName('');
+    setRole(''); setShowPassword(false); setShowConfirmPassword(false); setFormError(null);
   }, []);
 
   useEffect(() => {
@@ -82,40 +77,34 @@ export function AuthForm() {
     if (action === 'register') {
       if (!trimmedFullName) {
         setFormError("Full name is required for registration.");
-        setIsSubmitting(false);
-        return;
+        setIsSubmitting(false); return;
       }
-      const selectedRole = role as CustomUser['role']; // Type assertion, ensure role is not empty
+      const selectedRole = role as CustomUser['role'];
       if (!selectedRole) {
         setFormError("Please select a role (Student or Teacher).");
-        setIsSubmitting(false);
-        return;
+        setIsSubmitting(false); return;
       }
       if (password !== confirmPassword) {
         setFormError("Passwords do not match.");
-        setIsSubmitting(false);
-        return;
+        setIsSubmitting(false); return;
       }
       if (password.length < 6) {
         setFormError("Password must be at least 6 characters.");
-        setIsSubmitting(false);
-        return;
+        setIsSubmitting(false); return;
       }
-      console.log('[AuthForm] Attempting to register with email:', trimmedEmail, 'name:', trimmedFullName, 'role:', selectedRole);
       result = await signUp(trimmedEmail, password, trimmedFullName, selectedRole);
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        // AuthContext will handle the redirect
+        // AuthContext now handles the redirect
       } else {
         setFormError(result.error || "An unknown error occurred during registration.");
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
     } else { // Login
-      console.log('[AuthForm] Attempting sign in for:', trimmedEmail);
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        // AuthContext will handle the redirect
+        // AuthContext now handles the redirect
       } else {
         setFormError(result.error || "Invalid credentials or server error.");
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
@@ -124,10 +113,9 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
-  // If AuthContext is still loading initial state and user is null, show a page loader
-  // This prevents flashing the form if user is quickly identified as logged in by AuthContext
-  if (authContextLoading && user === null && pathname === AUTH_ROUTE) {
-    console.log('[AuthForm] AuthContext loading initial user state, user is null, on /auth. Showing AuthForm loader.');
+  // This is the screen that shows when AuthContext is still loading the initial user state
+  if (authContextLoading && pathname === AUTH_ROUTE && user === null) {
+    console.log('[AuthForm] AuthContext initial loading or no user yet, on /auth. Showing AuthForm page loader.');
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
         <Card className="p-6 glass-card text-center">
@@ -138,32 +126,27 @@ export function AuthForm() {
     );
   }
 
-  // If AuthContext has loaded, user is authenticated, and we are somehow still on /auth page
-  // AuthContext's route guard should handle this redirect. Show a "Finalizing" message.
+  // This is the "stuck" screen: user is known, AuthContext is done loading, but still on /auth page
   if (!authContextLoading && user && pathname === AUTH_ROUTE) {
-    console.log(`[AuthForm] User is authenticated (${user.email}), on /auth. Expecting redirect from AuthContext.`);
+    console.log(`[AuthForm] User is authenticated (${user.email}), AuthContext loaded, but still on /auth. AuthContext should redirect.`);
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
-        <Card className="p-6 glass-card text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-3"/>
-          <p className="text-md font-medium text-foreground">Finalizing session for {user.email}...</p>
-          <p className="mt-1 text-xs text-muted-foreground">Redirecting to dashboard.</p>
+        <Card className="p-8 glass-card text-center shadow-xl">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary mb-4"/>
+          <p className="text-lg font-semibold text-foreground">Finalizing session for {user.email}...</p>
+          <p className="mt-1 text-sm text-muted-foreground">Redirecting to dashboard.</p>
         </Card>
       </div>
     );
   }
 
-  // If AuthContext has loaded, user is not authenticated, and we are on /auth page, show the form
-  if (!authContextLoading && !user && pathname === AUTH_ROUTE) {
-    // Proceed to render the form
-  } else if (pathname !== AUTH_ROUTE) {
-    // This case should ideally not be reached if AuthContext and middleware are working.
-    // It means we are on a non-auth page but somehow AuthForm is rendered.
-    // AuthContext should redirect to AUTH_ROUTE if user is null and on a protected page.
-    console.warn(`[AuthForm] Rendered on unexpected path ${pathname} without user. AuthContext should handle redirection.`);
-    return null; // Or a generic loading/error, but AuthContext should take precedence.
-  }
-
+  // Proceed to render the form if:
+  // 1. AuthContext is done loading (`!authContextLoading`) AND no user (`!user`)
+  // 2. Or, if somehow `authContextLoading` is false but `user` is still null (initial state before cookie check completes, but we want to show form)
+  // Basically, if we are not in a definitive "user is logged in" state or "initial page load" state, show the form.
+  // The route guard in AuthContext should handle redirecting away if needed.
+  
+  console.log(`[AuthForm] Rendering form. authContextLoading: ${authContextLoading}, user: ${user?.email}, pathname: ${pathname}`);
 
   const handleTabChange = (value: string) => {
     setAction(value as AuthAction);
@@ -174,7 +157,7 @@ export function AuthForm() {
     const currentRoleParam = searchParams.get('role');
     if (value === 'register' && currentRoleParam) {
       newUrl.searchParams.set('role', currentRoleParam);
-      setRole(currentRoleParam as CustomUser['role']); // Pre-fill role if in URL
+      setRole(currentRoleParam as CustomUser['role']);
     } else if (value === 'login') {
       newUrl.searchParams.delete('role');
     }
@@ -226,12 +209,8 @@ export function AuthForm() {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      id="login-email" 
-                      type="email" 
-                      placeholder="you@example.com" 
-                      value={email} 
-                      onChange={(e) => setEmail(e.target.value)} 
-                      required 
+                      id="login-email" type="email" placeholder="you@example.com" 
+                      value={email} onChange={(e) => setEmail(e.target.value)} required 
                       className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="email" 
                     />
@@ -242,12 +221,8 @@ export function AuthForm() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      id="login-password" 
-                      type={showPassword ? 'text' : 'password'} 
-                      placeholder="••••••••" 
-                      value={password} 
-                      onChange={(e) => setPassword(e.target.value)} 
-                      required 
+                      id="login-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" 
+                      value={password} onChange={(e) => setPassword(e.target.value)} required 
                       className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="current-password" 
                     />
@@ -283,11 +258,8 @@ export function AuthForm() {
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      id="register-fullname" 
-                      placeholder="John Doe" 
-                      value={fullName} 
-                      onChange={(e) => setFullName(e.target.value)} 
-                      required 
+                      id="register-fullname" placeholder="John Doe" value={fullName} 
+                      onChange={(e) => setFullName(e.target.value)} required 
                       className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="name" 
                     />
@@ -298,12 +270,8 @@ export function AuthForm() {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      id="register-email" 
-                      type="email" 
-                      placeholder="you@example.com" 
-                      value={email} 
-                      onChange={(e) => setEmail(e.target.value)} 
-                      required 
+                      id="register-email" type="email" placeholder="you@example.com" 
+                      value={email} onChange={(e) => setEmail(e.target.value)} required 
                       className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="email" 
                     />
@@ -314,12 +282,8 @@ export function AuthForm() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      id="register-password" 
-                      type={showPassword ? 'text' : 'password'} 
-                      placeholder="•••••••• (min. 6 characters)" 
-                      value={password} 
-                      onChange={(e) => setPassword(e.target.value)} 
-                      required 
+                      id="register-password" type={showPassword ? 'text' : 'password'} placeholder="•••••••• (min. 6 characters)" 
+                      value={password} onChange={(e) => setPassword(e.target.value)} required 
                       className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="new-password" 
                     />
@@ -333,12 +297,8 @@ export function AuthForm() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      id="confirm-password" 
-                      type={showConfirmPassword ? 'text' : 'password'} 
-                      placeholder="••••••••" 
-                      value={confirmPassword} 
-                      onChange={(e) => setConfirmPassword(e.target.value)} 
-                      required 
+                      id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} placeholder="••••••••" 
+                      value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required 
                       className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="new-password" 
                     />
