@@ -3,9 +3,9 @@
 
 export function isSebEnvironment(): boolean {
   if (typeof window !== 'undefined' && window.navigator) {
-    // Common SEB user agent substrings. This might need adjustment based on SEB versions.
     const sebKeywords = ['SEB', 'SafeExamBrowser'];
     const userAgent = window.navigator.userAgent;
+    // console.log('[SEB Utils] User Agent:', userAgent);
     return sebKeywords.some(keyword => userAgent.includes(keyword));
   }
   return false;
@@ -15,67 +15,99 @@ export function isOnline(): boolean {
   if (typeof window !== 'undefined' && window.navigator) {
     return window.navigator.onLine;
   }
-  return false; // Assume offline if not in browser
+  return true; // Default to true in non-browser env or if navigator is missing
 }
 
-// Basic attempt to detect if developer tools might be open.
-// This is NOT foolproof and can be easily bypassed. SEB's own protection is key.
 export function areDevToolsLikelyOpen(): boolean {
   if (typeof window !== 'undefined') {
-    const threshold = 160; // Arbitrary threshold
-    return (window.outerWidth - window.innerWidth > threshold) ||
-           (window.outerHeight - window.innerHeight > threshold);
+    const threshold = 170; // Increased threshold slightly
+    const devtoolsOpen = (window.outerWidth - window.innerWidth > threshold) ||
+                         (window.outerHeight - window.innerHeight > threshold);
+    if (devtoolsOpen) {
+      // console.warn('[SEB Utils] Developer tools likely open.');
+    }
+    // A more direct check that sometimes works, but can be bypassed
+    // const element = new Image();
+    // Object.defineProperty(element, 'id', {
+    //   get: () => {
+    //     // console.warn('[SEB Utils] Developer tools detected via getter.');
+    //     // This only works if devtools are open AND inspecting this specific object
+    //     return 'devtools';
+    //   },
+    // });
+    // console.log('%c', element); // Log the element to trigger the getter if inspected
+    return devtoolsOpen;
   }
   return false;
 }
 
 export function isWebDriverActive(): boolean {
   if (typeof window !== 'undefined' && window.navigator) {
-    return !!(navigator as any).webdriver;
-  }
-  return false;
-}
-
-
-export function attemptBlockShortcuts(event: KeyboardEvent): boolean {
-  // Block Ctrl, Alt, Cmd (Meta) combinations with common keys
-  // This is a basic attempt. SEB's configuration is more robust.
-  if (event.ctrlKey || event.altKey || event.metaKey) {
-    const forbiddenKeys = ['c', 'v', 'x', 'a', 'p', 's', 'f', 'r', 't', 'w', 'q', 'Tab', 'Escape'];
-    if (forbiddenKeys.includes(event.key) || (event.key >= 'F1' && event.key <= 'F12')) {
-      console.warn(`[SEB Utils] Blocked shortcut: ${event.key} with modifier`);
-      event.preventDefault();
-      return true;
+    const webDriverActive = !!(navigator as any).webdriver;
+    if (webDriverActive) {
+      // console.warn('[SEB Utils] WebDriver (automation) detected.');
     }
+    return webDriverActive;
   }
-  if ((event.key >= 'F1' && event.key <= 'F12') || event.key === 'Escape' || event.key === 'Tab') {
-      console.warn(`[SEB Utils] Blocked key: ${event.key}`);
-      event.preventDefault();
-      return true;
-  }
-
-  // For MCQ, typically only mouse input is allowed. This function is more for general blocking.
-  // If strict A-Z, arrow, mouse is needed, it's better handled by SEB config.
-  // This example allows basic typing.
-  const allowedRegex = /^[a-zA-Z0-9\s.,!?'"$%^&*()-_=+;:/<>@[\]{}`~]$/; // More permissive for general input
-  const specialAllowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Shift', ' '];
-
-  if (!specialAllowedKeys.includes(event.key) && !allowedRegex.test(event.key) && !event.ctrlKey && !event.altKey && !event.metaKey) {
-    // console.warn(`[SEB Utils] Blocked non-alphanumeric/special key: ${event.key}`);
-    // event.preventDefault(); // Commented out to allow numbers, symbols etc.
-    // return true;
-  }
-
   return false;
 }
+
+// This function attempts to block common shortcuts.
+// Key blocking is primarily SEB's responsibility via .seb config.
+export function attemptBlockShortcuts(event: KeyboardEvent): void {
+  const key = event.key.toLowerCase();
+  const ctrlOrMeta = event.ctrlKey || event.metaKey;
+
+  // Block common Ctrl/Cmd shortcuts
+  if (ctrlOrMeta && ['c', 'v', 'x', 'a', 'p', 's', 'f', 'r', 't', 'w', 'u', 'i', 'j', 'o'].includes(key)) {
+    console.warn(`[SEB Utils] Blocked Ctrl/Cmd+${key} shortcut`);
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  // Block function keys F1-F12
+  if (key.startsWith('f') && !isNaN(parseInt(key.substring(1)))) {
+    console.warn(`[SEB Utils] Blocked function key: ${event.key}`);
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  // Block Alt key combinations (e.g., Alt+Tab, Alt+F4)
+  if (event.altKey && (key === 'tab' || key === 'f4')) {
+    console.warn(`[SEB Utils] Blocked Alt+${key} shortcut`);
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  // Block specific keys like Escape, Tab (if not combined with Alt, which SEB should handle better)
+  if (['escape', 'tab'].includes(key) && !event.altKey) {
+    console.warn(`[SEB Utils] Blocked key: ${event.key}`);
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+}
+
 
 export function disableContextMenu(event: MouseEvent): void {
-  console.warn('[SEB Utils] Context menu blocked.');
+  // console.warn('[SEB Utils] Context menu (right-click) blocked.');
   event.preventDefault();
 }
 
 export function disableCopyPaste(event: ClipboardEvent): void {
-  console.warn(`[SEB Utils] ${event.type} event blocked.`);
+  // console.warn(`[SEB Utils] Clipboard event (${event.type}) blocked.`);
   event.preventDefault();
 }
-    
+
+// Additional checks (conceptual, reliability varies)
+export function isVMLikely(): boolean {
+  // This is very heuristic and unreliable. SEB's own VM detection is better.
+  const suspiciousConcurrency = typeof navigator !== 'undefined' && navigator.hardwareConcurrency && navigator.hardwareConcurrency < 2;
+  if (suspiciousConcurrency) {
+    // console.warn('[SEB Utils] Low hardware concurrency detected, possibly a VM.');
+  }
+  return suspiciousConcurrency;
+}

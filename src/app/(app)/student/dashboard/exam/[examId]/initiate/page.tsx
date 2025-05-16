@@ -5,7 +5,7 @@
 // For now, it will redirect or show a message.
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react'; // Added React import
 import { useRouter, useParams } from 'next/navigation';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

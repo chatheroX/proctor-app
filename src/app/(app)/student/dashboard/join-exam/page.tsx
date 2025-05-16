@@ -16,7 +16,7 @@ import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[exa
 import { useAuth } from '@/contexts/AuthContext';
 import { encryptData } from '@/lib/crypto-utils';
 
-const SEB_CONFIG_FILE_PATH = '/configs/exam-config.seb'; // Path within your public folder
+const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb'; // Relative path from domain root
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
@@ -71,12 +71,11 @@ export default function JoinExamPage() {
         return;
       }
       
-      // SEB Launch Logic
       const payload = {
         examId: exam.exam_id,
         studentId: studentUser.user_id,
         timestamp: Date.now(),
-        examCode: exam.exam_code // Include exam_code in token if needed by SEB pages for verification
+        examCode: exam.exam_code 
       };
       const encryptedToken = await encryptData(payload);
 
@@ -86,12 +85,11 @@ export default function JoinExamPage() {
         return;
       }
 
-      // Construct the SEB config URL with examId and token in the hash
-      // The StartURL inside exam-config.seb should be: YOUR_APP_DOMAIN/seb/exam-view
-      // /seb/exam-view will then read examId and token from its window.location.hash
-      const sebConfigPathWithParams = `${SEB_CONFIG_FILE_PATH}#examId=${exam.exam_id}&token=${encodeURIComponent(encryptedToken)}`;
-      const absoluteSebConfigUrl = `${window.location.origin}${sebConfigPathWithParams}`;
-      const sebLaunchUrl = `seb://open?configUrl=${encodeURIComponent(absoluteSebConfigUrl)}`;
+      // The StartURL inside exam-config.seb should be YOUR_APP_DOMAIN/seb/exam-view
+      // Parameters (examId, token) are passed in the hash of the configUrl.
+      // /seb/exam-view will read these from window.location.hash
+      const configUrlWithParams = `${window.location.origin}${SEB_CONFIG_FILE_RELATIVE_PATH}#examId=${exam.exam_id}&token=${encodeURIComponent(encryptedToken)}`;
+      const sebLaunchUrl = `seb://open?configUrl=${encodeURIComponent(configUrlWithParams)}`;
 
       console.log("[JoinExamPage] Attempting to launch SEB with URL:", sebLaunchUrl);
       toast({
@@ -99,24 +97,17 @@ export default function JoinExamPage() {
         description: "Safe Exam Browser should start. If not, ensure it's installed and configured.",
         duration: 10000,
       });
-
+      
       // Attempt to launch SEB
-      // Note: Direct window.location.href assignment to custom protocols like seb://
-      // can be blocked by browsers for security reasons if not triggered by a very direct user action.
-      // This is the standard way to attempt SEB launch, but success can depend on browser/OS settings.
       window.location.href = sebLaunchUrl;
 
-      // It's hard to know if SEB launched successfully from here.
-      // The user is expected to switch to SEB.
-      // Setting isLoading to false after a delay or assuming it worked.
-      setTimeout(() => setIsLoading(false), 3000);
-
+      setTimeout(() => setIsLoading(false), 5000); // Reset loading state after a delay
 
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setIsLoading(false);
     }
-  }, [examCode, supabase, toast, router, studentUser, authLoading]);
+  }, [examCode, supabase, toast, studentUser, authLoading]);
 
   return (
     <div className="space-y-6">
@@ -148,7 +139,7 @@ export default function JoinExamPage() {
               <AlertTitle className="font-semibold text-primary dark:text-blue-300">SEB Required</AlertTitle>
               <AlertDescription className="text-primary/90 dark:text-blue-400/90 text-sm">
                 This exam will open in Safe Exam Browser. Ensure SEB is installed and properly configured on your system.
-                You will be redirected automatically.
+                You will be redirected automatically. If SEB does not launch, please check your browser settings or SEB installation.
               </AlertDescription>
             </Alert>
           </CardContent>

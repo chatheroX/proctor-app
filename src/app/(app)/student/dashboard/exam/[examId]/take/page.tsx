@@ -1,10 +1,10 @@
 
 'use client';
 
-// This page is now effectively deprecated and replaced by /exam-session/[examId]/page.tsx
+// This page is now effectively deprecated and replaced by /seb/live-test/page.tsx
 // It's kept to prevent 404s if old links are accessed, but should redirect.
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react'; // Added React import
 import { useRouter, useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
@@ -19,9 +19,7 @@ export default function DeprecatedTakeExamPage() {
     // Redirecting to join exam might be more appropriate if they somehow landed here.
     console.warn(`[DeprecatedTakeExamPage] Accessed. Redirecting for examId: ${examId}. This page is deprecated.`);
     if (examId) {
-      // Perhaps redirect to the new initiate page for this examId, assuming it's still valid to start.
-      // Or better, to a general exam list or dashboard.
-      router.replace(`/student/dashboard/join-exam`); // Or /student/dashboard/overview
+      router.replace(`/student/dashboard/join-exam`); 
     } else {
       router.replace('/student/dashboard/join-exam');
     }

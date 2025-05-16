@@ -3,7 +3,7 @@
 // It will redirect to join exam page or dashboard if accessed directly.
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react'; // Added React import
 import { useRouter, useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
