@@ -146,13 +146,11 @@ export default function InitiateExamPage() {
       return;
     }
     
-    // WARNING: The encryption key in crypto-utils.ts is hardcoded and insecure.
-    // This is for demonstration only. Real security requires proper key management.
     const payload = { 
       examId: examDetails.exam_id, 
       studentId: studentUser.user_id, 
-      timestamp: Date.now(), // Used to make token somewhat time-sensitive
-      examCode: examDetails.exam_code // Include exam code for potential validation
+      timestamp: Date.now(), 
+      examCode: examDetails.exam_code 
     };
     const encryptedToken = await encryptData(payload);
 
@@ -162,6 +160,7 @@ export default function InitiateExamPage() {
         return;
     }
     
+    // The target page is now /exam-session/[examId]
     const examUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(encryptedToken)}`;
     console.log("[InitiatePage] Launching exam at URL:", examUrl);
     
@@ -190,16 +189,16 @@ export default function InitiateExamPage() {
 
   if (authLoading || (isLoading && !examDetails && !error)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-slate-300">Loading exam instructions...</p>
+        <p className="text-lg text-slate-500 dark:text-slate-300">Loading exam instructions...</p>
       </div>
     );
   }
 
   if (error && !examDetails && !performingChecks) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
            <CardHeader className="pt-8 pb-4">
             <ServerCrash className="h-16 w-16 text-destructive mx-auto mb-5" />
@@ -218,7 +217,7 @@ export default function InitiateExamPage() {
 
   if (!examDetails && !isLoading && !performingChecks) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
          <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
            <CardHeader className="pt-8 pb-4">
             <AlertTriangle className="h-16 w-16 text-muted-foreground mx-auto mb-5" />
@@ -235,9 +234,9 @@ export default function InitiateExamPage() {
     );
   }
   
-  if (!examDetails) { // Should be caught by above, but as a fallback
+  if (!examDetails) { 
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900">
         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
            <CardHeader className="pt-8 pb-4">
             <ServerCrash className="h-16 w-16 text-destructive mx-auto mb-5" />
@@ -260,7 +259,7 @@ export default function InitiateExamPage() {
     : "Timing not specified";
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900 p-4">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900 p-4">
       <Card className="w-full max-w-3xl shadow-xl glass-card">
         <CardHeader>
           <CardTitle className="text-3xl md:text-4xl font-bold text-foreground text-center">{examDetails.title}</CardTitle>
@@ -269,12 +268,12 @@ export default function InitiateExamPage() {
         
         {!performingChecks && !allChecksPassed && (
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-center space-x-2 text-muted-foreground bg-background/30 backdrop-blur-sm p-2 rounded-md text-sm">
+            <div className="flex items-center justify-center space-x-2 text-muted-foreground bg-background/30 dark:bg-slate-800/50 backdrop-blur-sm p-2 rounded-md text-sm">
               <Clock size={18} />
               <span>{examTimeInfo}</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 p-4 border border-border/20 rounded-lg bg-background/50 shadow-sm">
+            <div className="grid grid-cols-3 gap-4 p-4 border border-border/20 rounded-lg bg-background/50 dark:bg-slate-800/50 shadow-sm">
               <div className="text-center">
                 <p className="text-xl font-semibold text-foreground">{examDetails.duration}</p>
                 <p className="text-xs text-muted-foreground">MINUTES</p>
@@ -289,10 +288,10 @@ export default function InitiateExamPage() {
               </div>
             </div>
             
-            <Alert className="bg-primary/10 border-primary/30 text-primary-foreground">
+            <Alert className="bg-primary/10 border-primary/30 text-primary-foreground dark:text-primary dark:bg-primary/5 dark:border-primary/20">
               <ShieldAlert className="h-4 w-4 text-primary" />
               <AlertTitle className="text-primary font-semibold">Exam Integrity Notice</AlertTitle>
-              <AlertDescription className="text-primary/80">
+              <AlertDescription className="text-primary/80 dark:text-primary/70">
                 This exam is designed to be taken in a secure environment.
                 System compatibility checks will be performed before starting.
                 Ensure you have any required software installed and configured.
@@ -316,7 +315,7 @@ export default function InitiateExamPage() {
             <Progress value={overallProgress} className="w-full mb-6 h-3 bg-primary/20 [&>div]:bg-primary" />
             <ul className="space-y-3">
               {checks.map((check) => (
-                <li key={check.name} className="flex items-center justify-between p-3 bg-background/50 rounded-md border border-border/20">
+                <li key={check.name} className="flex items-center justify-between p-3 bg-background/50 dark:bg-slate-800/50 rounded-md border border-border/20">
                   <div className="flex items-center gap-3">
                     {getStatusIcon(check.status)}
                     <span className="font-medium text-foreground">{check.name}</span>
@@ -333,10 +332,10 @@ export default function InitiateExamPage() {
                 </Alert>
             )}
             {allChecksPassed && !error && (
-                <Alert variant="default" className="mt-6 bg-green-600/10 border-green-600/30 text-green-300">
+                <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300 dark:bg-green-500/5 dark:border-green-500/20">
                     <CheckCircle className="h-5 w-5 text-green-500" />
-                    <AlertTitle className="text-green-400 font-semibold">System Ready!</AlertTitle>
-                    <AlertDescription className="text-green-300/80">
+                    <AlertTitle className="text-green-600 dark:text-green-400 font-semibold">System Ready!</AlertTitle>
+                    <AlertDescription className="text-green-600/80 dark:text-green-300/80">
                         Your system is compatible. The exam will attempt to open in a new tab.
                         If it doesn&apos;t, please ensure pop-ups are allowed and use the "Launch Exam Manually" button.
                     </AlertDescription>
@@ -345,7 +344,7 @@ export default function InitiateExamPage() {
           </CardContent>
         )}
         
-        <CardFooter className="flex flex-col items-center gap-3 pt-6 border-t border-border/30">
+        <CardFooter className="flex flex-col items-center gap-3 pt-6 border-t border-border/30 dark:border-border/20">
            {!allChecksPassed && (
             <Button
               onClick={startSystemChecks}
@@ -372,3 +371,4 @@ export default function InitiateExamPage() {
     </div>
   );
 }
+
