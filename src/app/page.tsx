@@ -4,27 +4,27 @@ import { AppHeader } from '@/components/shared/header';
 import { AppFooter } from '@/components/shared/footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CircleCheckBig, BookOpenText, Users, Cpu, ArrowRight } from 'lucide-react'; // Changed CheckCircle to CircleCheckBig
+import { CircleCheckBig, BookOpenText, Users, Cpu, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 const features = [
   {
-    icon: <CircleCheckBig className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
+    icon: <CircleCheckBig className="h-10 w-10 text-primary mb-3" />,
     title: 'Secure Exam Environment',
     description: 'Tight integration with Safe Exam Browser (SEB) for cheat-proof online exams.',
   },
   {
-    icon: <BookOpenText className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
+    icon: <BookOpenText className="h-10 w-10 text-primary mb-3" />,
     title: 'Flexible Exam Management',
     description: 'Full CRUD for exams, diverse question upload options, and customizable settings.',
   },
   {
-    icon: <Users className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
+    icon: <Users className="h-10 w-10 text-primary mb-3" />,
     title: 'Role-Based Dashboards',
     description: 'Dedicated, intuitive dashboards for both students and teachers.',
   },
   {
-    icon: <Cpu className="h-10 w-10 text-primary mb-3" />, // Updated icon and size
+    icon: <Cpu className="h-10 w-10 text-primary mb-3" />,
     title: 'AI-Powered Assistance',
     description: 'Built-in AI assistant to help teachers generate diverse exam questions effortlessly.',
   },
@@ -36,7 +36,7 @@ export default function LandingPage() {
       <AppHeader />
       <main className="flex-grow">
         {/* Hero Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-b from-muted/30 via-background to-background">
+        <section className="py-20 md:py-28 bg-gradient-to-b from-muted/50 via-background to-background">
           <div className="container px-4 md:px-6">
             <div className="grid gap-8 md:grid-cols-1 md:items-center text-center justify-items-center">
               <div className="space-y-6 max-w-3xl mx-auto">
@@ -52,7 +52,7 @@ export default function LandingPage() {
                       Get Started as Teacher <ArrowRight className="ml-2 h-5 w-5" />
                     </Link>
                   </Button>
-                  <Button size="lg" variant="outline" className="shadow-sm hover:shadow-md transition-shadow duration-300 border-border hover:bg-primary/10 hover:text-primary" asChild>
+                  <Button size="lg" variant="outline" className="shadow-sm hover:shadow-md transition-shadow duration-300 border-border hover:bg-accent/10 hover:text-primary" asChild>
                     <Link href="/auth?action=register&role=student">
                       Join as Student
                     </Link>
@@ -64,7 +64,7 @@ export default function LandingPage() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="py-16 md:py-24 bg-muted/20">
+        <section id="features" className="py-16 md:py-24 bg-muted/30">
           <div className="container px-4 md:px-6">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-foreground">Why Choose ZenTest?</h2>
@@ -76,9 +76,8 @@ export default function LandingPage() {
               {features.map((feature, index) => (
                 <Card key={index} className="modern-card p-4 text-center bg-card hover:border-primary/30">
                   <CardHeader className="items-center pt-4 pb-3">
-                     {/* Using React.cloneElement to adjust icon size within the card */}
-                    {React.cloneElement(feature.icon, { className: "h-10 w-10 text-primary mb-3" })}
-                    <CardTitle className="text-lg font-semibold text-card-foreground">{feature.title}</CardTitle>
+                     {React.cloneElement(feature.icon, { className: "h-10 w-10 text-primary mb-3" })}
+                    <CardTitle className="mt-2 text-lg font-semibold text-card-foreground">{feature.title}</CardTitle>
                   </CardHeader>
                   <CardContent className="text-muted-foreground text-sm pb-4">
                     <p>{feature.description}</p>
@@ -110,3 +109,5 @@ export default function LandingPage() {
     </div>
   );
 }
+
+    

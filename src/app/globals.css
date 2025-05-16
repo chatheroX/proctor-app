@@ -10,7 +10,7 @@ body {
 
 @layer base {
   :root {
-    /* Modern Light Theme - examam.io inspired (Neutral White + Teal Accent) */
+    /* Modern Light Theme - Blue Accent (#2B70E0) */
     --background: 0 0% 100%; /* Primary page background - white */
     --foreground: 220 15% 25%; /* Primary text color - dark grey */
 
@@ -20,9 +20,9 @@ body {
     --popover: 0 0% 100%;
     --popover-foreground: 220 15% 20%;
 
-    /* Primary Teal Accent (from user image) */
-    --primary: 170 50% 55%; /* A modern, soft teal */
-    --primary-foreground: 0 0% 100%; /* White text on primary teal elements */
+    /* Primary Blue Accent (#2B70E0 -> HSL: 217, 76%, 52%) */
+    --primary: 217 76% 52%;
+    --primary-foreground: 0 0% 100%; /* White text on primary blue elements */
     
     /* Secondary elements */
     --secondary: 220 15% 93.5%; /* Light grey for secondary backgrounds */
@@ -32,8 +32,8 @@ body {
     --muted: 220 15% 96.5%; /* Lighter grey for muted backgrounds/borders */
     --muted-foreground: 220 10% 45%; /* Softer muted text */
 
-    /* General Accent (can be same as primary or a complementary color) */
-    --accent: 210 60% 50%; /* A complementary softer blue */
+    /* General Accent (lighter blue for harmony) */
+    --accent: 217 70% 70%;
     --accent-foreground: 0 0% 100%; /* White text on accent elements */
 
     --destructive: 0 70% 55%; /* A clear red */
@@ -41,28 +41,27 @@ body {
 
     --border: 220 15% 88%; /* Subtle borders - light grey */
     --input: 220 15% 93%; /* Input field background */
-    --ring: 170 50% 60%; /* Focus ring - slightly lighter teal */
+    --ring: 217 76% 55%; /* Focus ring - primary blue */
     
     --radius: 0.75rem; /* Softer, more rounded corners (12px) */
 
-    /* Gradient Button Colors */
-    --gradient-primary-start: 170 50% 55%; /* Same as primary teal */
-    --gradient-primary-end: 170 60% 65%; /* Slightly lighter/different hue teal */
+    /* Gradient Button Colors (Blue Theme) */
+    --gradient-primary-start: 217 76% 52%;
+    --gradient-primary-end: 217 70% 60%; 
     --gradient-destructive-start: 0 70% 55%;
     --gradient-destructive-end: 0 80% 65%;
-    --gradient-positive-start: 140 60% 45%; /* Greenish */
+    --gradient-positive-start: 140 60% 45%;
     --gradient-positive-end: 150 70% 55%;
 
-
-    /* Sidebar specific theme variables - examam.io inspired */
+    /* Sidebar specific theme variables - Blue Theme */
     --sidebar-background: 0 0% 98%; /* Very light, almost white */
     --sidebar-foreground: 220 15% 35%; /* Text in sidebar */
-    --sidebar-primary: 170 50% 55%; /* Active item background (teal) */
+    --sidebar-primary: 217 76% 52%; /* Active item background (blue) */
     --sidebar-primary-foreground: 0 0% 100%; /* Active item text (white) */
-    --sidebar-accent: 220 15% 92%; /* Hover background for sidebar items (light grey) */
-    --sidebar-accent-foreground: 220 15% 25%; /* Hover text color */
+    --sidebar-accent: 217 76% 95%; /* Hover background for sidebar items (very light blue) */
+    --sidebar-accent-foreground: 217 76% 30%; /* Hover text color (darker blue) */
     --sidebar-border: 220 15% 88%; /* Sidebar border */
-    --sidebar-ring: 170 50% 60%; /* Focus ring for sidebar items */
+    --sidebar-ring: 217 76% 55%; /* Focus ring for sidebar items */
     --sidebar-group-text: 220 10% 55%; /* "MAIN MENU" text color */
   }
 
@@ -76,8 +75,9 @@ body {
     --popover: 220 15% 15%;
     --popover-foreground: 220 10% 92%;
 
-    --primary: 170 50% 60%; /* Lighter teal for dark mode */
-    --primary-foreground: 0 0% 10%; /* Darker text for primary buttons */
+    /* Primary Blue Accent for Dark Mode */
+    --primary: 217 76% 60%; /* Slightly lighter blue for dark mode */
+    --primary-foreground: 0 0% 100%; /* White text */
     
     --secondary: 220 15% 25%; 
     --secondary-foreground: 220 10% 85%;
@@ -85,33 +85,34 @@ body {
     --muted: 220 15% 22%;
     --muted-foreground: 220 10% 60%;
 
-    --accent: 210 60% 55%; /* Dark mode soft blue accent */
-    --accent-foreground: 0 0% 10%;
+    /* General Accent for Dark Mode */
+    --accent: 217 70% 65%; 
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 65% 60%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 220 15% 30%; 
     --input: 220 15% 17%;
-    --ring: 170 50% 65%;
+    --ring: 217 76% 65%; /* Lighter blue ring for dark mode */
     
-    /* Gradient Button Colors Dark */
-    --gradient-primary-start: 170 50% 60%;
-    --gradient-primary-end: 170 60% 70%;
+    /* Gradient Button Colors Dark (Blue Theme) */
+    --gradient-primary-start: 217 76% 60%;
+    --gradient-primary-end: 217 70% 68%;
     --gradient-destructive-start: 0 65% 60%;
     --gradient-destructive-end: 0 75% 70%;
     --gradient-positive-start: 140 50% 50%;
     --gradient-positive-end: 150 60% 60%;
 
-    /* Sidebar Dark Theme */
+    /* Sidebar Dark Theme - Blue Theme */
     --sidebar-background: 220 15% 15%; /* Darker sidebar */
     --sidebar-foreground: 220 10% 88%;
-    --sidebar-primary: 170 50% 60%; /* Active item teal */
+    --sidebar-primary: 217 76% 60%; /* Active item blue */
     --sidebar-primary-foreground: 0 0% 100%; /* White text on active */
-    --sidebar-accent: 220 15% 25%; /* Hover background */
-    --sidebar-accent-foreground: 220 10% 90%;
+    --sidebar-accent: 217 76% 25%; /* Hover background (darker subtle blue) */
+    --sidebar-accent-foreground: 217 76% 85%; /* Lighter blue text on hover */
     --sidebar-border: 220 15% 28%;
-    --sidebar-ring: 170 50% 70%;
+    --sidebar-ring: 217 76% 70%;
     --sidebar-group-text: 220 10% 65%;
   }
 }
@@ -136,12 +137,12 @@ body {
   @apply bg-card text-card-foreground rounded-lg border border-border/60 shadow-lg transition-shadow hover:shadow-xl dark:border-border/40;
 }
 
-/* Primary Button Style (Solid Primary Color) - examam.io inspired */
+/* Primary Button Style (Solid Primary Color) - Blue Theme */
 .btn-primary-solid {
-  @apply bg-primary text-primary-foreground hover:bg-primary/80 focus-visible:ring-ring shadow-md hover:shadow-lg transition-all duration-200 ease-in-out;
+  @apply bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring shadow-md hover:shadow-lg transition-all duration-200 ease-in-out;
 }
 
-/* New Gradient Button Style */
+/* New Gradient Button Style - Blue Theme */
 .btn-gradient {
   @apply text-primary-foreground font-semibold bg-gradient-to-r from-[hsl(var(--gradient-primary-start))] to-[hsl(var(--gradient-primary-end))] hover:from-[hsl(var(--gradient-primary-start),0.9)] hover:to-[hsl(var(--gradient-primary-end),0.9)] focus-visible:ring-ring shadow-md hover:shadow-lg transition-all duration-300 ease-in-out transform hover:-translate-y-0.5 active:translate-y-0;
 }
@@ -155,23 +156,21 @@ body {
   @apply border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:border-gray-400 dark:hover:border-gray-500;
 }
 
-
-/* Sidebar specific styling for active items - examam.io inspired */
+/* Sidebar specific styling for active items and hover - Blue Theme */
 [data-sidebar="menu-button"][data-active="true"] {
    @apply bg-sidebar-primary text-sidebar-primary-foreground shadow-md hover:bg-sidebar-primary/90;
 }
 [data-sidebar="menu-button"]:not([data-active="true"]):hover {
-  @apply bg-sidebar-accent text-sidebar-accent-foreground;
+  @apply bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_0_15px_0_hsl(var(--primary)/0.5)]; /* Glowing hover effect */
 }
 
-/* Glassmorphism Card Style */
+/* Glassmorphism Card Style - Enhanced for more depth */
 .glass-card {
-  @apply bg-card/60 dark:bg-card/70 backdrop-blur-lg border border-white/20 dark:border-white/10 shadow-2xl rounded-xl;
+  @apply bg-card/60 dark:bg-card/70 backdrop-blur-lg border border-white/30 dark:border-white/10 shadow-2xl rounded-xl transition-all duration-300 hover:shadow-primary/20;
 }
 .sidebar-glass {
-   @apply bg-[hsl(var(--sidebar-background)/0.6)] dark:bg-[hsl(var(--sidebar-background)/0.7)] backdrop-blur-xl border-r border-sidebar-border/30 dark:border-sidebar-border/20 shadow-lg;
+   @apply bg-[hsl(var(--sidebar-background)/0.7)] dark:bg-[hsl(var(--sidebar-background)/0.8)] backdrop-blur-lg border-r border-sidebar-border/50 dark:border-sidebar-border/30 shadow-xl;
 }
-
 
 /* Ensure body uses light mode by default if html.dark is not present */
 html:not(.dark) {
@@ -180,3 +179,5 @@ html:not(.dark) {
 html.dark {
   color-scheme: dark;
 }
+
+    

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Eye, EyeOff, User, Mail, Lock, Loader2, Briefcase, ArrowRight, ExternalLink } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Lock, Loader2, Briefcase, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CustomUser } from '@/types/supabase';
@@ -19,7 +19,6 @@ type AuthAction = 'login' | 'register';
 const AUTH_ROUTE = '/auth';
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE;
 
 
 export function AuthForm() {
@@ -39,10 +38,10 @@ export function AuthForm() {
   const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // For form submission loading state
 
 
-  const resetFormFields = useCallback(() => {
+  const resetFormFields = React.useCallback(() => {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
@@ -54,13 +53,17 @@ export function AuthForm() {
 
   useEffect(() => {
     const actionFromParams = (searchParams.get('action') as AuthAction) || 'login';
+    const roleFromParams = searchParams.get('role') as CustomUser['role'] || '';
+    
     if (actionFromParams !== action) {
       resetFormFields();
       setAction(actionFromParams);
     }
-  }, [searchParams, action, resetFormFields]);
-
-
+    if (actionFromParams === 'register' && roleFromParams && roleFromParams !== role) {
+        setRole(roleFromParams);
+    }
+  }, [searchParams, action, role, resetFormFields]);
+  
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -75,6 +78,7 @@ export function AuthForm() {
     }
 
     let result: { success: boolean; error?: string; user?: CustomUser | null };
+    let targetDashboard = STUDENT_DASHBOARD_ROUTE; // Default
     
     if (action === 'register') {
       if (!trimmedFullName) {
@@ -102,6 +106,8 @@ export function AuthForm() {
       result = await signUp(trimmedEmail, password, trimmedFullName, selectedRole);
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
+        targetDashboard = result.user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
+        // AuthContext will handle the redirect
       } else {
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
@@ -110,27 +116,32 @@ export function AuthForm() {
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
+        targetDashboard = result.user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
+        // AuthContext will handle the redirect
       } else {
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
       }
     }
     setIsSubmitting(false);
+    // No direct router.push here; AuthContext's useEffect handles redirection based on user state change
   };
   
+  // Show full page loader ONLY if AuthContext is loading AND we are on /auth path AND user state isn't yet determined
   if (authContextLoading && pathname === AUTH_ROUTE && user === null) { 
     console.log('[AuthForm] AuthContext loading, user is null, on /auth. Showing full page loader.');
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] py-12">
+      <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
 
+  // If user is authenticated and somehow lands on /auth page, show finalizing message. AuthContext should redirect.
   if (user && !authContextLoading && pathname === AUTH_ROUTE) {
     console.log('[AuthForm] User authenticated, on /auth. AuthContext should redirect. Showing finalizing message.');
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] py-12">
-        <Card className="p-6 rounded-lg shadow-md bg-card text-center modern-card">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
+        <Card className="p-6 glass-card text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-3"/>
           <p className="text-md font-medium text-foreground">Finalizing session & redirecting to dashboard...</p>
           <p className="mt-1 text-xs text-muted-foreground">User: {user.email}</p>
@@ -144,24 +155,30 @@ export function AuthForm() {
     resetFormFields();
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('action', value);
+    // Preserve role param if switching to register tab
+    if (value === 'register' && searchParams.get('role')) {
+      newUrl.searchParams.set('role', searchParams.get('role')!);
+    } else if (value === 'login') {
+      newUrl.searchParams.delete('role'); // Remove role param for login tab
+    }
     router.replace(newUrl.toString(), { scroll: false });
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 px-4">
-      <Card className="w-full max-w-md modern-card shadow-xl border-border/50">
+    <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 px-4 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
+      <Card className="w-full max-w-md glass-card shadow-xl border-border/50">
         <Tabs value={action} onValueChange={handleTabChange} className="w-full">
           <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-3">
-            <TabsList className="grid w-full grid-cols-2 bg-muted p-1 rounded-md">
+            <TabsList className="grid w-full grid-cols-2 bg-muted/70 dark:bg-muted/40 p-1 rounded-md backdrop-blur-sm">
               <TabsTrigger 
                 value="login" 
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary data-[state=inactive]:hover:bg-primary/10 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary data-[state=inactive]:hover:bg-primary/10 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
               >
                 Login
               </TabsTrigger>
               <TabsTrigger 
                 value="register" 
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary data-[state=inactive]:hover:bg-primary/10 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=active]:hover:bg-primary/90 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-primary data-[state=inactive]:hover:bg-primary/10 rounded-[0.3rem] py-2 text-sm font-medium transition-all"
               >
                 Register
               </TabsTrigger>
@@ -186,7 +203,7 @@ export function AuthForm() {
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
                       required 
-                      className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50" 
+                      className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="email" 
                     />
                   </div>
@@ -202,7 +219,7 @@ export function AuthForm() {
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
                       required 
-                      className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50" 
+                      className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="current-password" 
                     />
                     <Button type="button" variant="ghost" size="icon" className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
@@ -242,7 +259,7 @@ export function AuthForm() {
                       value={fullName} 
                       onChange={(e) => setFullName(e.target.value)} 
                       required 
-                      className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50" 
+                      className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="name" 
                     />
                   </div>
@@ -258,7 +275,7 @@ export function AuthForm() {
                       value={email} 
                       onChange={(e) => setEmail(e.target.value)} 
                       required 
-                      className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50" 
+                      className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="email" 
                     />
                   </div>
@@ -274,7 +291,7 @@ export function AuthForm() {
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
                       required 
-                      className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50" 
+                      className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="new-password" 
                     />
                      <Button type="button" variant="ghost" size="icon" className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
@@ -293,7 +310,7 @@ export function AuthForm() {
                       value={confirmPassword} 
                       onChange={(e) => setConfirmPassword(e.target.value)} 
                       required 
-                      className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50" 
+                      className="pl-10 pr-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm" 
                       autoComplete="new-password" 
                     />
                     <Button type="button" variant="ghost" size="icon" className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide password" : "Show password"}>
@@ -306,7 +323,7 @@ export function AuthForm() {
                   <div className="relative">
                      <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                     <Select value={role || ''} onValueChange={(value) => setRole(value as CustomUser['role'])} required>
-                      <SelectTrigger id="register-role" className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50">
+                      <SelectTrigger id="register-role" className="pl-10 py-2.5 text-sm rounded-md border-border/70 focus:border-primary focus:ring-primary bg-background/70 dark:bg-slate-800/50 backdrop-blur-sm">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border shadow-lg rounded-md">
@@ -337,3 +354,5 @@ export function AuthForm() {
     </div>
   );
 }
+
+    

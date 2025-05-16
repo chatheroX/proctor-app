@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Loader2, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import logoAsset from '../../../logo.png';
+import logoAsset from '../../../logo.png'; // Import the logo asset
 
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
@@ -22,10 +22,10 @@ export function AppHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/30 bg-background/80 dark:bg-slate-900/80 backdrop-blur-lg shadow-sm">
+    <header className="sticky top-0 z-50 w-full border-b border-border/30 bg-background/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm">
       <div className="container flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center space-x-2 group">
-          <Image src={logoAsset} alt="ZenTest Logo" width={100} height={28} priority className="h-7 w-auto" />
+        <Link href="/" className="flex items-center gap-2 group">
+          <Image src={logoAsset} alt="ZenTest Logo" width={114} height={32} priority className="h-8 w-auto" />
         </Link>
         <nav className="flex items-center space-x-1 sm:space-x-2">
           {isLoading ? (
@@ -67,3 +67,5 @@ export function AppHeader() {
     </header>
   );
 }
+
+    
