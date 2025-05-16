@@ -12,7 +12,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Exam } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
+import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page'; // Ensure correct path
 import { format } from 'date-fns';
 import { encryptData } from '@/lib/crypto-utils';
 
@@ -84,7 +84,7 @@ export default function InitiateExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase]); // Removed toast from here as it's not directly used
+  }, [examId, supabase]);
 
   useEffect(() => {
     if (examId && !authLoading && supabase) {
@@ -94,27 +94,27 @@ export default function InitiateExamPage() {
     }
   }, [examId, authLoading, supabase, fetchExamData, examDetails]);
 
-  const launchExamInNewTab = useCallback(async () => {
-    console.log("[InitiatePage] launchExamInNewTab called. Conditions:", {
-      allChecksPassed, // Will be true if this is called via the new useEffect
+  const performLaunch = useCallback(async () => {
+    console.log("[InitiatePage] performLaunch called. Conditions:", {
+      allChecksPassed,
       examDetailsExists: !!examDetails,
       studentUserIdExists: !!studentUser?.user_id,
       examCodeFromDetails: examDetails?.exam_code,
     });
 
-    if (!allChecksPassed || !examDetails || !studentUser?.user_id) {
+    if (!examDetails || !studentUser?.user_id) {
       const reasons = [];
-      if (!allChecksPassed) reasons.push("system checks not passed");
       if (!examDetails) reasons.push("exam details are missing");
       if (!studentUser?.user_id) reasons.push("user authentication is missing");
       
       const description = reasons.length > 0 
         ? `Cannot launch because: ${reasons.join(', ')}.`
-        : "System checks not passed or exam/user data missing.";
+        : "Exam/user data missing.";
       
-      console.error("[InitiatePage] Cannot Launch Exam:", description);
+      console.error("[InitiatePage] Cannot Launch Exam (in performLaunch):", description);
       toast({ title: "Cannot Launch", description, variant: "destructive" });
-      return;
+      setError(description); // Set page error
+      return false; // Indicate launch failure
     }
     
     const payload = { 
@@ -128,7 +128,7 @@ export default function InitiateExamPage() {
     if (!encryptedToken) {
         toast({ title: "Encryption Error", description: "Could not generate secure exam token.", variant: "destructive" });
         setError("Failed to create a secure exam session token. Please try again.");
-        return;
+        return false; // Indicate launch failure
     }
     
     const examUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(encryptedToken)}`;
@@ -137,22 +137,24 @@ export default function InitiateExamPage() {
     const newWindow = window.open(examUrl, '_blank', 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes');
 
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-      const popupErrorMsg = "Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again.";
+      const popupErrorMsg = "Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again using the 'Launch Exam' button if available.";
       console.error("[InitiatePage] Pop-up blocked or failed to open:", popupErrorMsg);
-      setError(popupErrorMsg);
+      setError(popupErrorMsg); // Set error to display to user
       toast({
           title: "Pop-up Blocked?",
-          description: "Could not open exam. Please disable pop-up blocker or use the manual launch button.",
+          description: "Could not open exam automatically. If a 'Launch Exam' button appears, please use it. Otherwise, check pop-up blocker.",
           variant: "destructive",
           duration: 7000,
       });
+      return false; // Indicate launch failure
     } else {
       console.log("[InitiatePage] Exam launched successfully in new tab.");
       toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
+      return true; // Indicate launch success
     }
-  }, [allChecksPassed, examDetails, studentUser, toast]); // studentUser instead of studentUser?.user_id for stability
+  }, [examDetails, studentUser, toast, allChecksPassed]); // Added allChecksPassed here just for completeness, though the outer function should gate based on it too
 
-  const startSystemChecks = useCallback(async () => {
+  const startSystemChecksAndAttemptLaunch = useCallback(async () => {
     if (!studentUser?.user_id) {
       toast({ title: "Authentication Error", description: "Student details not found.", variant: "destructive" });
       setError("Student details not found. Please re-login.");
@@ -172,11 +174,12 @@ export default function InitiateExamPage() {
     }
 
     setPerformingChecks(true);
-    setError(null);
-    setAllChecksPassed(false); // Reset before starting checks
+    setError(null); // Clear previous errors
+    setAllChecksPassed(false);
     setChecks(initialChecks.map(c => ({ ...c, status: 'pending', details: undefined })));
     setOverallProgress(0);
 
+    let checksSuccessful = true;
     for (let i = 0; i < initialChecks.length; i++) {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); 
@@ -187,24 +190,22 @@ export default function InitiateExamPage() {
       if (!isSuccess) {
         setError(`System check failed: ${initialChecks[i].name}. Cannot proceed with the exam.`);
         setPerformingChecks(false);
-        // Do not set allChecksPassed to false here, it's already false
-        return;
+        checksSuccessful = false;
+        break; 
       }
     }
-    // All checks passed successfully
-    setAllChecksPassed(true);
+    
     setPerformingChecks(false);
-    toast({ title: "System Checks Passed!", description: "You can now proceed to the exam.", variant: "default" });
-    // Removed direct call to launchExamInNewTab()
-  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast]);
 
-  // New useEffect to launch exam when allChecksPassed becomes true
-  useEffect(() => {
-    if (allChecksPassed && !performingChecks && !error && examDetails && studentUser?.user_id) {
-      console.log("[InitiatePage] useEffect triggered: allChecksPassed is true. Attempting to launch exam.");
-      launchExamInNewTab();
+    if (checksSuccessful) {
+      setAllChecksPassed(true);
+      toast({ title: "System Checks Passed!", description: "Attempting to launch the exam.", variant: "default" });
+      await performLaunch(); // Attempt to launch immediately after successful checks
+    } else {
+      // Error already set if a check failed
+      setAllChecksPassed(false);
     }
-  }, [allChecksPassed, performingChecks, error, examDetails, studentUser, launchExamInNewTab]);
+  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast, performLaunch]);
 
 
   const getStatusIcon = (status: CheckStatus['status']) => {
@@ -352,20 +353,20 @@ export default function InitiateExamPage() {
                 </li>
               ))}
             </ul>
-             {error && !allChecksPassed && (
+             {error && !allChecksPassed && ( // Show error if checks failed OR if launch failed after successful checks
                 <Alert variant="destructive" className="mt-4">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>System Check Failed</AlertTitle>
+                    <AlertTitle>{error.includes("System check failed") ? "System Check Failed" : "Launch Error"}</AlertTitle>
                     <AlertDescription>{error}</AlertDescription>
                 </Alert>
             )}
-            {allChecksPassed && !error && (
+            {allChecksPassed && !error && ( // Only show this green alert if checks passed AND there was no subsequent launch error
                 <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300 dark:bg-green-500/5 dark:border-green-500/20">
                     <CheckCircle className="h-5 w-5 text-green-500" />
                     <AlertTitle className="text-green-600 dark:text-green-400 font-semibold">System Ready!</AlertTitle>
                     <AlertDescription className="text-green-600/80 dark:text-green-300/80">
-                        Your system is compatible. The exam will attempt to open in a new tab.
-                        If it doesn&apos;t, please ensure pop-ups are allowed and use the "Launch Exam Manually" button.
+                        Your system is compatible. The exam should have opened in a new tab.
+                        If it didn&apos;t, please ensure pop-ups are allowed and use the "Launch Exam Manually" button below if available.
                     </AlertDescription>
                 </Alert>
             )}
@@ -373,22 +374,22 @@ export default function InitiateExamPage() {
         )}
         
         <CardFooter className="flex flex-col items-center gap-3 pt-6 border-t border-border/30 dark:border-border/20">
-           {!allChecksPassed && (
+           {!allChecksPassed && ( // Primary button to start checks and attempt launch
             <Button
-              onClick={startSystemChecks}
+              onClick={startSystemChecksAndAttemptLaunch}
               className="w-full btn-gradient py-3 text-lg rounded-md shadow-lg"
               disabled={performingChecks || !canStartTestProcess || authLoading || !studentUser || isLoading}
             >
               {performingChecks ? <Loader2 className="animate-spin mr-2"/> : <PlayCircle className="mr-2" />}
-              {performingChecks ? 'Running Checks...' : (canStartTestProcess ? 'Start System Checks & Proceed' : `Exam is ${effectiveStatus?.toLowerCase() || 'unavailable'}`)}
+              {performingChecks ? 'Running Checks...' : (canStartTestProcess ? 'Start System Checks & Launch Exam' : `Exam is ${effectiveStatus?.toLowerCase() || 'unavailable'}`)}
             </Button>
            )}
-           {allChecksPassed && !error && (
+           {allChecksPassed && ( // Show manual launch button if checks passed, useful if auto-launch failed
              <Button
-              onClick={launchExamInNewTab}
+              onClick={performLaunch} // Manual launch attempt
               className="w-full btn-gradient-positive py-3 text-lg rounded-md shadow-lg"
             >
-              <ExternalLink className="mr-2" /> Launch Exam
+              <ExternalLink className="mr-2" /> Launch Exam Manually
             </Button>
            )}
             <Button variant="outline" onClick={() => router.push('/student/dashboard/join-exam')} className="w-full btn-outline-subtle">
@@ -399,3 +400,4 @@ export default function InitiateExamPage() {
     </div>
   );
 }
+
