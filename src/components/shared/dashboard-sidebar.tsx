@@ -102,7 +102,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
       <SidebarHeader className="p-3 border-b border-sidebar-border/60 h-16 flex items-center">
         <div className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            <Image src={logoAsset} alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
+            <Image src={logoAsset} alt="ZenTest Logo" width={114} height={32} className="h-8 w-auto" />
           </Link>
            <SidebarTrigger className="text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:hidden" />
            <SidebarTrigger className="text-muted-foreground hover:text-foreground hidden group-data-[collapsible=icon]:flex" />

@@ -11,12 +11,16 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from '@/components/ui/progress';
-import { Loader2, AlertTriangle, ServerCrash, Clock, Check, X, Bookmark, ChevronLeft, ChevronRight, ShieldCheck, LogOut } from 'lucide-react';
+import { Loader2, AlertTriangle, ServerCrash, Clock, Check, X, Bookmark, ChevronLeft, ChevronRight, ShieldCheck, LogOut, Menu, GripVertical, Palette, Type } from 'lucide-react';
 import { useActivityMonitor, type FlaggedEvent } from '@/hooks/use-activity-monitor';
 import { useToast } from '@/hooks/use-toast';
 import type { Question, Exam, QuestionOption } from '@/types/supabase';
 import { cn } from "@/lib/utils";
-import logoAsset from '../../../logo.png'; // Assuming logo.png is at the project root
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import logoAsset from '../../../logo.png';
 
 interface ExamTakingInterfaceProps {
   examDetails: Exam | null;
@@ -24,17 +28,17 @@ interface ExamTakingInterfaceProps {
   initialAnswers?: Record<string, string>;
   parentIsLoading: boolean;
   examLoadingError: string | null;
-  persistentError: string | null;
-  cantStartReason: string | null;
+  persistentError: string | null; // Error that occurred but examDetails might still exist
+  cantStartReason: string | null; // Specific reason why exam cannot be started (e.g., "No questions")
   onAnswerChange: (questionId: string, optionId: string) => void;
   onSubmitExam: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   onTimeUp: (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => Promise<void>;
   isDemoMode?: boolean;
-  userIdForActivityMonitor: string;
+  userIdForActivityMonitor: string; // student_user_id or teacher_user_id for demo
   studentName?: string | null;
-  studentRollNumber?: string | null; // This is user_id (6-char ID)
+  studentRollNumber?: string | null; // user_id
   studentAvatarUrl?: string | null;
-  examStarted: boolean;
+  examStarted: boolean; // Prop to indicate if the exam session has been activated by parent
 }
 
 export function ExamTakingInterface({
@@ -55,7 +59,7 @@ export function ExamTakingInterface({
   studentAvatarUrl,
   examStarted,
 }: ExamTakingInterfaceProps) {
-  const router = useRouter();
+  const router = useRouter(); // Added import
   const { toast } = useToast();
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -63,11 +67,15 @@ export function ExamTakingInterface({
   const [examFinished, setExamFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(examDetails?.duration ? examDetails.duration * 60 : 0);
+
   const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
   const [visitedQuestions, setVisitedQuestions] = useState<Record<string, boolean>>({});
 
   const onSubmitExamRef = useRef(parentOnSubmitExam);
   const onTimeUpRef = useRef(parentOnTimeUp);
+
+  const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
+  const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
 
   useEffect(() => { onSubmitExamRef.current = parentOnSubmitExam; }, [parentOnSubmitExam]);
   useEffect(() => { onTimeUpRef.current = parentOnTimeUp; }, [parentOnTimeUp]);
@@ -78,29 +86,25 @@ export function ExamTakingInterface({
     }
   }, [examDetails?.duration]);
 
-  const currentQuestion = useMemo(() => (questions && questions.length > currentQuestionIndex) ? questions[currentQuestionIndex] : null, [questions, currentQuestionIndex]);
-  
   useEffect(() => {
     if (currentQuestion?.id && !visitedQuestions[currentQuestion.id]) {
       setVisitedQuestions(prev => ({ ...prev, [currentQuestion.id!]: true }));
     }
-  }, [currentQuestion?.id, visitedQuestions]);
-
-  const allowBacktracking = useMemo(() => examDetails?.allow_backtracking === true, [examDetails?.allow_backtracking]);
+  }, [currentQuestion, visitedQuestions]); // Added currentQuestion to deps
 
   const handleInternalTimeUp = useCallback(async () => {
     if (examFinished) return;
     toast({ title: isDemoMode ? "Demo Time's Up!" : "Time's Up!", description: isDemoMode ? "The demo exam duration has ended." : "Auto-submitting your exam.", variant: isDemoMode ? "default" : "destructive" });
     setIsSubmitting(true);
     try {
-      await onTimeUpRef.current(answers, activityFlags);
+      await onTimeUpRef.current(answers, activityFlags); // activityFlags will come from useActivityMonitor
       setExamFinished(true);
     } catch (e: any) {
       toast({ title: "Auto-Submission Error", description: e.message || "Could not auto-submit exam.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
-  }, [answers, isDemoMode, toast, examFinished, onTimeUpRef]); // activityFlags will be from useActivityMonitor
+  }, [answers, isDemoMode, toast, examFinished, onTimeUpRef]); // Removed activityFlags, setIsSubmitting, setExamFinished setters
 
   useEffect(() => {
     if (examFinished || timeLeftSeconds <= 0 || !examDetails || !examStarted) {
@@ -128,7 +132,7 @@ export function ExamTakingInterface({
   const [activityFlags, setActivityFlags] = useState<FlaggedEvent[]>([]);
   const handleFlagEvent = useCallback((event: FlaggedEvent) => {
     setActivityFlags((prev) => [...prev, event]);
-  }, []);
+  }, []); // Removed setActivityFlags from deps
 
   useActivityMonitor({
     studentId: userIdForActivityMonitor,
@@ -142,13 +146,13 @@ export function ExamTakingInterface({
     if (onAnswerChange) {
         onAnswerChange(questionId, optionId);
     }
-  }, [onAnswerChange]);
+  }, [onAnswerChange]); // Removed setAnswers from deps
 
   const handleNextQuestion = useCallback(() => {
     if (questions && currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
     }
-  }, [currentQuestionIndex, questions]);
+  }, [currentQuestionIndex, questions]); // Removed setCurrentQuestionIndex from deps
 
   const handlePreviousQuestion = useCallback(() => {
     if (allowBacktracking && currentQuestionIndex > 0) {
@@ -156,7 +160,7 @@ export function ExamTakingInterface({
     } else if (!allowBacktracking) {
       toast({ description: "Backtracking is not allowed for this exam.", variant: "default" });
     }
-  }, [allowBacktracking, currentQuestionIndex, toast]);
+  }, [allowBacktracking, currentQuestionIndex, toast]); // Removed setCurrentQuestionIndex from deps
 
   const handleQuestionNavigation = useCallback((index: number) => {
     if (index >= 0 && questions && index < questions.length) {
@@ -166,13 +170,13 @@ export function ExamTakingInterface({
       }
       setCurrentQuestionIndex(index);
     }
-  }, [allowBacktracking, currentQuestionIndex, questions, toast]);
+  }, [allowBacktracking, currentQuestionIndex, questions, toast]); // Removed setCurrentQuestionIndex from deps
 
   const handleToggleMarkForReview = useCallback(() => {
     if (currentQuestion?.id) {
       setMarkedForReview(prev => ({ ...prev, [currentQuestion.id!]: !prev[currentQuestion.id!] }));
     }
-  }, [currentQuestion?.id]);
+  }, [currentQuestion?.id]); // Removed setMarkedForReview from deps
 
   const handleInternalSubmitExam = useCallback(async () => {
     if (examFinished) return;
@@ -188,7 +192,7 @@ export function ExamTakingInterface({
     } finally {
       setIsSubmitting(false);
     }
-  }, [answers, activityFlags, examFinished, toast, onSubmitExamRef]);
+  }, [answers, activityFlags, examFinished, toast, onSubmitExamRef]); // Removed setIsSubmitting, setExamFinished setters
 
   const currentQuestionId = currentQuestion?.id;
   const memoizedOnRadioValueChange = useCallback((optionId: string) => {
@@ -207,35 +211,48 @@ export function ExamTakingInterface({
   const totalQuestions = questions?.length || 0;
   const answeredQuestionsCount = Object.keys(answers).filter(key => !!answers[key]).length;
 
+  // Prioritize displaying `cantStartReason` if it exists (e.g., "No questions")
+  const examNotReadyError = cantStartReason || examLoadingError || persistentError;
+
   if (parentIsLoading) {
     return (
-      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-center">
         <Loader2 className="h-16 w-16 text-primary animate-spin mb-6" />
-        <p className="text-xl text-slate-200 font-medium">Loading Exam Environment...</p>
+        <h2 className="text-xl font-medium text-slate-200 mb-1">Loading Exam Environment...</h2>
       </div>
     );
   }
   
-  if (examLoadingError || persistentError) {
+  if (examNotReadyError) { 
      return (
-      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-red-500/10 backdrop-blur-sm p-6 text-center">
-        <ServerCrash className="h-20 w-20 text-red-500 mb-5" />
-        <h2 className="text-2xl font-semibold text-red-700 dark:text-red-300 mb-3">Error Loading Exam</h2>
-        <p className="text-md text-red-600 dark:text-red-400 mb-8 max-w-md">{examLoadingError || persistentError}</p>
-        <Button onClick={() => window.close()} className="btn-gradient-destructive px-8 py-3 text-base rounded-lg shadow-xl">Close Tab</Button>
+       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+          <CardHeader className="pt-8 pb-4">
+            <ServerCrash className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Cannot Start Exam</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">{examNotReadyError}</p>
+            <Button onClick={() => window.close()} className="w-full btn-primary-solid">Close Tab</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
-
+  
   if (!examDetails || !examStarted) {
      return (
-      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-amber-500/10 backdrop-blur-sm p-6 text-center">
-        <AlertTriangle className="h-20 w-20 text-amber-500 mb-5" />
-        <h2 className="text-2xl font-semibold text-amber-700 dark:text-amber-300 mb-3">Exam Session Not Properly Initiated</h2>
-        <p className="text-md text-amber-600 dark:text-amber-400 mb-8 max-w-md">
-          {cantStartReason || "The exam details could not be loaded or the session is invalid. Please close this tab and try re-initiating the exam."}
-        </p>
-        <Button onClick={() => window.close()} className="bg-amber-500 hover:bg-amber-600 text-white px-8 py-3 text-base rounded-lg shadow-xl">Close Tab</Button>
+       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Exam Data Not Available</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">Could not load the details for this exam or session is invalid. Please close this tab and try re-initiating the exam.</p>
+            <Button onClick={() => window.close()} className="w-full btn-primary-solid">Close Tab</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -269,24 +286,29 @@ export function ExamTakingInterface({
     );
   }
 
-  if ((!questions || totalQuestions === 0) && !parentIsLoading) {
+  if (!questions || totalQuestions === 0) {
      return (
-      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-orange-500/10 backdrop-blur-sm p-6 text-center">
-        <X className="h-20 w-20 text-orange-500 mb-5" />
-        <h2 className="text-2xl font-semibold text-orange-700 dark:text-orange-300 mb-3">No Questions Available</h2>
-        <p className="text-md text-orange-600 dark:text-orange-400 mb-8">This exam currently has no questions. Please contact your instructor.</p>
-        <Button onClick={() => window.close()} className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-base rounded-lg shadow-xl">Close Tab</Button>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+          <CardHeader className="pt-8 pb-4">
+            <X className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">No Questions Available</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">This exam currently has no questions. Please contact your instructor.</p>
+            <Button onClick={() => window.close()} className="w-full btn-primary-solid">Close Tab</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
   
-  // Full-screen exam layout
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50">
-      {/* Top Bar */}
+      {/* Top Bar: Logo and User Info */}
       <header className="h-16 px-4 sm:px-6 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shrink-0">
         <div className="flex items-center gap-2">
-          <Image src={logoAsset} alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
+          <Image src={logoAsset} alt="ZenTest Logo" width={114} height={32} className="h-8 w-auto" />
         </div>
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9 border-2 border-primary/30">
@@ -296,8 +318,8 @@ export function ExamTakingInterface({
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{studentName || "Test Student"}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">ID: {studentRollNumber || "S00000"}</p>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{studentName || (isDemoMode ? "Demo Teacher" : "Test Student")}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">ID: {studentRollNumber || (isDemoMode ? "T00000" : "S00000")}</p>
           </div>
         </div>
       </header>
@@ -319,22 +341,22 @@ export function ExamTakingInterface({
         </Button>
       </div>
 
-      {/* Main Content Area - Expansive */}
-      <main className="flex-1 flex flex-col py-6 px-4 sm:px-8 md:px-12 lg:px-16 xl:px-24 overflow-y-auto"> {/* Added more padding */}
-        {/* Question Title & Text */}
-        <div className="w-full bg-white dark:bg-slate-900 shadow-xl rounded-lg p-6 sm:p-8 mb-6"> {/* Removed max-w-*, uses padding of parent */}
-          <div className="mb-1 flex justify-between items-center">
+      {/* Main Content Area (Question & Options) - This is now the focus */}
+      <main className="flex-1 flex flex-col py-6 px-4 sm:px-8 md:px-12 lg:px-16 xl:px-24 overflow-y-auto">
+        <div className="w-full bg-white dark:bg-slate-900 shadow-xl rounded-lg p-6 sm:p-8 mb-6">
+          <div className="mb-4 flex justify-between items-center">
             <p className="text-lg sm:text-xl font-semibold text-primary">
               Question {currentQuestionIndex + 1} <span className="text-sm font-normal text-slate-500 dark:text-slate-400">of {totalQuestions}</span>
             </p>
-            {/* Bookmark functionality can be added here if needed */}
+            <Button variant="ghost" size="icon" onClick={handleToggleMarkForReview} title={markedForReview[currentQuestion?.id || ''] ? "Unmark for Review" : "Mark for Review"}>
+                <Bookmark className={cn("h-5 w-5", markedForReview[currentQuestion?.id || ''] ? "fill-yellow-400 text-yellow-500" : "text-slate-400 hover:text-yellow-500")} />
+            </Button>
           </div>
           <h2 className="text-xl sm:text-2xl font-medium text-slate-800 dark:text-slate-100 leading-relaxed">
             {currentQuestion?.text}
           </h2>
         </div>
 
-        {/* MCQ Options */}
         {currentQuestion && (
           <div className="w-full bg-white dark:bg-slate-900 shadow-xl rounded-lg p-6 sm:p-8">
             <RadioGroup
@@ -343,7 +365,7 @@ export function ExamTakingInterface({
               onValueChange={memoizedOnRadioValueChange}
               className={cn(
                 "grid gap-4",
-                currentQuestion.options.length <= 2 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
+                currentQuestion.options.length <= 2 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2" // Simple responsive grid for options
               )}
               disabled={isSubmitting}
             >
@@ -399,6 +421,8 @@ export function ExamTakingInterface({
                     ? "bg-primary text-primary-foreground hover:bg-primary/90" 
                     : "border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70",
                   answers[q.id] && currentQuestionIndex !== index ? "bg-green-100 dark:bg-green-700/40 border-green-400 dark:border-green-600 text-green-700 dark:text-green-200" : "",
+                  markedForReview[q.id] && currentQuestionIndex !== index && !answers[q.id] ? "bg-purple-100 dark:bg-purple-700/40 border-purple-400 dark:border-purple-600 text-purple-700 dark:text-purple-200" : "",
+                  markedForReview[q.id] && currentQuestionIndex !== index && answers[q.id] ? "bg-purple-100 dark:bg-purple-700/40 border-purple-400 dark:border-purple-600 text-purple-700 dark:text-purple-200 ring-2 ring-green-500" : "", // Answered & Marked for Review
                   (!allowBacktracking && index < currentQuestionIndex) && "opacity-60 cursor-not-allowed"
                 )}
                 onClick={() => handleQuestionNavigation(index)}
@@ -420,8 +444,9 @@ export function ExamTakingInterface({
               : "bg-red-600 hover:bg-red-700 text-white" 
           )}
         >
-          {currentQuestionIndex < totalQuestions - 1 ? 'Next' : 'Submit Exam'}
+          {currentQuestionIndex < totalQuestions - 1 ? 'Next' : (isSubmitting ? 'Submitting...' : 'Submit Exam')}
           {currentQuestionIndex < totalQuestions - 1 && <ChevronRight className="ml-2 h-5 w-5" />}
+           {currentQuestionIndex === totalQuestions - 1 && isSubmitting && <Loader2 className="ml-2 h-5 w-5 animate-spin" />}
         </Button>
       </footer>
     </div>
