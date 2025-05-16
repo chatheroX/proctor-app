@@ -3,18 +3,18 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation'; // Corrected import
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, XCircle, Info, LogOut, ServerCrash } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam } from '@/types/supabase';
-import { useToast } from '@/hooks/use-toast';
-import { decryptData } from '@/lib/crypto-utils';
-import { isSebEnvironment, isOnline, areDevToolsLikelyOpen, isWebDriverActive, isVMLikely } from '@/lib/seb-utils';
-import { format } from 'date-fns';
-import { useAuth } from '@/contexts/AuthContext';
+import { useRouter }_from_ 'next/navigation'; // Corrected import
+import { Button }_from_ '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }_from_ '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle }_from_ '@/components/ui/alert';
+import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, XCircle, Info, LogOut, ServerCrash }_from_ 'lucide-react';
+import { createSupabaseBrowserClient }_from_ '@/lib/supabase/client';
+import type { Exam }_from_ '@/types/supabase';
+import { useToast }_from_ '@/hooks/use-toast';
+import { decryptData }_from_ '@/lib/crypto-utils';
+import { isSebEnvironment, isOnline, areDevToolsLikelyOpen, isWebDriverActive, isVMLikely }_from_ '@/lib/seb-utils';
+import { format }_from_ 'date-fns';
+import { useAuth }_from_ '@/contexts/AuthContext';
 
 const TOKEN_VALIDITY_MINUTES_SEB = 15; // Token from join page is valid for this long for SEB launch
 
@@ -29,7 +29,7 @@ export function SebExamViewClient() {
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createSupabaseBrowserClient();
-  const { user: studentUser, isLoading: authLoading, supabaseInitializationError } = useAuth();
+  const { user: studentUser, isLoading: authLoading, supabaseInitializationError }_from_ useAuth();
 
   const [pageIsLoading, setPageIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,12 +57,12 @@ export function SebExamViewClient() {
     const tokenParam = paramsFromHash.get('token');
 
     if (!examIdParam || !tokenParam) {
-      const errMsg = "Exam ID or session token missing from SEB launch parameters (hash). Please re-initiate from the dashboard.";
-      console.error("[SebExamViewClient] Error:", errMsg, "Hash was:", window.location.hash);
+      const errMsg = "CRITICAL: Exam ID or session token missing from SEB launch parameters (hash). This usually means the SEB configuration file (.seb) was not processed correctly, or the StartURL inside it is misconfigured. Please re-initiate from the dashboard or contact support.";
+      console.error("[SebExamViewClient] Error:", errMsg, "Full Hash was:", window.location.hash);
       setError(errMsg);
-      toast({ title: "Launch Error", description: "Invalid SEB parameters. SEB will quit.", variant: "destructive", duration: 10000 });
+      toast({ title: "SEB Launch Error", description: "Invalid SEB parameters. SEB will attempt to quit.", variant: "destructive", duration: 15000 });
       setPageIsLoading(false);
-      setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 9000);
+      setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 14000);
       return;
     }
     console.log("[SebExamViewClient] Parsed from hash - examId:", examIdParam, "token:", tokenParam ? "present" : "missing");
@@ -76,7 +76,11 @@ export function SebExamViewClient() {
   useEffect(() => {
     if (!isClientSide || !examIdFromHash || !tokenFromHash || authLoading || supabaseInitializationError) {
       if (isClientSide && !authLoading && (!examIdFromHash || !tokenFromHash) && pageIsLoading && !error && !supabaseInitializationError) {
-           setError("SEB launch parameters missing or invalid after auth load. Cannot proceed.");
+           // This case should be caught by the previous useEffect setting an error if params are missing.
+           // If somehow reached, it's an inconsistent state.
+           const unexpectedErrorMsg = "SEB launch parameters were initially found but are now missing, or auth is loaded but parameters were never set. Cannot proceed.";
+           console.error("[SebExamViewClient] Unexpected state for decryption:", unexpectedErrorMsg);
+           setError(unexpectedErrorMsg);
            setPageIsLoading(false);
       }
       if(supabaseInitializationError && pageIsLoading){
@@ -103,7 +107,7 @@ export function SebExamViewClient() {
         
         const tokenAgeMinutes = (Date.now() - payload.timestamp) / (1000 * 60);
         if (tokenAgeMinutes > TOKEN_VALIDITY_MINUTES_SEB) {
-          const msg = 'SEB session link expired (valid for ' + TOKEN_VALIDITY_MINUTES_SEB + ' min). Re-initiate.';
+          const msg = 'SEB session link expired (valid for ' + TOKEN_VALIDITY_MINUTES_SEB + ' min). Please re-initiate from the dashboard.';
           throw new Error(msg);
         }
         console.log("[SebExamViewClient] Token decrypted and validated. Payload:", payload);
@@ -158,7 +162,6 @@ export function SebExamViewClient() {
     addResult("Developer Tools Check", !areDevToolsLikelyOpen(), areDevToolsLikelyOpen() ? "Potentially Open" : "Not Detected");
     addResult("WebDriver/Automation Check", !isWebDriverActive(), isWebDriverActive() ? "Detected" : "Not Detected");
     addResult("Virtual Machine Check", !isVMLikely(), isVMLikely() ? "Potentially Detected" : "Not Detected");
-    // Keyboard/Mouse restrictions are primarily SEB config; JS is supplemental.
     addResult("Input Restrictions Check", true, "SEB config primary; JS supplemental checks active in live test.");
 
     setCheckResultsLog(newCheckResults);
@@ -173,7 +176,6 @@ export function SebExamViewClient() {
 
     if (allChecksPass) {
       toast({ title: "Redirecting to Live Exam...", description: "Your exam will begin shortly.", duration: 3000 });
-      // Pass examId and token as query params to live-test page
       router.push(`/seb/live-test?examId=${examIdFromHash}&token=${encodeURIComponent(tokenFromHash!)}`);
     } else {
       setError("One or more critical system checks failed. Cannot start exam. SEB will attempt to quit.");
@@ -189,13 +191,19 @@ export function SebExamViewClient() {
   // Redirect if not in SEB (initial client-side check)
   useEffect(() => {
     if (isClientSide && !pageIsLoading && !isSebEnvironment() && !error ) {
-      setError("CRITICAL: This page can only be accessed within Safe Exam Browser. Redirecting to unsupported browser page...");
-      setTimeout(() => router.replace('/unsupported-browser'), 3000);
+      // Only redirect if no other critical error (like missing hash params) is already being handled
+      console.warn("[SebExamViewClient] Not in SEB environment. Redirecting to unsupported browser page.");
+      setError("CRITICAL: This page can only be accessed within Safe Exam Browser. Redirecting..."); // Set an error state too
+      router.replace('/unsupported-browser'); // No timeout, redirect immediately
     }
   }, [isClientSide, pageIsLoading, router, error]);
 
 
-  if (pageIsLoading || authLoading || (!isClientSide && !error) ) {
+  if (pageIsLoading || authLoading || (!isClientSide && !error && !examIdFromHash && !tokenFromHash) ) {
+    // Show loader if:
+    // 1. Page is generally loading (pageIsLoading)
+    // 2. Auth context is loading (authLoading)
+    // 3. Client-side hasn't run yet AND no error is present AND hash params haven't been parsed yet
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 to-slate-950 text-slate-300">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -209,7 +217,7 @@ export function SebExamViewClient() {
     );
   }
 
-  if (error) {
+  if (error) { // This will now catch missing hash params error as well
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-red-700 to-red-900 text-white">
         <Card className="w-full max-w-lg modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
@@ -298,7 +306,7 @@ export function SebExamViewClient() {
               <li>Do not attempt to exit SEB or switch applications unless instructed or the exam is finished.</li>
               <li>The timer will start once you click "Start Exam" after system checks.</li>
               <li>Read each question carefully before answering.</li>
-              <li>Only A-Z keys, arrow keys, and mouse clicks are permitted for answering. Other shortcuts are disabled. (Enforced by SEB config)</li>
+              <li>Input restrictions (e.g., only A-Z keys, arrow keys, mouse clicks) are enforced by SEB configuration.</li>
             </ul>
           </div>
 
@@ -334,3 +342,5 @@ export function SebExamViewClient() {
   );
 }
 
+
+    
