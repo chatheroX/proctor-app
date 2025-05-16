@@ -89,7 +89,11 @@ export default function JoinExamPage() {
       // Parameters (examId, token) are passed in the hash of the configUrl.
       // /seb/exam-view will read these from window.location.hash
       const configUrlWithParams = `${window.location.origin}${SEB_CONFIG_FILE_RELATIVE_PATH}#examId=${exam.exam_id}&token=${encodeURIComponent(encryptedToken)}`;
-      const sebLaunchUrl = `seb://open?configUrl=${encodeURIComponent(configUrlWithParams)}`;
+      
+      // Corrected SEB Launch URL
+      // Remove http(s):// prefix and prepend sebs://
+      const domainAndPathWithHash = configUrlWithParams.replace(/^https?:\/\//, '');
+      const sebLaunchUrl = `sebs://${domainAndPathWithHash}`;
 
       console.log("[JoinExamPage] Attempting to launch SEB with URL:", sebLaunchUrl);
       toast({
@@ -101,13 +105,15 @@ export default function JoinExamPage() {
       // Attempt to launch SEB
       window.location.href = sebLaunchUrl;
 
+      // It's good practice to reset loading state, but direct navigation might make this less critical.
+      // Consider if you want to keep the page interactive or show a persistent "launching" message.
       setTimeout(() => setIsLoading(false), 5000); // Reset loading state after a delay
 
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setIsLoading(false);
     }
-  }, [examCode, supabase, toast, studentUser, authLoading]);
+  }, [examCode, supabase, toast, studentUser, authLoading, router]); // Added router to dependencies
 
   return (
     <div className="space-y-6">
