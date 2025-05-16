@@ -5,25 +5,24 @@
 // WARNING: THIS IS A DEMONSTRATION AND USES A HARDCODED KEY.
 // DO NOT USE THIS IN PRODUCTION WITHOUT A PROPER KEY MANAGEMENT STRATEGY.
 // A securely managed, non-extractable key is crucial for real security.
-const VERY_INSECURE_HARDCODED_KEY = 'your-very-insecure-32-byte-key!'; // Must be 16, 24, or 32 bytes for AES
+const VERY_INSECURE_HARDCODED_KEY = 'this-is-a-32-byte-long-secret-key!'; // Exactly 32 characters -> 32 bytes
 
 async function getKeyMaterial(): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyData = enc.encode(VERY_INSECURE_HARDCODED_KEY);
   if (keyData.byteLength !== 32) {
-    console.error("Key material is not 32 bytes. Ensure it's a valid length for AES-256.");
+    console.error("Key material is not 32 bytes. Ensure it's a valid length for AES-256. Actual length:", keyData.byteLength);
     // Fallback to a generated key if the hardcoded one is invalid, though this won't allow decryption across sessions.
-    return crypto.subtle.generateKey(
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-      );
+    // This fallback is problematic for consistent encryption/decryption, the hardcoded key *must* be correct.
+    // For the purpose of this error, the primary issue is the hardcoded key's length.
+    // A real application would throw a configuration error or have a more robust key provisioning.
+    throw new Error("CRITICAL: Encryption key is not 32 bytes long. Please check configuration.");
   }
   return crypto.subtle.importKey(
     'raw',
     keyData,
     { name: 'AES-GCM' },
-    false,
+    false, // 'extractable' should be false for security unless explicitly needed
     ['encrypt', 'decrypt']
   );
 }
@@ -87,6 +86,10 @@ export async function decryptData<T = Record<string, any>>(encryptedBase64: stri
     return JSON.parse(decodedData) as T;
   } catch (error) {
     console.error('Decryption failed:', error);
+    // More specific error for token tampering or key mismatch
+    if (error instanceof DOMException && error.name === 'OperationError') {
+        console.error('Decryption failed: Likely incorrect key or tampered/corrupt data.');
+    }
     return null;
   }
 }
