@@ -5,20 +5,20 @@
 // WARNING: THIS IS A DEMONSTRATION AND USES A HARDCODED KEY.
 // DO NOT USE THIS IN PRODUCTION WITHOUT A PROPER KEY MANAGEMENT STRATEGY.
 // A securely managed, non-extractable key is crucial for real security.
-const VERY_INSECURE_HARDCODED_KEY = 'this-is-a-32-byte-secret-key!!'; // Exactly 32 characters
+const VERY_INSECURE_HARDCODED_KEY = 'abcdefghijklmnopqrstuvwxyz123456'; // Exactly 32 ASCII characters
 
 async function getKeyMaterial(): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const keyData = enc.encode(VERY_INSECURE_HARDCODED_KEY);
+  const keyStringForLog = VERY_INSECURE_HARDCODED_KEY; // Use a var for logging clarity
+  const keyData = enc.encode(keyStringForLog);
+
   if (keyData.byteLength !== 32) {
-    const errorMessage = `CRITICAL: Encryption key is not 32 bytes long. Expected 32, got ${keyData.byteLength}. Please check configuration.`;
-    console.error(errorMessage, "Key used:", VERY_INSECURE_HARDCODED_KEY);
-    // Fallback to a generated key if the hardcoded one is invalid, though this won't allow decryption across sessions.
-    // This fallback is problematic for consistent encryption/decryption, the hardcoded key *must* be correct.
-    // For the purpose of this error, the primary issue is the hardcoded key's length.
-    // A real application would throw a configuration error or have a more robust key provisioning.
+    const errorMessage = `CRITICAL: Encryption key is not 32 bytes long. Expected 32 bytes, but got ${keyData.byteLength} bytes for key string "${keyStringForLog}" (character length ${keyStringForLog.length}). Please check configuration.`;
+    console.error(errorMessage);
+    // Throw the detailed error message
     throw new Error(errorMessage);
   }
+
   return crypto.subtle.importKey(
     'raw',
     keyData,
@@ -54,8 +54,9 @@ export async function encryptData(data: Record<string, any>): Promise<string | n
 
     // Convert buffer to Base64 string
     return btoa(String.fromCharCode.apply(null, Array.from(resultBuffer)));
-  } catch (error) {
-    console.error('Encryption failed:', error);
+  } catch (error: any) {
+    const detailedErrorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Encryption failed:', detailedErrorMessage, error);
     return null;
   }
 }
@@ -85,11 +86,11 @@ export async function decryptData<T = Record<string, any>>(encryptedBase64: stri
 
     const decodedData = new TextDecoder().decode(decryptedContent);
     return JSON.parse(decodedData) as T;
-  } catch (error) {
-    console.error('Decryption failed:', error);
-    // More specific error for token tampering or key mismatch
+  } catch (error: any) {
+    const detailedErrorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Decryption failed:', detailedErrorMessage, error);
     if (error instanceof DOMException && error.name === 'OperationError') {
-        console.error('Decryption failed: Likely incorrect key or tampered/corrupt data.');
+        console.error('Decryption DOMException OperationError: Likely incorrect key or tampered/corrupt data.');
     }
     return null;
   }
