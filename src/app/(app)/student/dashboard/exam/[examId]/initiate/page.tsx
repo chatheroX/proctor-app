@@ -3,18 +3,18 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-// import Image from 'next/image'; // Not used in current design
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, AlertTriangle, Clock, ListChecks, PlayCircle, ExternalLink, CheckCircle, XCircle, ShieldAlert } from 'lucide-react';
+import { Loader2, AlertTriangle, Clock, ListChecks, PlayCircle, ExternalLink, CheckCircle, XCircle, ShieldAlert, ServerCrash } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Exam } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { format } from 'date-fns';
+import { encryptData } from '@/lib/crypto-utils'; // Import encryption utility
 
 interface CheckStatus {
   name: string;
@@ -26,7 +26,6 @@ const initialChecks: CheckStatus[] = [
   { name: 'Browser Compatibility', status: 'pending' },
   { name: 'Internet Connectivity', status: 'pending' },
   { name: 'System Integrity (Basic)', status: 'pending' },
-  // { name: 'SEB Launcher Check', status: 'pending' }, // Example SEB specific check
   { name: 'Secure Session Readiness', status: 'pending' },
 ];
 
@@ -64,7 +63,7 @@ export default function InitiateExamPage() {
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('exam_id, title, description, duration, questions, start_time, end_time, status')
+        .select('exam_id, title, description, duration, questions, start_time, end_time, status, exam_code')
         .eq('exam_id', examId)
         .single();
 
@@ -120,12 +119,11 @@ export default function InitiateExamPage() {
     setChecks(initialChecks.map(c => ({ ...c, status: 'pending', details: undefined })));
     setOverallProgress(0);
 
-    // Simulate system checks
     for (let i = 0; i < initialChecks.length; i++) {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); 
 
-      const isSuccess = Math.random() > 0.05; // Simulate high success rate
+      const isSuccess = Math.random() > 0.05; 
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
       setOverallProgress(((i + 1) / initialChecks.length) * 100);
       if (!isSuccess) {
@@ -137,25 +135,36 @@ export default function InitiateExamPage() {
     setAllChecksPassed(true);
     setPerformingChecks(false);
     toast({ title: "System Checks Passed!", description: "You can now proceed to the exam.", variant: "default" });
+    // Automatically attempt to launch exam after checks pass
+    launchExamInNewTab();
   }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast]);
 
 
-  const launchExamInNewTab = useCallback(() => {
+  const launchExamInNewTab = useCallback(async () => {
     if (!allChecksPassed || !examDetails || !studentUser?.user_id) {
       toast({ title: "Cannot Launch", description: "System checks not passed or exam/user data missing.", variant: "destructive" });
       return;
     }
+    
+    // WARNING: The encryption key in crypto-utils.ts is hardcoded and insecure.
+    // This is for demonstration only. Real security requires proper key management.
+    const payload = { 
+      examId: examDetails.exam_id, 
+      studentId: studentUser.user_id, 
+      timestamp: Date.now(), // Used to make token somewhat time-sensitive
+      examCode: examDetails.exam_code // Include exam code for potential validation
+    };
+    const encryptedToken = await encryptData(payload);
 
-    // "Encrypted" URL simulation (basic base64 encoding for demo)
-    // In a real SEB scenario, this would involve more secure token generation, possibly SEB config key.
-    const payload = JSON.stringify({ examId: examDetails.exam_id, studentId: studentUser.user_id, timestamp: Date.now() });
-    const token = typeof window !== 'undefined' ? btoa(payload) : ''; 
+    if (!encryptedToken) {
+        toast({ title: "Encryption Error", description: "Could not generate secure exam token.", variant: "destructive" });
+        setError("Failed to create a secure exam session token. Please try again.");
+        return;
+    }
     
-    // New URL for the dedicated exam session page
-    const examUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(token)}`;
+    const examUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(encryptedToken)}`;
+    console.log("[InitiatePage] Launching exam at URL:", examUrl);
     
-    // For SEB, this might be a custom protocol link like 'seb://...' or a link to an .seb config file
-    // For browser testing, we open in a new tab.
     const newWindow = window.open(examUrl, '_blank', 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes');
 
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
@@ -168,10 +177,8 @@ export default function InitiateExamPage() {
       });
     } else {
       toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
-      // Optionally, can redirect this initiate page to a waiting screen or exam history
-      // router.push('/student/dashboard/exam-history'); // Example
     }
-  }, [allChecksPassed, examDetails, studentUser?.user_id, toast, router]);
+  }, [allChecksPassed, examDetails, studentUser?.user_id, toast]);
 
   const getStatusIcon = (status: CheckStatus['status']) => {
     if (status === 'pending') return <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />;
@@ -183,46 +190,66 @@ export default function InitiateExamPage() {
 
   if (authLoading || (isLoading && !examDetails && !error)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-muted-foreground">Loading exam instructions...</p>
+        <p className="text-lg text-slate-300">Loading exam instructions...</p>
       </div>
     );
   }
 
   if (error && !examDetails && !performingChecks) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Error Loading Exam Information</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">{error}</p>
-        <Button onClick={() => router.push('/student/dashboard/join-exam')} className="mt-4">
-          Back to Join Exam
-        </Button>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <ServerCrash className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Error Loading Exam Information</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">{error}</p>
+            <Button onClick={() => router.push('/student/dashboard/join-exam')} className="w-full btn-primary-solid">
+              Back to Join Exam
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (!examDetails && !isLoading && !performingChecks) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-        <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
-        <p className="text-lg text-muted-foreground text-center">Exam details not found.</p>
-         <Button onClick={() => router.push('/student/dashboard/join-exam')} className="mt-4">
-          Back to Join Exam
-        </Button>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
+         <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <AlertTriangle className="h-16 w-16 text-muted-foreground mx-auto mb-5" />
+            <CardTitle className="text-2xl text-muted-foreground">Exam Details Not Found</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">The exam details could not be retrieved.</p>
+            <Button onClick={() => router.push('/student/dashboard/join-exam')} className="w-full btn-primary-solid">
+              Back to Join Exam
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
   
-  if (!examDetails) {
+  if (!examDetails) { // Should be caught by above, but as a fallback
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-        <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
-        <p className="text-lg text-muted-foreground text-center">Could not display exam information. Critical data missing.</p>
-         <Button onClick={() => router.push('/student/dashboard/join-exam')} className="mt-4">
-          Back to Join Exam
-        </Button>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <ServerCrash className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Critical Error</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">Could not display exam information. Critical data missing.</p>
+            <Button onClick={() => router.push('/student/dashboard/join-exam')} className="w-full btn-primary-solid">
+              Back to Join Exam
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -233,42 +260,43 @@ export default function InitiateExamPage() {
     : "Timing not specified";
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-      <Card className="w-full max-w-3xl shadow-xl">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-gray-900 p-4">
+      <Card className="w-full max-w-3xl shadow-xl glass-card">
         <CardHeader>
-          <CardTitle className="text-3xl md:text-4xl font-bold text-gray-800 text-center">{examDetails.title}</CardTitle>
-          {examDetails.description && <CardDescription className="text-center text-gray-600 mt-2">{examDetails.description}</CardDescription>}
+          <CardTitle className="text-3xl md:text-4xl font-bold text-foreground text-center">{examDetails.title}</CardTitle>
+          {examDetails.description && <CardDescription className="text-center text-muted-foreground mt-2">{examDetails.description}</CardDescription>}
         </CardHeader>
         
         {!performingChecks && !allChecksPassed && (
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-center space-x-2 text-gray-500 bg-gray-100 p-2 rounded-md text-sm">
+            <div className="flex items-center justify-center space-x-2 text-muted-foreground bg-background/30 backdrop-blur-sm p-2 rounded-md text-sm">
               <Clock size={18} />
               <span>{examTimeInfo}</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 p-4 border border-gray-200 rounded-lg bg-white shadow-sm">
+            <div className="grid grid-cols-3 gap-4 p-4 border border-border/20 rounded-lg bg-background/50 shadow-sm">
               <div className="text-center">
-                <p className="text-xl font-semibold text-gray-700">{examDetails.duration}</p>
-                <p className="text-xs text-gray-500">MINUTES</p>
+                <p className="text-xl font-semibold text-foreground">{examDetails.duration}</p>
+                <p className="text-xs text-muted-foreground">MINUTES</p>
               </div>
               <div className="text-center">
-                <p className="text-xl font-semibold text-gray-700">100</p> {/* Placeholder for Max Marks */}
-                <p className="text-xs text-gray-500">MARKS</p>
+                <p className="text-xl font-semibold text-foreground">100</p> 
+                <p className="text-xs text-muted-foreground">MARKS</p>
               </div>
               <div className="text-center">
-                <p className="text-xl font-semibold text-gray-700">{questionsCount}</p>
-                <p className="text-xs text-gray-500">QUESTIONS</p>
+                <p className="text-xl font-semibold text-foreground">{questionsCount}</p>
+                <p className="text-xs text-muted-foreground">QUESTIONS</p>
               </div>
             </div>
             
-            <Alert>
-              <ShieldAlert className="h-4 w-4" />
-              <AlertTitle>Exam Integrity Notice</AlertTitle>
-              <AlertDescription>
-                This exam is designed to be taken in a secure environment (e.g., Safe Exam Browser).
+            <Alert className="bg-primary/10 border-primary/30 text-primary-foreground">
+              <ShieldAlert className="h-4 w-4 text-primary" />
+              <AlertTitle className="text-primary font-semibold">Exam Integrity Notice</AlertTitle>
+              <AlertDescription className="text-primary/80">
+                This exam is designed to be taken in a secure environment.
                 System compatibility checks will be performed before starting.
                 Ensure you have any required software installed and configured.
+                The exam will attempt to open in a new tab.
               </AlertDescription>
             </Alert>
             
@@ -284,14 +312,14 @@ export default function InitiateExamPage() {
 
         {(performingChecks || allChecksPassed) && (
           <CardContent className="space-y-4">
-            <h3 className="text-xl font-semibold text-center mb-4">System Compatibility Checks</h3>
-            <Progress value={overallProgress} className="w-full mb-6 h-3" />
+            <h3 className="text-xl font-semibold text-center mb-4 text-foreground">System Compatibility Checks</h3>
+            <Progress value={overallProgress} className="w-full mb-6 h-3 bg-primary/20 [&>div]:bg-primary" />
             <ul className="space-y-3">
               {checks.map((check) => (
-                <li key={check.name} className="flex items-center justify-between p-3 bg-background rounded-md border">
+                <li key={check.name} className="flex items-center justify-between p-3 bg-background/50 rounded-md border border-border/20">
                   <div className="flex items-center gap-3">
                     {getStatusIcon(check.status)}
-                    <span className="font-medium">{check.name}</span>
+                    <span className="font-medium text-foreground">{check.name}</span>
                   </div>
                   {check.details && <span className={`text-sm ${check.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{check.details}</span>}
                 </li>
@@ -305,10 +333,10 @@ export default function InitiateExamPage() {
                 </Alert>
             )}
             {allChecksPassed && !error && (
-                <Alert variant="default" className="mt-6 bg-green-500/10 border-green-500/30">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <AlertTitle className="text-green-700 font-semibold">System Ready!</AlertTitle>
-                    <AlertDescription className="text-green-600/80">
+                <Alert variant="default" className="mt-6 bg-green-600/10 border-green-600/30 text-green-300">
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <AlertTitle className="text-green-400 font-semibold">System Ready!</AlertTitle>
+                    <AlertDescription className="text-green-300/80">
                         Your system is compatible. The exam will attempt to open in a new tab.
                         If it doesn&apos;t, please ensure pop-ups are allowed and use the "Launch Exam Manually" button.
                     </AlertDescription>
@@ -317,11 +345,11 @@ export default function InitiateExamPage() {
           </CardContent>
         )}
         
-        <CardFooter className="flex flex-col items-center gap-3 pt-6 border-t">
+        <CardFooter className="flex flex-col items-center gap-3 pt-6 border-t border-border/30">
            {!allChecksPassed && (
             <Button
               onClick={startSystemChecks}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 text-lg rounded-md shadow-md"
+              className="w-full btn-gradient py-3 text-lg rounded-md shadow-lg"
               disabled={performingChecks || !canStartTestProcess || authLoading || !studentUser || isLoading}
             >
               {performingChecks ? <Loader2 className="animate-spin mr-2"/> : <PlayCircle className="mr-2" />}
@@ -331,12 +359,12 @@ export default function InitiateExamPage() {
            {allChecksPassed && !error && (
              <Button
               onClick={launchExamInNewTab}
-              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg rounded-md shadow-md"
+              className="w-full btn-gradient-positive py-3 text-lg rounded-md shadow-lg"
             >
               <ExternalLink className="mr-2" /> Launch Exam
             </Button>
            )}
-            <Button variant="outline" onClick={() => router.push('/student/dashboard/join-exam')} className="w-full">
+            <Button variant="outline" onClick={() => router.push('/student/dashboard/join-exam')} className="w-full btn-outline-subtle">
               Cancel / Back to Join Exam
             </Button>
         </CardFooter>

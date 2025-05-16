@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, PlaySquare, CalendarClock, AlertCircle } from 'lucide-react'; // Removed MonitorPlay
+import { ArrowLeft, Edit, Share2, Trash2, Clock, CheckSquare, ListChecks, Copy, Loader2, AlertTriangle, Users2, CalendarClock, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -22,49 +22,43 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import Link from 'next/link';
-import { format, parseISO, isBefore, isAfter, isValid } from 'date-fns';
+import { format, parseISO, isBefore, isAfter, isValid, type Duration } from 'date-fns';
 
-// Helper function to determine effective status
-export const getEffectiveExamStatus = (exam: Exam | null | undefined): ExamStatus => {
-  if (!exam || !exam.status) {
-    return 'Published'; // Default if essential data is missing
+
+export const getEffectiveExamStatus = (exam: Exam | null | undefined, currentTime?: Date): ExamStatus => {
+  if (!exam) { // Removed !exam.status as status is now mandatory
+    return 'Published'; // Default or handle as error if exam is totally null
   }
+
+  const now = currentTime || new Date(); // Use provided current time or system current time
 
   // If already Completed in DB, it's Completed.
   if (exam.status === 'Completed') return 'Completed';
 
-  // If Published and has valid start/end times, determine if Upcoming, Ongoing, or past End (Completed)
-  if (exam.status === 'Published') {
+  // For 'Published' or 'Ongoing' exams, timings are crucial.
+  if (exam.status === 'Published' || exam.status === 'Ongoing') {
     if (!exam.start_time || !exam.end_time) {
-      // If Published but no schedule, it cannot be Ongoing or Completed by time.
-      // It remains 'Published' (effectively upcoming/needs scheduling).
-      return 'Published';
+      // This case should ideally not happen for 'Published' exams per form validation.
+      // If it does, treat as 'Published' (effectively upcoming/needs proper scheduling).
+      console.warn(`Exam ${exam.exam_id} is ${exam.status} but missing start/end times.`);
+      return 'Published'; 
     }
-    const now = new Date();
     const startTime = parseISO(exam.start_time);
     const endTime = parseISO(exam.end_time);
 
     if (!isValid(startTime) || !isValid(endTime)) {
-      return 'Published'; // Invalid dates, treat as Published
+      console.warn(`Exam ${exam.exam_id} has invalid start/end times.`);
+      return 'Published'; // Invalid dates, treat as not yet properly scheduled
     }
 
-    if (isAfter(now, endTime)) return 'Completed'; // Time has passed
-    if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing'; // Within scheduled time
-    if (isBefore(now, startTime)) return 'Published'; // Scheduled for future, so it's Upcoming (effectively)
+    if (isAfter(now, endTime)) return 'Completed'; 
+    if (isAfter(now, startTime) && isBefore(now, endTime)) return 'Ongoing'; 
+    if (isBefore(now, startTime)) return 'Published'; // Effectively 'Upcoming'
   }
-
-  // If DB status is 'Ongoing', check if end_time has passed
-  if (exam.status === 'Ongoing') {
-    if (exam.end_time) {
-      const now = new Date();
-      const endTime = parseISO(exam.end_time);
-      if (isValid(endTime) && isAfter(now, endTime)) return 'Completed';
-    }
-    // If no end_time or end_time hasn't passed, it's still Ongoing
-    return 'Ongoing';
-  }
-
-  return exam.status; // Fallback to database status for other cases (e.g. 'Draft' if it existed)
+  
+  // Fallback to database status if none of the above conditions met (e.g. for any new statuses)
+  // Or if it's 'Published' but start time hasn't arrived and end time hasn't passed.
+  return exam.status as ExamStatus; 
 };
 
 
@@ -89,13 +83,13 @@ export default function ExamDetailsPage() {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('*, teacher_id') // Ensure teacher_id is fetched if needed for ownership checks
+        .select('*, teacher_id') 
         .eq('exam_id', examId)
         .single();
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
       setExam(data);
       if (data) {
         setEffectiveStatus(getEffectiveExamStatus(data));
@@ -114,7 +108,6 @@ export default function ExamDetailsPage() {
     fetchExamDetails();
   }, [fetchExamDetails]);
 
-  // Effect to periodically update the effective status based on current time
   useEffect(() => {
     if (exam) {
       const interval = setInterval(() => {
@@ -122,9 +115,8 @@ export default function ExamDetailsPage() {
         if (newEffectiveStatus !== effectiveStatus) {
           setEffectiveStatus(newEffectiveStatus);
         }
-      }, 60000); // Check every minute
+      }, 30000); // Check every 30 seconds for more responsive status updates
 
-      // Also re-check on window focus, as time might have passed significantly
       const handleFocus = () => {
          const newEffectiveStatus = getEffectiveExamStatus(exam);
          if (newEffectiveStatus !== effectiveStatus) {
@@ -138,7 +130,7 @@ export default function ExamDetailsPage() {
         window.removeEventListener('focus', handleFocus);
       };
     }
-  }, [exam, effectiveStatus]); // Re-run if exam data or effectiveStatus itself changes
+  }, [exam, effectiveStatus]); 
 
 
   const copyExamCode = () => {
@@ -155,11 +147,11 @@ export default function ExamDetailsPage() {
     if (!exam) return;
     setIsDeleting(true);
     try {
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from('ExamX')
         .delete()
         .eq('exam_id', exam.exam_id);
-      if (error) throw error;
+      if (deleteError) throw deleteError;
       toast({ title: "Exam Deleted", description: `Exam "${exam.title}" has been deleted successfully.` });
       router.push('/teacher/dashboard/exams');
     } catch (error: any) {
@@ -172,8 +164,8 @@ export default function ExamDetailsPage() {
 
   const getStatusBadgeVariant = (status: ExamStatus) => {
     switch (status) {
-      case 'Published': return 'default'; // Usually means upcoming if start_time is in future
-      case 'Ongoing': return 'destructive'; // Often highlighted
+      case 'Published': return 'default'; 
+      case 'Ongoing': return 'destructive'; 
       case 'Completed': return 'outline';
       default: return 'secondary';
     }
@@ -181,7 +173,7 @@ export default function ExamDetailsPage() {
 
   const getStatusBadgeClass = (status: ExamStatus) => {
      switch (status) {
-      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; // For upcoming
+      case 'Published': return 'bg-blue-500 hover:bg-blue-600 text-white'; 
       case 'Ongoing': return 'bg-yellow-500 hover:bg-yellow-600 text-black';
       case 'Completed': return 'bg-green-500 hover:bg-green-600 text-white';
       default: return '';
@@ -223,22 +215,21 @@ export default function ExamDetailsPage() {
   }
 
   const questionsList = exam.questions || [];
-  // Exam code is shareable if the exam is not 'Completed'
   const isShareable = effectiveStatus !== 'Completed';
 
 
   return (
     <div className="space-y-6">
-      <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')} className="mb-4">
+      <Button variant="outline" onClick={() => router.push('/teacher/dashboard/exams')} className="mb-4 btn-outline-subtle">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Exams List
       </Button>
 
-      <Card className="shadow-xl">
+      <Card className="shadow-xl modern-card">
         <CardHeader>
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle className="text-3xl">{exam.title}</CardTitle>
-              <CardDescription className="mt-1">{exam.description || "No description provided."}</CardDescription>
+              <CardTitle className="text-3xl text-foreground">{exam.title}</CardTitle>
+              <CardDescription className="mt-1 text-muted-foreground">{exam.description || "No description provided."}</CardDescription>
             </div>
             <Badge
               variant={getStatusBadgeVariant(effectiveStatus)}
@@ -249,48 +240,48 @@ export default function ExamDetailsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 border rounded-lg bg-muted/30">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 border border-border/30 rounded-lg bg-background/50">
             <div>
               <Label className="text-sm font-medium text-muted-foreground">Exam Code</Label>
               <div className="flex items-center gap-2">
                 <p className="text-lg font-semibold text-primary">{exam.exam_code}</p>
-                <Button variant="ghost" size="icon" onClick={copyExamCode} className="h-7 w-7">
+                <Button variant="ghost" size="icon" onClick={copyExamCode} className="h-7 w-7 text-muted-foreground hover:text-primary">
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
             </div>
             <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><Clock className="h-4 w-4" /> Duration</Label>
-              <p className="text-lg font-semibold">{exam.duration} minutes</p>
+              <p className="text-lg font-semibold text-foreground">{exam.duration} minutes</p>
             </div>
             <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><CheckSquare className="h-4 w-4" /> Backtracking</Label>
-              <p className="text-lg font-semibold">{exam.allow_backtracking ? 'Allowed' : 'Not Allowed'}</p>
+              <p className="text-lg font-semibold text-foreground">{exam.allow_backtracking ? 'Allowed' : 'Not Allowed'}</p>
             </div>
              <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><CalendarClock className="h-4 w-4" /> Start Time</Label>
-              <p className="text-lg font-semibold">{formatDateTime(exam.start_time)}</p>
+              <p className="text-lg font-semibold text-foreground">{formatDateTime(exam.start_time)}</p>
             </div>
              <div>
               <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><CalendarClock className="h-4 w-4" /> End Time</Label>
-              <p className="text-lg font-semibold">{formatDateTime(exam.end_time)}</p>
+              <p className="text-lg font-semibold text-foreground">{formatDateTime(exam.end_time)}</p>
             </div>
              <div>
                 <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1"><AlertCircle className="h-4 w-4" /> Database Status</Label>
-                <p className="text-lg font-semibold">{exam.status}</p>
+                <p className="text-lg font-semibold text-foreground">{exam.status}</p>
             </div>
           </div>
 
           <div>
-            <h3 className="text-xl font-semibold mb-3 flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary" /> Questions ({questionsList.length})</h3>
+            <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-foreground"><ListChecks className="h-5 w-5 text-primary" /> Questions ({questionsList.length})</h3>
             {questionsList.length > 0 ? (
-              <ul className="space-y-4 max-h-96 overflow-y-auto pr-2">
+              <ul className="space-y-4 max-h-96 overflow-y-auto pr-2 rounded-md">
                 {questionsList.map((q: Question, index: number) => (
-                  <li key={q.id || index} className="p-4 border rounded-md bg-background shadow-sm">
-                    <p className="font-medium text-md mb-1">Q{index + 1}: {q.text}</p>
+                  <li key={q.id || index} className="p-4 border border-border/20 rounded-md bg-background/70 shadow-sm">
+                    <p className="font-medium text-md mb-1 text-foreground">Q{index + 1}: {q.text}</p>
                     <ul className="list-disc list-inside text-sm space-y-1 pl-4">
                       {q.options.map((opt, i) => (
-                        <li key={opt.id || i} className={opt.id === q.correctOptionId ? 'text-green-600 font-semibold' : 'text-muted-foreground'}>
+                        <li key={opt.id || i} className={opt.id === q.correctOptionId ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-muted-foreground'}>
                           {opt.text} {opt.id === q.correctOptionId && "(Correct)"}
                         </li>
                       ))}
@@ -299,24 +290,23 @@ export default function ExamDetailsPage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground">No questions have been added to this exam yet.</p>
+              <p className="text-muted-foreground p-4 text-center border border-border/20 rounded-md bg-background/30">No questions have been added to this exam yet.</p>
             )}
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 border-t pt-6 flex-wrap">
-          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/exams/${exam.exam_id}/edit`)}>
+        <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 border-t border-border/30 pt-6 flex-wrap">
+          <Button variant="outline" onClick={() => router.push(`/teacher/dashboard/exams/${exam.exam_id}/edit`)} className="btn-outline-subtle">
             <Edit className="mr-2 h-4 w-4" /> Edit Exam
           </Button>
-          {/* Monitor Exam button removed */}
-          <Button variant="outline" asChild disabled={effectiveStatus !== 'Completed'}>
-            <Link href={`/teacher/dashboard/results/${exam.exam_id}`}>
+          <Button variant="outline" asChild disabled={effectiveStatus === 'Completed'}>
+            <Link href={`/teacher/dashboard/results/${exam.exam_id}`} className="btn-outline-subtle disabled:opacity-50">
                 <Users2 className="mr-2 h-4 w-4" /> View Results
             </Link>
           </Button>
-          <Button variant="outline" onClick={copyExamCode} disabled={!isShareable}>
+          <Button variant="outline" onClick={copyExamCode} disabled={!isShareable} className="btn-outline-subtle">
             <Share2 className="mr-2 h-4 w-4" /> Share Exam Code
           </Button>
-          <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} disabled={isDeleting || effectiveStatus === 'Ongoing'}>
+          <Button variant="destructive" onClick={() => setShowDeleteDialog(true)} disabled={isDeleting || effectiveStatus === 'Ongoing'} className="btn-gradient-destructive">
             {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <Trash2 className="mr-2 h-4 w-4" /> Delete Exam
           </Button>
@@ -324,17 +314,17 @@ export default function ExamDetailsPage() {
       </Card>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="glass-card">
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-foreground">Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
               This action cannot be undone. This will permanently delete the exam
               "{exam?.title}" and all its associated data. Ongoing exams cannot be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteExam} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isDeleting || effectiveStatus === 'Ongoing'}>
+            <AlertDialogCancel className="btn-outline-subtle">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExam} className="btn-gradient-destructive" disabled={isDeleting || effectiveStatus === 'Ongoing'}>
               {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Yes, delete exam
             </AlertDialogAction>

@@ -12,7 +12,9 @@ import { Loader2, AlertTriangle, ShieldAlert, ServerCrash } from 'lucide-react';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { decryptData } from '@/lib/crypto-utils'; // Import decryption utility
 
+const TOKEN_VALIDITY_MINUTES = 5; // Token generated on initiate page is valid for this long
 
 export default function ExamSessionPage() {
   const params = useParams();
@@ -22,17 +24,28 @@ export default function ExamSessionPage() {
   const supabase = createSupabaseBrowserClient();
   const { user: studentUser, isLoading: authIsLoading } = useAuth();
 
-  const examId = params.examId as string;
+  const examIdFromUrl = params.examId as string;
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [pageIsLoading, setPageIsLoading] = useState(true); 
   const [pageError, setPageError] = useState<string | null>(null);
-  const [isValidSession, setIsValidSession] = useState<boolean | undefined>(undefined); 
+  const [isValidSession, setIsValidSession] = useState<boolean | undefined>(undefined);
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0); // In milliseconds
 
   const studentUserId = studentUser?.user_id;
   const studentName = studentUser?.name;
   const studentAvatarUrl = studentUser?.avatar_url;
+
+  // Simulate fetching server time offset
+  useEffect(() => {
+    // In a real app, this would be an API call to your server
+    // const fetchedOffset = await fetch('/api/time-sync').then(res => res.json()).offset;
+    // For demo, assume client and server time are perfectly synced (offset = 0)
+    // or a small fixed/random offset for testing.
+    setServerTimeOffset(0); 
+    console.log('[ExamSessionPage] Simulated server time offset:', 0);
+  }, []);
 
 
   useEffect(() => {
@@ -50,8 +63,8 @@ export default function ExamSessionPage() {
       return;
     }
 
-    const token = searchParams.get('token');
-    if (!token) {
+    const encryptedToken = searchParams.get('token');
+    if (!encryptedToken) {
       console.error("[ExamSessionPage] Missing exam token.");
       setPageError("Access denied. Missing required exam token. Please re-initiate the exam from the dashboard.");
       setIsValidSession(false);
@@ -59,30 +72,44 @@ export default function ExamSessionPage() {
       return;
     }
 
-    try {
-      const decoded = typeof window !== 'undefined' ? atob(decodeURIComponent(token)) : '';
-      const payload = JSON.parse(decoded);
-      console.log("[ExamSessionPage] Decoded token payload:", payload);
-      
-      if (payload.examId !== examId || payload.studentId !== studentUserId) {
-        console.error("[ExamSessionPage] Token mismatch. Decoded ExamId:", payload.examId, "URL ExamId:", examId, "Decoded StudentId:", payload.studentId, "Context StudentId:", studentUserId);
-        throw new Error("Invalid token payload. Session mismatch.");
-      }
-      console.log("[ExamSessionPage] Token validation successful.");
-      setIsValidSession(true);
-      setPageError(null); 
-    } catch (e: any) {
-      console.error("[ExamSessionPage] Error validating token:", e.message);
-      setPageError(e.message || "Invalid or expired exam session token. Please re-initiate the exam.");
-      setIsValidSession(false);
-      if (pageIsLoading) setPageIsLoading(false);
-    }
-  }, [searchParams, examId, studentUserId, authIsLoading, pageIsLoading]);
+    decryptData<{ examId: string; studentId: string; timestamp: number, examCode: string }>(encryptedToken)
+      .then(payload => {
+        if (!payload) {
+          throw new Error("Invalid token: Decryption failed.");
+        }
+        console.log("[ExamSessionPage] Decrypted token payload:", payload);
+        
+        if (payload.examId !== examIdFromUrl) {
+           console.error("[ExamSessionPage] Token mismatch. Decoded ExamId:", payload.examId, "URL ExamId:", examIdFromUrl);
+           throw new Error("Invalid token payload: Exam ID mismatch.");
+        }
+        if (payload.studentId !== studentUserId) {
+            console.error("[ExamSessionPage] Token mismatch. Decoded StudentId:", payload.studentId, "Context StudentId:", studentUserId);
+            throw new Error("Invalid token payload: Student ID mismatch.");
+        }
+
+        const tokenAgeMinutes = (Date.now() - payload.timestamp) / (1000 * 60);
+        if (tokenAgeMinutes > TOKEN_VALIDITY_MINUTES) {
+            console.error(`[ExamSessionPage] Token expired. Age: ${tokenAgeMinutes.toFixed(2)} minutes.`);
+            throw new Error(`Exam session link expired (valid for ${TOKEN_VALIDITY_MINUTES} minutes). Please re-initiate the exam.`);
+        }
+
+        console.log("[ExamSessionPage] Token validation successful.");
+        setIsValidSession(true);
+        setPageError(null); 
+      })
+      .catch((e: any) => {
+        console.error("[ExamSessionPage] Error validating token:", e.message);
+        setPageError(e.message || "Invalid or expired exam session token. Please re-initiate the exam.");
+        setIsValidSession(false);
+        if (pageIsLoading) setPageIsLoading(false);
+      });
+  }, [searchParams, examIdFromUrl, studentUserId, authIsLoading, pageIsLoading]);
 
   const fetchExamData = useCallback(async () => {
-    if (!examId || !supabase || !studentUserId) {
+    if (!examIdFromUrl || !supabase || !studentUserId) {
       const missingInfo = [];
-      if (!examId) missingInfo.push("Exam ID");
+      if (!examIdFromUrl) missingInfo.push("Exam ID");
       if (!supabase) missingInfo.push("Supabase client");
       if (!studentUserId) missingInfo.push("Student details");
       setPageError(`${missingInfo.join(', ')} unavailable for exam data fetch.`);
@@ -90,22 +117,24 @@ export default function ExamSessionPage() {
       return;
     }
 
-    console.log(`[ExamSessionPage] Fetching exam data for examId: ${examId}, studentId: ${studentUserId}`);
-    setPageIsLoading(true); // Ensure loading state is true before fetch
+    console.log(`[ExamSessionPage] Fetching exam data for examId: ${examIdFromUrl}, studentId: ${studentUserId}`);
+    setPageIsLoading(true); 
     setPageError(null);
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
         .select('exam_id, title, description, duration, questions, allow_backtracking, start_time, end_time, status')
-        .eq('exam_id', examId)
+        .eq('exam_id', examIdFromUrl)
         .single();
 
       if (fetchError) throw fetchError;
       if (!data) throw new Error("Exam not found.");
 
       const currentExam = data as Exam;
-      const effectiveStatus = getEffectiveExamStatus(currentExam);
-      console.log("[ExamSessionPage] Fetched Exam Data:", currentExam, "Effective Status:", effectiveStatus);
+      // Consider serverTimeOffset for status calculation
+      const nowWithOffset = new Date(Date.now() - serverTimeOffset);
+      const effectiveStatus = getEffectiveExamStatus(currentExam, nowWithOffset); 
+      console.log("[ExamSessionPage] Fetched Exam Data:", currentExam, "Effective Status (with offset):", effectiveStatus);
 
       if (effectiveStatus !== 'Ongoing') {
          setPageError(`This exam is currently ${effectiveStatus.toLowerCase()} and cannot be taken. Please close this tab.`);
@@ -127,7 +156,10 @@ export default function ExamSessionPage() {
       setQuestions(currentExam.questions || []);
       
       // TODO: Create or update ExamSubmissionsX record on exam start
-      console.log("[ExamSessionPage] TODO: Create/Update ExamSubmissionsX record for student:", studentUserId, "exam:", examId);
+      // Check if a submission for this exam_id and student_user_id already exists with status 'In Progress'
+      // If yes, load answers. If no, create new.
+      // For now, we assume a fresh start.
+      console.log("[ExamSessionPage] TODO: Create/Update ExamSubmissionsX record for student:", studentUserId, "exam:", examIdFromUrl);
 
     } catch (e: any) {
       console.error("[ExamSessionPage] Error fetching exam data:", e.message);
@@ -137,7 +169,7 @@ export default function ExamSessionPage() {
     } finally {
       setPageIsLoading(false);
     }
-  }, [examId, supabase, studentUserId]);
+  }, [examIdFromUrl, supabase, studentUserId, serverTimeOffset]);
 
   useEffect(() => {
     console.log("[ExamSessionPage] Exam data fetch effect. IsValidSession:", isValidSession, "ExamDetails:", !!examDetails, "PageError:", pageError, "pageIsLoading:", pageIsLoading);
@@ -146,14 +178,14 @@ export default function ExamSessionPage() {
             console.log("[ExamSessionPage] Valid session, fetching exam data.");
             fetchExamData();
         } else if (examDetails || pageError) {
-             console.log("[ExamSessionPage] Exam data already fetched or error exists, ensuring page pageIsLoading is false.");
+             console.log("[ExamSessionPage] Exam data already fetched or error exists, ensuring pageIsLoading is false.");
             if(pageIsLoading) setPageIsLoading(false); 
         }
     } else if (isValidSession === false && pageIsLoading) {
-        console.log("[ExamSessionPage] Session explicitly invalid, ensuring page pageIsLoading is false.");
+        console.log("[ExamSessionPage] Session explicitly invalid, ensuring pageIsLoading is false.");
         setPageIsLoading(false);
     }
-  }, [isValidSession, examId, fetchExamData, examDetails, pageError, pageIsLoading]);
+  }, [isValidSession, examIdFromUrl, fetchExamData, examDetails, pageError, pageIsLoading]);
 
 
   const handleSubmitExamActual = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -169,11 +201,18 @@ export default function ExamSessionPage() {
         flagged_events: flaggedEvents.length > 0 ? flaggedEvents as any : null,
         status: 'Completed',
         submitted_at: new Date().toISOString(),
+        // score would be calculated on server or by teacher later
     };
 
     console.log("[ExamSessionPage] Submitting exam. Data:", submissionData);
     try {
-        const { error: submissionError } = await supabase.from('ExamSubmissionsX').insert(submissionData);
+        // Upsert to handle potential existing 'In Progress' submission
+        const { error: submissionError } = await supabase
+            .from('ExamSubmissionsX')
+            .upsert(submissionData, { onConflict: 'exam_id, student_user_id' })
+            .eq('exam_id', examDetails.exam_id) // Ensure upsert targets correctly
+            .eq('student_user_id', studentUserId);
+
         if (submissionError) { 
           console.error("[ExamSessionPage] Submission Error:", submissionError);
           toast({ title: "Submission Error", description: submissionError.message, variant: "destructive" });
@@ -202,7 +241,12 @@ export default function ExamSessionPage() {
     
     console.log("[ExamSessionPage] Time up. Auto-submitting exam. Data:", submissionData);
     try {
-        const { error: submissionError } = await supabase.from('ExamSubmissionsX').insert(submissionData);
+        const { error: submissionError } = await supabase
+            .from('ExamSubmissionsX')
+            .upsert(submissionData, { onConflict: 'exam_id, student_user_id' })
+            .eq('exam_id', examDetails.exam_id)
+            .eq('student_user_id', studentUserId);
+
         if (submissionError) { 
           console.error("[ExamSessionPage] Auto-Submission Error (Time Up):", submissionError);
           toast({ title: "Auto-Submission Error", description: submissionError.message, variant: "destructive" });
@@ -218,13 +262,22 @@ export default function ExamSessionPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-center">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <h2 className="text-xl font-medium text-slate-200 mb-1">Preparing Your Exam...</h2>
+        <h2 className="text-xl font-medium text-slate-200 mb-1">Preparing Your Exam Session...</h2>
         <p className="text-sm text-slate-400">
           {authIsLoading ? "Authenticating session..." : 
-           isValidSession === undefined ? "Validating exam session..." :
+           isValidSession === undefined ? "Validating exam token..." :
            pageIsLoading && !examDetails && !pageError ? "Loading exam content..." : 
            "Please wait."}
         </p>
+         {/* Add a warning about the demo crypto key */}
+        <Alert variant="destructive" className="mt-8 max-w-md bg-destructive/20 border-destructive/30 text-destructive-foreground">
+            <ShieldAlert className="h-4 w-4 text-destructive" />
+            <AlertTitle className="font-semibold">Security Notice (Development)</AlertTitle>
+            <AlertDescription className="text-xs">
+                This exam session uses demo-level encryption for URL parameters. 
+                For production, ensure robust key management.
+            </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -263,8 +316,10 @@ export default function ExamSessionPage() {
     );
   }
 
+  // This case should be caught by pageError with "no questions" message
   if (examDetails && (!questions || questions.length === 0) && !pageIsLoading && !pageError) {
       setPageError("This exam has no questions. Please contact your teacher and close this tab.");
+      // Re-render will show the error screen
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-center">
             <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
@@ -273,15 +328,14 @@ export default function ExamSessionPage() {
       );
   }
 
-
   return (
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions || []}
       parentIsLoading={pageIsLoading && !examDetails} 
       examLoadingError={pageError} 
-      persistentError={null} // No separate persistent error state in this page
-      cantStartReason={pageError} // If pageError is set (e.g. "no questions"), it's a reason not to start
+      persistentError={null} 
+      cantStartReason={pageError}
       onAnswerChange={ (qid, oid) => console.log(`[ExamSessionPage] Answer changed Q:${qid} O:${oid}`) }
       onSubmitExam={handleSubmitExamActual}
       onTimeUp={handleTimeUpActual}
@@ -290,7 +344,8 @@ export default function ExamSessionPage() {
       studentName={studentName}
       studentRollNumber={studentUserId} 
       studentAvatarUrl={studentAvatarUrl}
-      examStarted={true} // If this page renders, exam is considered started
+      examStarted={true}
     />
   );
 }
+
