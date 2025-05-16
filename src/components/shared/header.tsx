@@ -6,18 +6,20 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Loader2, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import logoAsset from '../../../logo.png';
+import logoAsset from '../../../logo.png'; 
 
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
-const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE;
 
 export function AppHeader() {
-  const { user, signOut, isLoading: authLoading } = useAuth(); // isLoading is now authLoading
+  const { user, signOut, isLoading: authLoading } = useAuth();
   const isAuthenticated = !!user;
 
   const getDashboardRoute = () => {
-    if (!user || !user.role) return DEFAULT_DASHBOARD_ROUTE;
+    if (!user || !user.role) { // Default if role isn't defined for some reason
+        console.warn("[AppHeader] User role missing, defaulting dashboard route.");
+        return STUDENT_DASHBOARD_ROUTE; 
+    }
     return user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
   };
 
@@ -28,7 +30,7 @@ export function AppHeader() {
           <Image src={logoAsset} alt="ZenTest Logo" width={114} height={32} priority className="h-8 w-auto" />
         </Link>
         <nav className="flex items-center space-x-1 sm:space-x-2">
-          {authLoading ? ( // Use authLoading from context
+          {authLoading ? ( 
              <div className="p-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
              </div>

@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, BookOpenCheck, Brain, BarChart3, Loader2, AlertTriangle } from 'lucide-react';
 import { useCallback, ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button'; // Added Button import
+import { useRouter } from 'next/navigation'; // Added useRouter for redirect
 
 const teacherNavItems: NavItem[] = [
   { href: '/teacher/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
@@ -14,15 +16,19 @@ const teacherNavItems: NavItem[] = [
   { href: '/teacher/dashboard/results', label: 'Student Results', icon: BarChart3 },
 ];
 
+const AUTH_ROUTE = '/auth';
+
 export default function TeacherDashboardLayout({
   children,
 }: {
   children: ReactNode;
 }) {
   const { user, signOut, isLoading: authLoading, authError } = useAuth();
+  const router = useRouter();
 
   const handleSignOut = useCallback(async () => {
     await signOut();
+    // router.replace(AUTH_ROUTE); // AuthContext's route guard will handle this
   }, [signOut]);
 
   if (authLoading) {
@@ -34,8 +40,7 @@ export default function TeacherDashboardLayout({
     );
   }
   
-  if (!user) { // Auth loading is false, but no user
-    // Middleware should have redirected to /auth.
+  if (!user) {
     return (
         <div className="flex h-screen w-full items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
             <Card className="p-6 modern-card text-center shadow-xl">
@@ -48,6 +53,9 @@ export default function TeacherDashboardLayout({
                   {authError ? authError : "Your session may have expired or is invalid."}
                 </p>
                  <p className="text-xs text-muted-foreground mt-1">Please try logging in again.</p>
+                 <Button onClick={() => router.replace(AUTH_ROUTE)} className="mt-4 btn-primary-solid w-full">
+                    Go to Login
+                </Button>
               </CardContent>
             </Card>
         </div>
@@ -73,7 +81,7 @@ export default function TeacherDashboardLayout({
   return (
     <SidebarProvider 
         defaultOpen 
-        className="bg-gradient-to-br from-slate-50 via-gray-100 to-slate-100 dark:from-slate-900 dark:via-gray-950 dark:to-slate-900 min-h-screen"
+        className="bg-slate-100 dark:bg-slate-900 min-h-screen" // Updated background to a simpler one
     > 
       <SidebarElements
         navItems={teacherNavItems}
