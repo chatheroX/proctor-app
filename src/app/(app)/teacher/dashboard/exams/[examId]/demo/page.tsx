@@ -8,7 +8,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Question, Exam, FlaggedEvent } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ExamTakingInterface } from '@/components/shared/exam-taking-interface';
-import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, Info } from 'lucide-react'; 
+import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, Info, ServerCrash } from 'lucide-react'; 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -26,22 +26,22 @@ export default function TeacherDemoExamPage() {
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [pageError, setPageError] = useState<string | null>(null); // Renamed from 'error'
+  const [pageError, setPageError] = useState<string | null>(null);
   const [examLocallyStarted, setExamLocallyStarted] = useState(false); 
 
   const teacherUserId = teacherUser?.user_id;
   const teacherName = teacherUser?.name;
 
   const fetchExamData = useCallback(async () => {
+    console.log(`[TeacherDemoPage] fetchExamData triggered. examId: ${examId}, teacherUserId: ${teacherUserId}`);
     if (!examId || !supabase) {
-      setPageError(examId ? "Supabase client not available." : "Exam ID is missing for demo.");
+      const errorMsg = examId ? "Supabase client not available for demo." : "Exam ID is missing for demo.";
+      console.warn(`[TeacherDemoPage] Aborting fetch: ${errorMsg}`);
+      setPageError(errorMsg);
       setIsLoading(false);
       return;
     }
-    // Removed check for teacherUserId here to allow fetch even if context is slow,
-    // but userIdForActivityMonitor below will use 'anonymous_teacher_demo' if teacherUser is null.
     
-    console.log(`[TeacherDemoPage] Fetching exam data for demo. ExamId: ${examId}`);
     setIsLoading(true);
     setPageError(null);
     try {
@@ -57,8 +57,9 @@ export default function TeacherDemoExamPage() {
       const currentExam = data as Exam;
       setExamDetails(currentExam);
       setQuestions(currentExam.questions || []);
+
       if (!currentExam.questions || currentExam.questions.length === 0) {
-        setPageError("This exam has no questions. Add questions to run a demo.");
+        setPageError("This exam has no questions. Please add questions to run a demo.");
       }
     } catch (e: any) {
       console.error("[TeacherDemoPage] Failed to fetch exam data for demo:", e);
@@ -68,27 +69,27 @@ export default function TeacherDemoExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase]);
+  }, [examId, supabase, teacherUserId]); // Added teacherUserId
 
   useEffect(() => {
-     console.log("[TeacherDemoPage] Fetch Effect Triggered. examId:", examId, "authIsLoading:", authIsLoading, "examDetails:", !!examDetails, "pageError:", pageError, "isLoading:", isLoading);
-    if (examId && !authIsLoading) { // teacherUserId check removed from here
-        if (!examDetails && !pageError && isLoading) { 
-             console.log("[TeacherDemoPage] Conditions met, calling fetchExamData.");
-             fetchExamData();
-        } else if (examDetails || pageError) {
-             console.log("[TeacherDemoPage] Exam data already fetched or error exists. Ensure isLoading is false.");
-            if(isLoading) setIsLoading(false); 
-        }
-    } else if (!isLoading && !examId ) { 
-        setPageError("Exam ID missing for demo.");
+    console.log("[TeacherDemoPage] Fetch Effect. authIsLoading:", authIsLoading, "teacherUserId:", teacherUserId, "examId:", examId, "examDetails:", !!examDetails, "pageError:", pageError, "isLoading:", isLoading);
+    if (!authIsLoading && teacherUserId && examId) {
+      if (!examDetails && !pageError && isLoading) {
+        console.log("[TeacherDemoPage] Conditions met, calling fetchExamData.");
+        fetchExamData();
+      } else if (examDetails || pageError) {
         if(isLoading) setIsLoading(false);
+      }
+    } else if (!isLoading && (!teacherUserId || !examId) && !authIsLoading) {
+      if (!teacherUserId) setPageError("Teacher details not available for demo.");
+      else if (!examId) setPageError("Exam ID missing for demo.");
+      if(isLoading) setIsLoading(false);
     }
-  }, [examId, authIsLoading, examDetails, pageError, isLoading, fetchExamData]);
+  }, [examId, authIsLoading, teacherUserId, examDetails, pageError, isLoading, fetchExamData]);
 
 
   const handleStartDemoExam = useCallback(() => {
-    console.log('[TeacherDemoPage] handleStartDemoExam called.');
+    console.log('[TeacherDemoPage] handleStartDemoExam called. ExamDetails:', !!examDetails, 'Questions count:', questions?.length);
     if (!examDetails) {
       toast({ title: "Error", description: "Exam details not loaded for demo.", variant: "destructive" });
       return;
@@ -107,6 +108,7 @@ export default function TeacherDemoExamPage() {
 
   const handleDemoAnswerChange = useCallback((questionId: string, optionId: string) => {
     console.log(`[TeacherDemoPage] Demo Answer for QID ${questionId}: OptionID ${optionId}`);
+    // No actual state change needed for demo answers unless you want to track them locally for demo
   }, []);
 
   const handleDemoSubmitExam = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
@@ -126,31 +128,43 @@ export default function TeacherDemoExamPage() {
 
   if (authIsLoading || (isLoading && !examDetails && !pageError)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-slate-100 dark:bg-gray-900">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-muted-foreground">Loading demo exam: {examId}...</p>
+        <p className="text-lg text-slate-300">Loading demo exam: {examId}...</p>
       </div>
     );
   }
 
   if (pageError && !examDetails && !examLocallyStarted) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-slate-100 dark:bg-gray-900">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Cannot Load Demo Environment</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">{pageError}</p>
-        <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <ServerCrash className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Cannot Load Demo</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">{pageError}</p>
+            <Button onClick={() => router.back()} className="w-full btn-primary-solid">Go Back</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
   
   if (!examDetails && !isLoading && !examLocallyStarted) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-slate-100 dark:bg-gray-900">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Demo Exam Not Found</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">Could not load details for this demo exam.</p>
-        <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Demo Exam Not Found</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">Could not load details for this demo exam.</p>
+            <Button onClick={() => router.back()} className="w-full btn-primary-solid">Go Back</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -232,11 +246,18 @@ export default function TeacherDemoExamPage() {
   }
 
   return (
-     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-slate-100 dark:bg-gray-900">
-        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-        <p className="text-lg text-destructive text-center mb-2">Error in Demo Setup</p>
-        <p className="text-sm text-muted-foreground text-center mb-4">Could not initialize the demo exam interface correctly.</p>
-        <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Error in Demo Setup</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">Could not initialize the demo exam interface correctly.</p>
+            <Button onClick={() => router.back()} className="w-full btn-primary-solid">Go Back</Button>
+          </CardContent>
+        </Card>
       </div>
   );
 }
+

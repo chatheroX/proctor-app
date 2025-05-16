@@ -8,9 +8,11 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Question, Exam, FlaggedEvent, ExamSubmissionInsert } from '@/types/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ExamTakingInterface } from '@/components/shared/exam-taking-interface';
-import { Loader2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Loader2, AlertTriangle, ShieldAlert, ServerCrash } from 'lucide-react';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+
 
 export default function ExamSessionPage() {
   const params = useParams();
@@ -24,14 +26,13 @@ export default function ExamSessionPage() {
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // For this page's data loading
+  const [isLoading, setIsLoading] = useState(true); 
   const [error, setError] = useState<string | null>(null);
   const [isValidSession, setIsValidSession] = useState<boolean | undefined>(undefined); 
 
   const studentUserId = studentUser?.user_id;
   const studentName = studentUser?.name;
 
-  // Effect for token validation
   useEffect(() => {
     console.log("[ExamSessionPage] Token validation effect. AuthLoading:", authIsLoading, "StudentUserID:", studentUserId);
     if (authIsLoading) {
@@ -93,7 +94,7 @@ export default function ExamSessionPage() {
     try {
       const { data, error: fetchError } = await supabase
         .from('ExamX')
-        .select('exam_id, title, description, duration, questions, allow_backtracking, start_time, end_time, status') // Select only needed fields
+        .select('exam_id, title, description, duration, questions, allow_backtracking, start_time, end_time, status')
         .eq('exam_id', examId)
         .single();
 
@@ -207,13 +208,12 @@ export default function ExamSessionPage() {
     toast({ title: "Exam Auto-Submitted!", description: "Your responses have been recorded due to time up. You can close this tab." });
   }, [studentUserId, examDetails, toast, supabase]);
 
-  // Initial loading state covers auth and token validation
   if (authIsLoading || isValidSession === undefined || (isValidSession && isLoading && !examDetails && !error)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-900 p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-center">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <h2 className="text-xl font-medium text-foreground mb-1">Preparing Your Exam...</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-xl font-medium text-slate-200 mb-1">Preparing Your Exam...</h2>
+        <p className="text-sm text-slate-400">
           {authIsLoading ? "Authenticating session..." : 
            isValidSession === undefined ? "Validating exam session..." :
            isLoading && !examDetails && !error ? "Loading exam content..." : 
@@ -223,36 +223,34 @@ export default function ExamSessionPage() {
     );
   }
   
-  // This error covers token validation failures or issues after token validation but before exam data load starts
   if (error && (!examDetails || (examDetails && questions.length === 0 && !isLoading)) ) { 
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-900 p-4 text-center">
-        <Card className="w-full max-w-md modern-card shadow-lg p-6">
-          <CardHeader>
-            <ShieldAlert className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <CardTitle className="text-xl font-semibold text-destructive mb-2">Cannot Start Exam</CardTitle>
+       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+          <CardHeader className="pt-8 pb-4">
+            <ServerCrash className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Cannot Start Exam</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            <p className="text-xs text-muted-foreground">Please try re-initiating the exam from your dashboard or contact support.</p>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">{error}</p>
+             <Button onClick={() => window.close()} className="w-full btn-primary-solid">Close Tab</Button>
           </CardContent>
         </Card>
       </div>
     );
   }
   
-  // If loading is done, but examDetails are still null (should be caught by error above, but defensive)
   if (!examDetails && !isLoading) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-900 p-4 text-center">
-        <Card className="w-full max-w-md modern-card shadow-lg p-6">
-          <CardHeader>
-            <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <CardTitle className="text-xl font-semibold text-destructive mb-2">Exam Data Not Available</CardTitle>
+       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+           <CardHeader className="pt-8 pb-4">
+            <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-5" />
+            <CardTitle className="text-2xl text-destructive">Exam Data Not Available</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">Could not load the details for this exam.</p>
-            <p className="text-xs text-muted-foreground">Please try again or contact your teacher/support.</p>
+          <CardContent className="pb-6">
+            <p className="text-sm text-muted-foreground mb-6">Could not load the details for this exam. Please try re-initiating the exam.</p>
+             <Button onClick={() => window.close()} className="w-full btn-primary-solid">Close Tab</Button>
           </CardContent>
         </Card>
       </div>
@@ -263,8 +261,8 @@ export default function ExamSessionPage() {
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions || []}
-      parentIsLoading={isLoading && !examDetails} // True if page is loading exam data
-      examLoadingError={error} // Pass any error during exam data fetch from this page
+      parentIsLoading={isLoading && !examDetails} 
+      examLoadingError={error} 
       examStarted={true} 
       onAnswerChange={ (qid, oid) => console.log(`[ExamSessionPage] Answer changed Q:${qid} O:${oid}`) }
       onSubmitExam={handleSubmitExamActual}
@@ -276,3 +274,4 @@ export default function ExamSessionPage() {
     />
   );
 }
+
