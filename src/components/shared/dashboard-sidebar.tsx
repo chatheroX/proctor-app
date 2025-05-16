@@ -16,10 +16,24 @@ import {
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, LogOut, Settings, Loader2, Hash, UserCircle, GripVertical } from 'lucide-react';
+import { LogOut, Settings, Loader2, UserCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+// Placeholder ZenTest SVG Logo
+const ZenTestLogo = () => (
+  <svg width="100" height="28" viewBox="0 0 100 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-7 w-auto text-primary group-hover:text-primary/90 transition-colors">
+    <text x="0" y="20" fontFamily="Arial, Helvetica, sans-serif" fontSize="20" fontWeight="bold" fill="currentColor">
+      Zen<tspan fill="hsl(var(--accent))">●</tspan>Test<tspan fill="hsl(var(--accent))">●</tspan>
+    </text>
+     {/* Replace this SVG with:
+    <Image src="/images/zentest-logo.png" alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
+    once you place your logo in public/images/zentest-logo.png
+    Adjust width and height props as needed.
+    */}
+  </svg>
+);
 
 
 export interface NavItem {
@@ -43,7 +57,6 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
   const pathname = usePathname();
 
   const mainNavItems = navItems.filter(item => !item.group || item.group === 'MAIN');
-  // Add other groups similarly if needed
 
   const renderNavGroup = (items: NavItem[], groupLabel?: string) => {
     if (items.length === 0 && !groupLabel) return null;
@@ -77,7 +90,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                     className: "group-data-[collapsible=icon]:block hidden bg-popover text-popover-foreground border-border shadow-sm rounded-sm"
                 }}
                 disabled={item.disabled}
-                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
+                className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-all duration-200 ease-in-out data-[active=true]:hover:bg-sidebar-primary/90"
                 data-sidebar="menu-button"
               >
                 <Link href={item.href} className="gap-2.5">
@@ -101,8 +114,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
       <SidebarHeader className="p-3 border-b border-sidebar-border/60 h-16 flex items-center">
         <div className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            <ShieldCheck className="h-7 w-7 text-primary" />
-            <span className="font-semibold text-xl text-foreground">ProctorPrep</span>
+            <ZenTestLogo />
           </Link>
            <SidebarTrigger className="text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:hidden" />
            <SidebarTrigger className="text-muted-foreground hover:text-foreground hidden group-data-[collapsible=icon]:flex" />
@@ -124,7 +136,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                         children: "My Profile",
                          className: "group-data-[collapsible=icon]:block hidden bg-popover text-popover-foreground border-border shadow-sm rounded-sm"
                     }}
-                    className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
+                    className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-all duration-200 ease-in-out data-[active=true]:hover:bg-sidebar-primary/90"
                      data-sidebar="menu-button"
                 >
                     <Link href={`/${userRoleDashboard}/dashboard/profile`} className="gap-2.5">
@@ -141,7 +153,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                         children: "Settings",
                          className: "group-data-[collapsible=icon]:block hidden bg-popover text-popover-foreground border-border shadow-sm rounded-sm"
                     }}
-                    className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md"
+                    className="text-sm font-medium text-sidebar-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-all duration-200 ease-in-out data-[active=true]:hover:bg-sidebar-primary/90"
                      data-sidebar="menu-button"
                 >
                     <Link href={`/${userRoleDashboard}/dashboard/settings`} className="gap-2.5">
@@ -168,7 +180,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
                         <p className="text-sm font-medium text-foreground truncate" title={user.name || user.email}>
                         {user.name || user.email}
                         </p>
-                        <p className="text-xs text-muted-foreground capitalize truncate" title={user.role || undefined}>
+                        <p className="text-xs text-muted-foreground capitalize truncate" title={`${user.role} - ID: ${user.user_id}`}>
                           {user.role || 'N/A'} - ID: {user.user_id}
                         </p>
                     </div>
