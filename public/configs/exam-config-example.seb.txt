@@ -1,54 +1,59 @@
 
-This is an EXAMPLE instruction file for creating your 'exam-config.seb'.
-You MUST use the Safe Exam Browser (SEB) Configuration Tool to create the actual 'exam-config.seb' file.
+CRITICAL TEST: Before proceeding, open https://YOUR_APP_DOMAIN/configs/exam-config.seb in a regular web browser (replace YOUR_APP_DOMAIN). It MUST download the exam-config.seb file. If it shows your website's 404 page, login page, or any other HTML, your Netlify (or other hosting provider) serving configuration for this file is incorrect and SEB will fail. Ensure your hosting provider serves this file with Content-Type: application/octet-stream or application/x-seb.
 
-CRITICAL INSTRUCTIONS FOR YOUR 'exam-config.seb' FILE:
+---
 
-1.  **PLACEMENT**:
-    *   After creating 'exam-config.seb' with the SEB Configuration Tool, you MUST place this file in your Next.js project at the following exact path:
-        `public/configs/exam-config.seb`
-    *   Ensure this file is committed to your repository and deployed with your application.
+This is an EXAMPLE configuration text. You MUST use the Safe Exam Browser (SEB) Configuration Tool
+to create your actual 'exam-config.seb' file and place it in /public/configs/exam-config.seb
 
-2.  **START URL (Inside your 'exam-config.seb' settings)**:
-    *   In the SEB Configuration Tool, go to the "General" tab.
-    *   Set the "Start URL" to: `https://YOUR_APP_DOMAIN/seb/entry`
-    *   **IMPORTANT**:
-        *   Replace `YOUR_APP_DOMAIN` with the actual, publicly accessible domain where your ZenTest application is deployed (e.g., `https://proctorx.netlify.app`).
-        *   The Start URL should point to `/seb/entry` WITHOUT any hash parameters or query strings initially. Your application will dynamically add the necessary `#entryToken=...` to the URL of the `.seb` file itself when launching SEB. SEB will then append this hash to the Start URL.
+Key Settings to Configure in SEB Configuration Tool:
 
-3.  **SECURITY SETTINGS (Inside your 'exam-config.seb' settings)**:
-    *   **Browser Exam Key (BEK)**: Generate and use a strong Browser Exam Key. Your application's `/seb/entry` page might perform a conceptual check for this via headers if SEB is configured to send it (advanced setup).
-    *   **Config Key (CK)**: Generate and use a strong Config Key.
-    *   **Prohibited Processes**: Add common screen sharing, communication, and virtual machine processes to the prohibited list.
-    *   **Allowed Processes**: Typically, only SEB itself.
-    *   **Keyboard Shortcuts**: Disable Ctrl, Alt, Cmd/Win, Function keys (F1-F12), PrintScreen, Esc (unless quit link is used), Tab (unless specifically needed for accessibility within a form element if SEB allows).
-    *   **Clipboard**: Disable.
-    *   **Developer Tools**: Disable browser developer tools.
-    *   **URL Filtering**:
-        *   For a token-based approach, extensive URL filtering might be less critical for the initial page load, as the token validates the session.
-        *   However, you might want to restrict navigation away from your application's domain.
-        *   Allow your application's domain: `https://YOUR_APP_DOMAIN/` (and subpaths).
-        *   Allow Supabase URLs if your app directly communicates for auth status or other client-side fetches (though API routes are better).
-    *   **Quit Link**:
-        *   Enable "Allow user to quit SEB".
-        *   Set the quit link URL to `seb://quit`.
-        *   Optionally, set a quit password.
-    *   **Audio Control**: Enable if needed, disable if not.
-    *   **File Downloads/Uploads**: Configure based on whether your exam requires them (current ZenTest doesn't have uploads). For security, generally disable downloads unless explicitly needed.
-    *   **Browser Window**: Configure to open full screen, hide SEB taskbar initially.
-    *   **Network**: Configure proxies if necessary for your institution.
+1. General Tab:
+   - Start URL:
+     - Set this to: https://YOUR_APP_DOMAIN/seb/entry
+     - Replace YOUR_APP_DOMAIN with your actual deployed application domain (e.g., https://proctorx.netlify.app).
+     - DO NOT include any query parameters or hash parameters like #entryToken= here. The token will be passed by the application when it launches SEB.
 
-4.  **SERVING THE .SEB FILE**:
-    *   Ensure your hosting provider (e.g., Netlify) serves the `/configs/exam-config.seb` file with the correct `Content-Type` (e.g., `application/x-seb` or `application/octet-stream`) and does not treat it as an HTML page or redirect it. The `_headers` and `_redirects` files in the `public` directory aim to assist with this on Netlify.
+2. Config File Tab:
+   - Administration: Set a password for changing settings.
+   - Encryption: Consider using a password to encrypt the .seb settings if distributing it.
 
-Your ZenTest application (`join-exam/page.tsx`) will construct a URL like:
-`sebs://YOUR_APP_DOMAIN/configs/exam-config.seb#entryToken=GENERATED_TOKEN`
-to launch SEB.
+3. Browser Tab:
+   - Enable "Enable JavaScript".
+   - Enable "Enable plug-ins (Flash, Java, etc.)" - generally NO, unless specifically needed.
+   - Enable "Block pop-up windows" - typically YES.
+   - What SEB should do with downloaded files: "Open/save them outside SEB" or "Block". For exams, usually "Block".
 
-SEB will then:
-1. Fetch `https://YOUR_APP_DOMAIN/configs/exam-config.seb`.
-2. Apply its settings.
-3. Navigate to the "Start URL" configured inside it (i.e., `https://YOUR_APP_DOMAIN/seb/entry`), appending the hash: `https://YOUR_APP_DOMAIN/seb/entry#entryToken=GENERATED_TOKEN`.
-4. Your `/seb/entry` page (`SebEntryClient.tsx`) will read the token from the hash.
+4. Exam Tab:
+   - Enable quit link: seb://quit
+   - Allow user to quit SEB: "Only after exam is submitted" or "Using quit password" or both.
+   - Quit password: (Set one if you enable this option).
 
-This ensures the process is dynamic regarding your application's domain for launching SEB, but the `Start URL` *within* the `.seb` file must be correctly set to your deployed application's public domain.
+5. Network Tab > URL Filter:
+   - This section is less critical if using the token-based entry (/seb/entry) as the page itself validates the token.
+   - However, you might want to allow your domain:
+     - Action: Allow, Expression: https://YOUR_APP_DOMAIN/*
+   - And potentially deny everything else if you want to be very strict:
+     - Action: Block, Expression: * (This should be the last rule)
+
+6. Applications Tab > Prohibited Processes:
+   - Add common screen sharing, remote control, communication apps (e.g., Zoom, Teams, Discord, AnyDesk, TeamViewer, OBS).
+   - Add common screenshot/screen recording tools.
+
+7. Browser Exam Key / Config Key:
+   - The fields for Browser Exam Key and Config Key are on the "Exam" tab or "Config File" tab depending on SEB version.
+   - These are generated by SEB when you save the config. Your application doesn't typically need to *send* these, but SEB uses them to verify the integrity of the session.
+   - If your LMS or exam system requires your web application to *verify* these keys from SEB's request headers, you'd need server-side logic to read `X-SafeExamBrowser-RequestHash` (for ConfigKey) or `X-SafeExamBrowser-BrowserExamKey`. This is an advanced setup.
+
+8. Security Tab:
+   - Enable "Allow screen sharing (Screen Mirroring)" - typically NO.
+   - Enable "Allow screen capture" - typically NO.
+   - Enable "Allow virtual machine" - typically NO.
+   - Enable "Allow Developer Tools" - NO.
+
+Remember to SAVE your configuration from the SEB Configuration Tool as 'exam-config.seb' and place it in /public/configs/exam-config.seb in your project.
+Your web application will then launch SEB by pointing to this .seb file, and SEB will use the "Start URL" defined within this file.
+The application passes the entryToken as a hash parameter to the URL of the .seb file itself, e.g.,
+https://YOUR_APP_DOMAIN/configs/exam-config.seb#entryToken=GENERATED_TOKEN
+SEB should append this hash to the Start URL it loads from within the .seb file.
+e.g., SEB should open: https://YOUR_APP_DOMAIN/seb/entry#entryToken=GENERATED_TOKEN
