@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { format } from 'date-fns';
-import { encryptData } from '@/lib/crypto-utils'; // Import encryption utility
+import { encryptData } from '@/lib/crypto-utils';
 
 interface CheckStatus {
   name: string;
@@ -84,7 +84,7 @@ export default function InitiateExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase]);
+  }, [examId, supabase, toast]); // Added toast as it's used, though it's stable
 
   useEffect(() => {
     if (examId && !authLoading && supabase) {
@@ -93,6 +93,66 @@ export default function InitiateExamPage() {
       }
     }
   }, [examId, authLoading, supabase, fetchExamData, examDetails]);
+
+  const launchExamInNewTab = useCallback(async () => {
+    console.log("[InitiatePage] launchExamInNewTab called. Conditions:", {
+      allChecksPassed,
+      examDetailsExists: !!examDetails,
+      studentUserIdExists: !!studentUser?.user_id,
+      examIdFromDetails: examDetails?.exam_id,
+      studentUserIdFromAuth: studentUser?.user_id,
+      examCodeFromDetails: examDetails?.exam_code,
+    });
+
+    if (!allChecksPassed || !examDetails || !studentUser?.user_id) {
+      const reasons = [];
+      if (!allChecksPassed) reasons.push("system checks not passed");
+      if (!examDetails) reasons.push("exam details are missing");
+      if (!studentUser?.user_id) reasons.push("user authentication is missing");
+      
+      const description = reasons.length > 0 
+        ? `Cannot launch because: ${reasons.join(', ')}.`
+        : "System checks not passed or exam/user data missing.";
+      
+      console.error("[InitiatePage] Cannot Launch Exam:", description);
+      toast({ title: "Cannot Launch", description, variant: "destructive" });
+      return;
+    }
+    
+    const payload = { 
+      examId: examDetails.exam_id, 
+      studentId: studentUser.user_id, 
+      timestamp: Date.now(), 
+      examCode: examDetails.exam_code 
+    };
+    const encryptedToken = await encryptData(payload);
+
+    if (!encryptedToken) {
+        toast({ title: "Encryption Error", description: "Could not generate secure exam token.", variant: "destructive" });
+        setError("Failed to create a secure exam session token. Please try again.");
+        return;
+    }
+    
+    const examUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(encryptedToken)}`;
+    console.log("[InitiatePage] Launching exam at URL:", examUrl);
+    
+    const newWindow = window.open(examUrl, '_blank', 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes');
+
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      const popupErrorMsg = "Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again.";
+      console.error("[InitiatePage] Pop-up blocked or failed to open:", popupErrorMsg);
+      setError(popupErrorMsg);
+      toast({
+          title: "Pop-up Blocked?",
+          description: "Could not open exam. Please disable pop-up blocker or use the manual launch button.",
+          variant: "destructive",
+          duration: 7000,
+      });
+    } else {
+      console.log("[InitiatePage] Exam launched successfully in new tab.");
+      toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
+    }
+  }, [allChecksPassed, examDetails, studentUser?.user_id, toast]); // Added toast as a dependency
 
   const startSystemChecks = useCallback(async () => {
     if (!studentUser?.user_id) {
@@ -123,6 +183,7 @@ export default function InitiateExamPage() {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); 
 
+      // const isSuccess = Math.random() > 0.1; // Simulate occasional failure
       const isSuccess = true; // Force checks to pass for easier debugging
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
       setOverallProgress(((i + 1) / initialChecks.length) * 100);
@@ -139,63 +200,6 @@ export default function InitiateExamPage() {
     launchExamInNewTab();
   }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast, launchExamInNewTab]);
 
-
-  const launchExamInNewTab = useCallback(async () => {
-    console.log("[InitiatePage] launchExamInNewTab called. Conditions:", {
-      allChecksPassed,
-      examDetailsExists: !!examDetails,
-      studentUserIdExists: !!studentUser?.user_id,
-      examIdFromDetails: examDetails?.exam_id,
-      studentUserIdFromAuth: studentUser?.user_id,
-      examCodeFromDetails: examDetails?.exam_code,
-    });
-
-    if (!allChecksPassed || !examDetails || !studentUser?.user_id) {
-      const reasons = [];
-      if (!allChecksPassed) reasons.push("system checks not passed");
-      if (!examDetails) reasons.push("exam details are missing");
-      if (!studentUser?.user_id) reasons.push("user authentication is missing");
-      
-      const description = reasons.length > 0 
-        ? `Cannot launch because: ${reasons.join(', ')}.`
-        : "System checks not passed or exam/user data missing.";
-      
-      toast({ title: "Cannot Launch", description, variant: "destructive" });
-      return;
-    }
-    
-    const payload = { 
-      examId: examDetails.exam_id, 
-      studentId: studentUser.user_id, 
-      timestamp: Date.now(), 
-      examCode: examDetails.exam_code 
-    };
-    const encryptedToken = await encryptData(payload);
-
-    if (!encryptedToken) {
-        toast({ title: "Encryption Error", description: "Could not generate secure exam token.", variant: "destructive" });
-        setError("Failed to create a secure exam session token. Please try again.");
-        return;
-    }
-    
-    // The target page is now /exam-session/[examId]
-    const examUrl = `/exam-session/${examDetails.exam_id}?token=${encodeURIComponent(encryptedToken)}`;
-    console.log("[InitiatePage] Launching exam at URL:", examUrl);
-    
-    const newWindow = window.open(examUrl, '_blank', 'noopener,noreferrer,resizable=yes,scrollbars=yes,status=yes');
-
-    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-      setError("Could not open the exam in a new tab. Please ensure pop-ups are allowed for this site, then try again.");
-      toast({
-          title: "Pop-up Blocked?",
-          description: "Could not open exam. Please disable pop-up blocker or use the manual launch button.",
-          variant: "destructive",
-          duration: 7000,
-      });
-    } else {
-      toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
-    }
-  }, [allChecksPassed, examDetails, studentUser?.user_id, toast]);
 
   const getStatusIcon = (status: CheckStatus['status']) => {
     if (status === 'pending') return <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />;
