@@ -16,7 +16,9 @@ import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[exa
 import { useAuth } from '@/contexts/AuthContext';
 import { encryptData } from '@/lib/crypto-utils';
 
-const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb'; // Relative path from domain root
+// The exam-config.seb file in public/configs/ should have its Start URL configured to:
+// https://YOUR_APP_DOMAIN/seb/exam-view (without any query parameters)
+// The examId and token will be passed as query params to this URL when launched by SEB from here.
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
@@ -85,20 +87,17 @@ export default function JoinExamPage() {
         return;
       }
 
-      // The StartURL inside exam-config.seb should be YOUR_APP_DOMAIN/seb/exam-view
-      // Parameters (examId, token) are passed in the hash of the configUrl.
-      // /seb/exam-view will read these from window.location.hash
-      const configUrlWithParams = `${window.location.origin}${SEB_CONFIG_FILE_RELATIVE_PATH}#examId=${exam.exam_id}&token=${encodeURIComponent(encryptedToken)}`;
+      // Construct the direct SEB Start URL with query parameters
+      const examViewUrl = `${window.location.origin}/seb/exam-view?examId=${exam.exam_id}&token=${encodeURIComponent(encryptedToken)}`;
       
-      // Corrected SEB Launch URL
       // Remove http(s):// prefix and prepend sebs://
-      const domainAndPathWithHash = configUrlWithParams.replace(/^https?:\/\//, '');
-      const sebLaunchUrl = `sebs://${domainAndPathWithHash}`;
+      const domainAndPathWithQuery = examViewUrl.replace(/^https?:\/\//, '');
+      const sebLaunchUrl = `sebs://${domainAndPathWithQuery}`;
 
-      console.log("[JoinExamPage] Attempting to launch SEB with URL:", sebLaunchUrl);
+      console.log("[JoinExamPage] Attempting to launch SEB with direct URL:", sebLaunchUrl);
       toast({
         title: "Launching Exam in SEB",
-        description: "Safe Exam Browser should start. If not, ensure it's installed and configured.",
+        description: "Safe Exam Browser should start. If not, ensure it's installed and configured to handle sebs:// links.",
         duration: 10000,
       });
       
@@ -143,7 +142,7 @@ export default function JoinExamPage() {
               <ExternalLink className="h-5 w-5 text-primary dark:text-blue-400" />
               <AlertTitle className="font-semibold text-primary dark:text-blue-300">SEB Required</AlertTitle>
               <AlertDescription className="text-primary/90 dark:text-blue-400/90 text-sm">
-                This exam will open in Safe Exam Browser. Ensure SEB is installed and properly configured on your system.
+                This exam will open in Safe Exam Browser. Ensure SEB is installed and properly configured on your system to handle `sebs://` links.
                 You will be redirected automatically. If SEB does not launch, please check your browser settings or SEB installation.
               </AlertDescription>
             </Alert>
@@ -164,4 +163,3 @@ export default function JoinExamPage() {
     </div>
   );
 }
-

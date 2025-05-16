@@ -1,14 +1,10 @@
 
 // src/app/seb/exam-view/page.tsx
-'use client'; // Keep 'use client' for top-level page due to direct hash access in client component
-
 import React, { Suspense } from 'react';
 import { SebExamViewClient } from '@/components/seb/seb-exam-view-client';
 import { Loader2 } from 'lucide-react';
 
-
-// This page structure allows SebExamViewClient to use useSearchParams (or window.location.hash)
-// within a Suspense boundary if needed, although hash access is direct.
+// This is the Server Component part of the page
 export default function SebExamViewPage() {
   return (
     <Suspense fallback={
