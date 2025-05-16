@@ -210,7 +210,7 @@ export default function ExamSessionPage() {
   // Initial loading state covers auth and token validation
   if (authIsLoading || isValidSession === undefined || (isValidSession && isLoading && !examDetails && !error)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-900 p-4 text-center">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <h2 className="text-xl font-medium text-foreground mb-1">Preparing Your Exam...</h2>
         <p className="text-sm text-muted-foreground">
@@ -226,7 +226,7 @@ export default function ExamSessionPage() {
   // This error covers token validation failures or issues after token validation but before exam data load starts
   if (error && (!examDetails || (examDetails && questions.length === 0 && !isLoading)) ) { 
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-900 p-4 text-center">
         <Card className="w-full max-w-md modern-card shadow-lg p-6">
           <CardHeader>
             <ShieldAlert className="h-12 w-12 text-destructive mx-auto mb-4" />
@@ -244,7 +244,7 @@ export default function ExamSessionPage() {
   // If loading is done, but examDetails are still null (should be caught by error above, but defensive)
   if (!examDetails && !isLoading) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 dark:bg-gray-900 p-4 text-center">
         <Card className="w-full max-w-md modern-card shadow-lg p-6">
           <CardHeader>
             <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
@@ -263,8 +263,8 @@ export default function ExamSessionPage() {
     <ExamTakingInterface
       examDetails={examDetails}
       questions={questions || []}
-      isLoading={isLoading && !examDetails} // Pass true if page is loading exam data
-      error={error} // Pass any error during exam data fetch from this page
+      parentIsLoading={isLoading && !examDetails} // True if page is loading exam data
+      examLoadingError={error} // Pass any error during exam data fetch from this page
       examStarted={true} 
       onAnswerChange={ (qid, oid) => console.log(`[ExamSessionPage] Answer changed Q:${qid} O:${oid}`) }
       onSubmitExam={handleSubmitExamActual}
