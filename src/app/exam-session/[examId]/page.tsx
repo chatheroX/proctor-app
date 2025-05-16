@@ -12,6 +12,7 @@ import { Loader2, AlertTriangle, ShieldAlert, ServerCrash } from 'lucide-react';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added Alert imports
 import { decryptData } from '@/lib/crypto-utils'; // Import decryption utility
 
 const TOKEN_VALIDITY_MINUTES = 5; // Token generated on initiate page is valid for this long
