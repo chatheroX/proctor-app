@@ -2,197 +2,154 @@
 // src/components/seb/seb-live-test-client.tsx
 'use client';
 
-import React, { useEffect, useState, useCallback, Suspense } from 'react'; // Added Suspense
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { Exam, Question, ExamSubmissionInsert, FlaggedEvent } from '@/types/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import type { Exam, Question, ExamSubmissionInsert, FlaggedEvent, CustomUser } from '@/types/supabase';
 import { ExamTakingInterface } from '@/components/shared/exam-taking-interface';
-import { Loader2, AlertTriangle, ShieldAlert, ServerCrash, XCircle, CheckCircle } from 'lucide-react';
+import { Loader2, AlertTriangle, ShieldAlert, ServerCrash, XCircle, CheckCircle, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { decryptData } from '@/lib/crypto-utils';
 import { isSebEnvironment, attemptBlockShortcuts, disableContextMenu, disableCopyPaste, isOnline, areDevToolsLikelyOpen, isWebDriverActive } from '@/lib/seb-utils';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-const TOKEN_VALIDITY_MINUTES_SEB = 15;
-
-interface DecryptedTokenPayload {
-  examId: string;
-  studentId: string;
-  timestamp: number;
-  examCode: string;
-}
-
 export function SebLiveTestClient() {
   const router = useRouter();
-  const searchParams = useSearchParams(); 
-  const { user: studentUser, isLoading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
 
   const [examDetails, setExamDetails] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [studentProfile, setStudentProfile] = useState<Pick<CustomUser, 'user_id' | 'name' | 'avatar_url'> | null>(null);
   const [pageIsLoading, setPageIsLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isValidSession, setIsValidSession] = useState<boolean | undefined>(undefined);
-  const [isClientSide, setIsClientSide] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const examIdFromUrl = searchParams?.get('examId'); 
-  const encryptedTokenFromUrl = searchParams?.get('token');
+  const examIdFromUrl = searchParams?.get('examId');
+  const studentIdFromUrl = searchParams?.get('studentId'); // Student ID passed from /seb/entry
 
+  // Step 1: SEB Environment Check & Basic Security
   useEffect(() => {
-    setIsClientSide(true);
-  }, []);
-
-  // Step 1: SEB Environment Check & Token Validation & Initial Security Listeners
-  useEffect(() => {
-    if (!isClientSide || authLoading || !examIdFromUrl || !encryptedTokenFromUrl) {
-      if (isClientSide && !authLoading && (!examIdFromUrl || !encryptedTokenFromUrl) && pageIsLoading && !pageError) {
-        setPageError("Exam ID or session token missing from URL. Invalid entry point.");
-        setIsValidSession(false);
-        setPageIsLoading(false);
-      }
-      return;
-    }
-
-    console.log("[SebLiveTestClient] Initializing. SEB Check, Token Validation.");
+    setPageIsLoading(true);
+    setError(null);
+    setIsValidSession(undefined);
 
     if (!isSebEnvironment()) {
       setPageError("CRITICAL: Not in SEB environment. This page is restricted.");
-      toast({ title: "SEB Required", description: "Redirecting to unsupported browser page...", variant: "destructive", duration: 4000 });
+      toast({ title: "SEB Required", description: "Redirecting...", variant: "destructive", duration: 4000 });
       setTimeout(() => router.replace('/unsupported-browser'), 3000);
       setIsValidSession(false);
       setPageIsLoading(false);
       return;
     }
-    // Check other immediate security concerns. More checks can be added.
     if (!isOnline() || areDevToolsLikelyOpen() || isWebDriverActive()) {
-        setPageError("Critical system integrity check failed. Cannot proceed with exam. SEB will quit.");
-        toast({ title: "Security Alert", description: "System integrity compromised.", variant: "destructive", duration: 7000});
-        setIsValidSession(false);
-        setPageIsLoading(false);
-        setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
-        return;
-    }
-    console.log("[SebLiveTestClient] SEB environment and basic integrity confirmed.");
-    
-    if (!studentUser || !studentUser.user_id) {
-      setPageError("Student authentication details missing. Cannot validate exam session. SEB will quit.");
-      toast({ title: "Auth Error", description: "Student session invalid.", variant: "destructive", duration: 7000 });
+      setPageError("Critical system integrity check failed. Cannot proceed. SEB will quit.");
+      toast({ title: "Security Alert", description: "System integrity compromised. Quitting SEB.", variant: "destructive", duration: 7000 });
       setIsValidSession(false);
       setPageIsLoading(false);
-      setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
+      setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
+      return;
+    }
+
+    if (!examIdFromUrl || !studentIdFromUrl) {
+      setPageError("Exam ID or Student ID missing from URL. Invalid exam entry. SEB will quit.");
+      toast({ title: "Invalid Session", description: "Exam parameters missing. Quitting SEB.", variant: "destructive", duration: 7000 });
+      setIsValidSession(false);
+      setPageIsLoading(false);
+      setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
       return;
     }
     
-    decryptData<DecryptedTokenPayload>(encryptedTokenFromUrl)
-      .then(payload => {
-        if (!payload) throw new Error("Invalid or corrupt session token from URL.");
-        if (payload.examId !== examIdFromUrl) throw new Error("Token-Exam ID mismatch in URL.");
-        if (payload.studentId !== studentUser.user_id) throw new Error("Token-Student ID mismatch.");
-        
-        const tokenAgeMinutes = (Date.now() - payload.timestamp) / (1000 * 60);
-        if (tokenAgeMinutes > TOKEN_VALIDITY_MINUTES_SEB) {
-          throw new Error('SEB live session link expired. Please re-initiate.');
-        }
-        console.log("[SebLiveTestClient] Token decrypted and validated for live test.");
-        setIsValidSession(true);
-        setPageError(null);
-      })
-      .catch((e: any) => {
-        const errorMsg = 'Live session validation failed: ' + e.message + '. SEB will attempt to quit.';
-        setPageError(errorMsg);
-        toast({ title: "Session Error", description: errorMsg, variant: "destructive", duration: 7000 });
-        setIsValidSession(false);
-        setPageIsLoading(false);
-        setTimeout(() => { if(typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
-      });
-  }, [isClientSide, authLoading, examIdFromUrl, encryptedTokenFromUrl, studentUser, router, toast, pageIsLoading, pageError]);
+    console.log("[SebLiveTestClient] SEB Checks Passed. examId:", examIdFromUrl, "studentId:", studentIdFromUrl);
+    setIsValidSession(true);
+    // isLoading will be set to false after data fetching
+  }, [examIdFromUrl, studentIdFromUrl, router, toast]);
 
 
-  // Step 2: Fetch Exam Data if session is valid
-  const fetchExamData = useCallback(async () => {
-    if (!examIdFromUrl || !supabase || !studentUser?.user_id || isValidSession === false) {
-      if (isValidSession !== false && !pageError) setPageError("Cannot fetch exam: Critical information missing or invalid session.");
+  // Step 2: Fetch Exam Data & Student Profile if session is valid
+  const fetchExamAndStudentData = useCallback(async () => {
+    if (!examIdFromUrl || !studentIdFromUrl || !supabase) {
+      setPageError("Cannot fetch data: Critical information missing.");
       setPageIsLoading(false);
       return;
     }
     
-    console.log('[SebLiveTestClient] Fetching exam data for examId: ' + examIdFromUrl);
-    setPageIsLoading(true);
+    console.log('[SebLiveTestClient] Fetching exam and student data...');
+    setPageIsLoading(true); 
     setPageError(null);
     try {
-      const { data, error: fetchError } = await supabase
-        .from('ExamX')
-        .select('exam_id, title, description, duration, questions, allow_backtracking, start_time, end_time, status')
-        .eq('exam_id', examIdFromUrl)
-        .single();
+      const [examRes, studentRes] = await Promise.all([
+        supabase.from('ExamX').select('*').eq('exam_id', examIdFromUrl).single(),
+        supabase.from('proctorX').select('user_id, name, avatar_url').eq('user_id', studentIdFromUrl).single()
+      ]);
 
-      if (fetchError) throw fetchError;
-      if (!data) throw new Error("Exam not found in database.");
+      if (examRes.error || !examRes.data) {
+        throw new Error(examRes.error?.message || "Exam not found.");
+      }
+      if (studentRes.error || !studentRes.data) {
+        throw new Error(studentRes.error?.message || "Student profile not found.");
+      }
 
-      const currentExam = data as Exam;
-
+      const currentExam = examRes.data as Exam;
       if (!currentExam.questions || currentExam.questions.length === 0) {
-        throw new Error("This exam has no questions. Please contact your teacher.");
+        throw new Error("This exam has no questions.");
       }
 
       setExamDetails(currentExam);
-      setQuestions(currentExam.questions || []);
-      console.log("[SebLiveTestClient] Exam data fetched successfully.");
+      setQuestions(currentExam.questions);
+      setStudentProfile(studentRes.data as Pick<CustomUser, 'user_id' | 'name' | 'avatar_url'>);
+      console.log("[SebLiveTestClient] Exam and student data fetched successfully.");
 
+      // Record or update "In Progress" submission
       const { error: submissionUpsertError } = await supabase
         .from('ExamSubmissionsX')
         .upsert({
             exam_id: currentExam.exam_id,
-            student_user_id: studentUser.user_id,
-            status: 'In Progress', // This will overwrite if they somehow re-enter
-            started_at: new Date().toISOString()
-        }, { onConflict: 'exam_id, student_user_id', ignoreDuplicates: false }) // Consider behavior on re-entry more carefully
+            student_user_id: studentIdFromUrl,
+            status: 'In Progress',
+            started_at: new Date().toISOString() 
+        }, { onConflict: 'exam_id, student_user_id' }) 
         .select();
       
       if (submissionUpsertError) {
-        console.error("[SebLiveTestClient] Error upserting 'In Progress' submission:", submissionUpsertError);
-        toast({title: "Warning", description: "Could not record exam start time. Proceeding.", variant: "default"});
-      } else {
-        console.log("[SebLiveTestClient] 'In Progress' submission recorded/updated for student:", studentUser.user_id);
+        console.warn("[SebLiveTestClient] Error upserting 'In Progress' submission:", submissionUpsertError.message);
+        toast({title: "Warning", description: "Could not record exam start. Proceeding.", variant: "default"});
       }
 
     } catch (e: any) {
-      console.error("[SebLiveTestClient] Error fetching exam data:", e.message);
-      const errorMsg = e.message || "Failed to load exam data.";
-      setPageError(errorMsg);
-      toast({ title: "Exam Load Error", description: errorMsg, variant: "destructive", duration: 7000 });
-      setQuestions([]);
-      setExamDetails(null);
+      console.error("[SebLiveTestClient] Error fetching data:", e.message);
+      setPageError(e.message || "Failed to load exam data.");
+      toast({ title: "Exam Load Error", description: e.message, variant: "destructive", duration: 7000 });
+      setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 6000);
     } finally {
       setPageIsLoading(false);
     }
-  }, [examIdFromUrl, supabase, studentUser, isValidSession, toast, pageError, setPageError, setPageIsLoading, setExamDetails, setQuestions]);
+  }, [examIdFromUrl, studentIdFromUrl, supabase, toast]);
 
   useEffect(() => {
-    if (isValidSession === true && !examDetails && !pageError) { // fetch only if session is valid and data not yet fetched
-        fetchExamData();
+    if (isValidSession === true && !examDetails && !studentProfile) {
+        fetchExamAndStudentData();
     }
-  }, [isValidSession, examDetails, pageError, fetchExamData]);
+  }, [isValidSession, examDetails, studentProfile, fetchExamAndStudentData]);
 
 
-  // Step 3: Add SEB-specific event listeners for security
+  // Step 3: SEB-specific event listeners for security
   useEffect(() => {
-    if (!isClientSide || !isSebEnvironment() || !isValidSession) return;
+    if (!isSebEnvironment() || isValidSession === false) return;
 
     console.log("[SebLiveTestClient] Adding SEB security event listeners.");
     document.addEventListener('contextmenu', disableContextMenu);
     window.addEventListener('keydown', attemptBlockShortcuts);
     document.addEventListener('copy', disableCopyPaste);
     document.addEventListener('paste', disableCopyPaste);
+    
     const beforeUnloadHandler = (event: BeforeUnloadEvent) => {
         console.warn("[SebLiveTestClient] Attempt to unload/refresh page blocked.");
-        toast({ title: "Navigation Blocked", description: "Page refresh/close is disabled during the exam.", variant:"destructive", duration: 3000 });
+        toast({ title: "Navigation Blocked", description: "Page refresh/close is disabled.", variant:"destructive", duration: 3000 });
         event.preventDefault();
-        event.returnValue = 'Are you sure you want to leave? Exam progress might be lost.'; // Standard message
+        event.returnValue = '';
         return event.returnValue;
     };
     window.addEventListener('beforeunload', beforeUnloadHandler);
@@ -205,54 +162,50 @@ export function SebLiveTestClient() {
       document.removeEventListener('paste', disableCopyPaste);
       window.removeEventListener('beforeunload', beforeUnloadHandler);
     };
-  }, [isClientSide, isValidSession, toast]); // Added toast
+  }, [isValidSession, toast]);
 
 
   const handleActualSubmit = useCallback(async (answers: Record<string, string>, flaggedEvents: FlaggedEvent[], submissionType: 'submit' | 'timeup') => {
-    if (!studentUser?.user_id || !examDetails) {
-        toast({title: "Submission Error", description: "Student or Exam details missing. Cannot submit.", variant: "destructive"});
+    if (!studentIdFromUrl || !examDetails) {
+        toast({title: "Submission Error", description: "Student or Exam details missing.", variant: "destructive"});
         return;
     }
     
-    const submissionData: ExamSubmissionInsert = {
+    const submissionPayload: Omit<ExamSubmissionInsert, 'submission_id' | 'started_at' | 'score'> = {
         exam_id: examDetails.exam_id,
-        student_user_id: studentUser.user_id,
-        answers: answers as any, 
-        flagged_events: flaggedEvents.length > 0 ? flaggedEvents as any : null,
+        student_user_id: studentIdFromUrl,
+        answers: answers,
+        flagged_events: flaggedEvents.length > 0 ? flaggedEvents : null,
         status: 'Completed',
         submitted_at: new Date().toISOString(),
-        // started_at is set when exam loads
     };
 
-    console.log('[SebLiveTestClient] ' + (submissionType === 'submit' ? 'Submitting' : 'Auto-submitting') + ' exam. Data:', submissionData);
+    console.log('[SebLiveTestClient] ' + submissionType + ' submission. Data:', submissionPayload);
     try {
-        const { error: submissionError } = await supabase
-            .from('ExamSubmissionsX')
-            .update({ 
-                answers: submissionData.answers,
-                flagged_events: submissionData.flagged_events,
-                status: 'Completed',
-                submitted_at: submissionData.submitted_at,
-             })
-            .eq('exam_id', examDetails.exam_id)
-            .eq('student_user_id', studentUser.user_id);
+      const response = await fetch('/api/seb/submit-exam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submissionPayload),
+      });
 
-        if (submissionError) { 
-          console.error("[SebLiveTestClient] Submission Error:", submissionError);
-          setPageError('Failed to save exam: ' + submissionError.message + ". Please contact support. SEB will quit.");
-          toast({ title: "Submission Error", description: 'Failed to save exam: ' + submissionError.message, variant: "destructive", duration: 10000 });
-        } else {
-          setIsSubmitted(true); // Set submitted state to show success UI
-          toast({ title: submissionType === 'submit' ? "Exam Submitted!" : "Exam Auto-Submitted!", description: "Your responses have been recorded. SEB will now quit.", duration: 10000 });
-        }
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `Failed to submit with status: ${response.status}`);
+      }
+      
+      setIsSubmitted(true);
+      if (typeof window !== 'undefined') sessionStorage.setItem(`exam-${examDetails.exam_id}-finished`, 'true');
+      toast({ title: submissionType === 'submit' ? "Exam Submitted!" : "Exam Auto-Submitted!", description: "Your responses have been recorded. SEB will now quit.", duration: 10000 });
+      // SEB quit is handled by the success UI in the render block after setIsSubmitted(true)
+
     } catch(e: any) {
-        console.error("[SebLiveTestClient] Catch block for submission error", e);
-        setPageError("An unexpected critical error occurred while submitting. Please contact support. SEB will quit.");
-        toast({ title: "Critical Submission Error", description: "An unexpected error occurred. SEB will quit.", variant: "destructive", duration: 10000 });
-    } finally {
-        // SEB quit will be handled by the success/error UI in the render block
+      console.error("[SebLiveTestClient] Submission API error:", e);
+      setPageError("Failed to submit exam: " + e.message + ". Please contact support. SEB will quit.");
+      toast({ title: "Submission Error", description: e.message + ". Quitting SEB.", variant: "destructive", duration: 10000 });
+      setTimeout(() => { if (typeof window !== 'undefined') window.location.href = "seb://quit"; }, 9000);
     }
-  }, [studentUser?.user_id, examDetails, supabase, toast, setIsSubmitted, setPageError]);
+  }, [studentIdFromUrl, examDetails, supabase, toast]);
 
   const handleSubmitExamSeb = useCallback((answers: Record<string, string>, flaggedEvents: FlaggedEvent[]) => {
     return handleActualSubmit(answers, flaggedEvents, 'submit');
@@ -262,55 +215,55 @@ export function SebLiveTestClient() {
     return handleActualSubmit(answers, flaggedEvents, 'timeup');
   }, [handleActualSubmit]);
 
-  const handleSebQuitFromInterface = useCallback(() => {
+  const handleSebQuit = useCallback(() => {
      toast({ title: "Exiting SEB", description: "Safe Exam Browser will close.", duration: 3000 });
      if (typeof window !== 'undefined') window.location.href = "seb://quit";
   },[toast]);
 
 
-  if (pageIsLoading || isValidSession === undefined || authLoading) {
+  if (pageIsLoading || isValidSession === undefined) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4 text-center">
         <Loader2 className="h-16 w-16 text-primary animate-spin mb-6" />
         <h2 className="text-xl font-medium text-slate-200 mb-1">
-          {authLoading ? "Verifying Student Session..." :
-           isValidSession === undefined ? "Validating Secure Exam Link..." : 
-           "Loading Live Exam Environment..."}
+          {isValidSession === undefined ? "Validating Secure Exam Link..." : "Loading Live Exam Environment..."}
         </h2>
-         <ShieldAlert className="h-5 w-5 text-yellow-400 mt-4 inline-block mr-2" />
-         <p className="text-sm text-yellow-400">Secure Exam Environment Active</p>
+         <div className="flex items-center text-yellow-400 mt-4">
+             <ShieldAlert className="h-5 w-5 mr-2" />
+             <p className="text-sm">Secure Exam Environment Active. Please wait.</p>
+         </div>
       </div>
     );
   }
   
   if (pageError || isValidSession === false) { 
      return (
-       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-700 to-red-900 p-4">
-        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-800 to-red-950 p-4">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-destructive">
           <CardHeader className="pt-8 pb-4">
             <XCircle className="h-16 w-16 text-destructive mx-auto mb-5" />
             <CardTitle className="text-2xl text-destructive">Exam Session Error</CardTitle>
           </CardHeader>
           <CardContent className="pb-6">
             <p className="text-sm text-muted-foreground mb-6">{pageError || "Invalid exam session. SEB will quit."}</p>
-             <Button onClick={handleSebQuitFromInterface} className="w-full btn-gradient-destructive">Exit SEB</Button>
+             <Button onClick={handleSebQuit} className="w-full btn-gradient-destructive">Exit SEB</Button>
           </CardContent>
         </Card>
       </div>
     );
   }
   
-  if (!examDetails) {
+  if (!examDetails || !studentProfile) { // Should be caught by error state above, but as fallback
      return (
        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-950 p-4">
-        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg border-border/30">
+        <Card className="w-full max-w-md modern-card text-center shadow-xl bg-card/80 backdrop-blur-lg">
            <CardHeader className="pt-8 pb-4">
             <ServerCrash className="h-16 w-16 text-orange-500 mx-auto mb-5" />
-            <CardTitle className="text-2xl text-orange-500">Exam Data Not Available</CardTitle>
+            <CardTitle className="text-2xl text-orange-500">Exam Data Unavailable</CardTitle>
           </CardHeader>
           <CardContent className="pb-6">
-            <p className="text-sm text-muted-foreground mb-6">Could not load the exam content. This may be due to an invalid link or server issue. SEB will attempt to quit.</p>
-             <Button onClick={handleSebQuitFromInterface} className="w-full btn-gradient-destructive">Exit SEB</Button>
+            <p className="text-sm text-muted-foreground mb-6">Could not load exam or student content. SEB will attempt to quit.</p>
+             <Button onClick={handleSebQuit} className="w-full btn-gradient-destructive">Exit SEB</Button>
           </CardContent>
         </Card>
       </div>
@@ -319,20 +272,20 @@ export function SebLiveTestClient() {
 
   if (isSubmitted) {
     return (
-      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-gradient-to-br from-green-500/10 via-emerald-500/10 to-teal-500/10 backdrop-blur-md p-6 text-center">
-        <Card className="w-full max-w-lg modern-card shadow-2xl p-8 bg-card/90 dark:bg-card/80">
+      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-gradient-to-br from-green-800/80 via-emerald-900/80 to-teal-900/80 backdrop-blur-md p-6 text-center">
+        <Card className="w-full max-w-lg modern-card shadow-2xl p-8 bg-card/90 dark:bg-card/85">
           <CardHeader className="pb-5">
-            <CheckCircle className="h-20 w-20 text-green-500 mx-auto mb-5" />
-            <h2 className="text-2xl font-semibold text-foreground">Exam Submitted Successfully!</h2>
+            <CheckCircle className="h-20 w-20 text-green-400 mx-auto mb-5" />
+            <h2 className="text-2xl font-semibold text-slate-100">Exam Submitted Successfully!</h2>
             <p className="text-muted-foreground mt-2 text-sm">
               Your responses for "{examDetails.title}" have been recorded.
             </p>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">You may now exit Safe Exam Browser.</p>
+            <p className="text-sm text-slate-400">You may now exit Safe Exam Browser.</p>
           </CardContent>
           <CardFooter className="mt-6">
-            <Button onClick={handleSebQuitFromInterface} className="btn-gradient-positive w-full py-3 text-base rounded-lg shadow-lg hover:shadow-primary/30">
+            <Button onClick={handleSebQuit} className="btn-gradient-positive w-full py-3 text-base rounded-lg shadow-lg hover:shadow-green-500/30">
                 <LogOut className="mr-2 h-4 w-4"/> Exit SEB
             </Button>
           </CardFooter>
@@ -344,20 +297,20 @@ export function SebLiveTestClient() {
   return (
     <ExamTakingInterface
       examDetails={examDetails}
-      questions={questions || []}
+      questions={questions}
       parentIsLoading={false} 
-      examLoadingError={null} // Handled by this component's error states
+      examLoadingError={null} 
       persistentError={null} 
-      cantStartReason={null} // Start is implicit by reaching this page
-      onAnswerChange={ (qid, oid) => console.log('[SebLiveTestClient] Answer changed Q:' + qid + ' O:' + oid) }
+      cantStartReason={null}
+      onAnswerChange={ (qid, oid) => console.log('[SebLiveTestClient] Answer for Q:' + qid + ' is O:' + oid) }
       onSubmitExam={handleSubmitExamSeb}
       onTimeUp={handleTimeUpSeb}
-      isDemoMode={false} // This is the live SEB test
-      userIdForActivityMonitor={studentUser?.user_id || 'unknown_seb_student'}
-      studentName={studentUser?.name}
-      studentRollNumber={studentUser?.user_id} 
-      studentAvatarUrl={studentUser?.avatar_url}
-      examStarted={true} // Exam starts when this component renders successfully
+      isDemoMode={false}
+      userIdForActivityMonitor={studentProfile.user_id}
+      studentName={studentProfile.name}
+      studentRollNumber={studentProfile.user_id} 
+      studentAvatarUrl={studentProfile.avatar_url}
+      examStarted={true} 
     />
   );
 }

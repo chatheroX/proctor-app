@@ -1,21 +1,21 @@
 
-// This page is now effectively deprecated as the "Join Exam" page handles SEB launch directly.
+// This page is now effectively DEPRECATED as the "Join Exam" page handles SEB launch directly.
 // It will redirect to join exam page or dashboard if accessed directly.
 'use client';
 
-import React, { useEffect } from 'react'; // Added React import
+import React, { useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
 export default function DeprecatedSebRedirectPage() {
   const router = useRouter();
   const params = useParams();
-  const examId = params.examId as string;
+  const examId = params.examId as string; // Keep for potential logging, though not directly used for redirect path
 
   useEffect(() => {
     console.warn(`[DeprecatedSebRedirectPage] Accessed. This page is deprecated. Redirecting to join exam page...`);
     router.replace('/student/dashboard/join-exam');
-  }, [examId, router]);
+  }, [examId, router]); // examId kept in deps for completeness, though redirect path is fixed
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">

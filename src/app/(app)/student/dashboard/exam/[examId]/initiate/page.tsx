@@ -1,16 +1,22 @@
 
-// This page is now effectively deprecated for the primary SEB flow.
+// This page is now effectively DEPRECATED for the primary SEB flow.
 // The "Join Exam" page will directly attempt to launch SEB.
 // This page could be repurposed for non-SEB testing or removed.
 // For now, it will redirect or show a message.
 'use client';
 
-import React, { useEffect } from 'react'; // Added React import
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Loader2, AlertTriangle } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, AlertTriangle, PlayCircle, ShieldCheck, Info, ServerCrash, XCircle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { Exam } from '@/types/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns'; // Ensure date-fns is imported if used
 
 export default function DeprecatedInitiateExamPage() {
   const router = useRouter();
@@ -33,7 +39,7 @@ export default function DeprecatedInitiateExamPage() {
         <CardContent className="pb-6 space-y-4">
           <CardDescription className="text-muted-foreground">
             This exam initiation step is no longer used for the primary SEB exam flow.
-            Exams are launched directly into Safe Exam Browser from the "Join Exam" page.
+            Exams are launched directly into Safe Exam Browser from the "Join Exam" page using a secure entry token.
           </CardDescription>
           <p className="text-sm text-muted-foreground">
             If you are a student, please go back and join the exam through the dashboard to initiate the SEB launch sequence.

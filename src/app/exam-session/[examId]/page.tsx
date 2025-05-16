@@ -1,12 +1,11 @@
 
 // src/app/exam-session/[examId]/page.tsx
-// This page is now largely superseded by the /seb/... flow for SEB-enabled exams.
-// It can be kept as a fallback for non-SEB testing or if SEB detection on initiate page fails
-// and redirects here. For now, it will show a message indicating SEB is preferred.
+// This page is now effectively DEPRECATED and replaced by /seb/entry/[token]
+// It will show a message and redirect.
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,14 +13,11 @@ import Link from 'next/link';
 
 export default function DeprecatedExamSessionPage() {
   const router = useRouter();
-  const params = useParams();
-  const examId = params.examId as string;
 
   useEffect(() => {
-    console.warn(`[DeprecatedExamSessionPage] Accessed for examId: ${examId}. This page is deprecated for SEB flow. Redirecting to student join exam...`);
-    // Consider redirecting to student dashboard or join exam page
+    console.warn(`[DeprecatedExamSessionPage] Accessed. This page is deprecated. Redirecting to student dashboard...`);
     router.replace('/student/dashboard/join-exam'); 
-  }, [examId, router]);
+  }, [router]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
@@ -32,12 +28,12 @@ export default function DeprecatedExamSessionPage() {
         </CardHeader>
         <CardContent className="pb-6 space-y-4">
           <p className="text-muted-foreground">
-            This exam access method is deprecated. Exams are now launched directly into Safe Exam Browser.
+            This exam access method is deprecated. Exams are launched directly into Safe Exam Browser via a new secure entry flow.
           </p>
           <p className="text-sm text-muted-foreground">
-            You will be redirected to the "Join Exam" page.
+            You will be redirected.
           </p>
-          <Button asChild className="w-full btn-outline-subtle mt-4">
+           <Button asChild className="w-full btn-outline-subtle mt-4">
             <Link href="/student/dashboard/join-exam">
               Go to Join Exam Page Now
             </Link>
@@ -47,4 +43,3 @@ export default function DeprecatedExamSessionPage() {
     </div>
   );
 }
-    

@@ -7,26 +7,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { Exam } from '@/types/supabase';
+import type { Exam, SebEntryTokenInsert } from '@/types/supabase';
 import { getEffectiveExamStatus } from '@/app/(app)/teacher/dashboard/exams/[examId]/details/page';
 import { useAuth } from '@/contexts/AuthContext';
-import { encryptData } from '@/lib/crypto-utils';
 
-// The exam-config.seb file in public/configs/ should have its Start URL configured to:
-// https://YOUR_APP_DOMAIN/seb/exam-view (without any query parameters)
-// The examId and token will be passed as query params to this URL when launched by SEB from here.
+const SEB_CONFIG_FILE_RELATIVE_PATH = '/configs/exam-config.seb'; // Relative to public folder
+const TOKEN_EXPIRY_MINUTES = 5; // Short-lived token for SEB entry
 
 export default function JoinExamPage() {
   const [examCode, setExamCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const { user: studentUser, isLoading: authLoading } = useAuth();
+
+  const generateRandomToken = (length = 32) => {
+    const array = new Uint8Array(length);
+    window.crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  };
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,68 +52,64 @@ export default function JoinExamPage() {
         .single();
 
       if (error || !exam) {
-        if (error && error.code === 'PGRST116') { // No rows found
-          toast({ title: "Invalid Code", description: "Exam code not found. Please check and try again.", variant: "destructive" });
-        } else {
-          toast({ title: "Error", description: error?.message || "Could not verify exam code.", variant: "destructive" });
-        }
+        toast({ title: "Invalid Code", description: error?.message || "Exam code not found or error fetching exam.", variant: "destructive" });
         setIsLoading(false);
         return;
       }
 
       const effectiveStatus = getEffectiveExamStatus(exam as Exam);
-
       if (effectiveStatus !== 'Ongoing') {
-         toast({ title: "Exam Not Active", description: "This exam is currently " + effectiveStatus.toLowerCase() + " and cannot be joined. Please check the schedule.", variant: "default", duration: 7000 });
+         toast({ title: "Exam Not Active", description: "This exam is currently " + effectiveStatus.toLowerCase() + ".", variant: "default", duration: 7000 });
          setIsLoading(false);
          return;
       }
-
       if (!exam.questions || exam.questions.length === 0) {
-        toast({ title: "Exam Not Ready", description: "This exam currently has no questions. Please contact your teacher.", variant: "destructive" });
+        toast({ title: "Exam Not Ready", description: "This exam has no questions. Contact your teacher.", variant: "destructive" });
         setIsLoading(false);
         return;
       }
       
-      const payload = {
-        examId: exam.exam_id,
-        studentId: studentUser.user_id,
-        timestamp: Date.now(),
-        examCode: exam.exam_code 
+      const sebEntryToken = generateRandomToken();
+      const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000).toISOString();
+
+      const tokenRecord: SebEntryTokenInsert = {
+        token: sebEntryToken,
+        student_user_id: studentUser.user_id,
+        exam_id: exam.exam_id,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        expires_at: expiresAt,
       };
-      const encryptedToken = await encryptData(payload);
 
-      if (!encryptedToken) {
-        toast({ title: "Encryption Error", description: "Could not generate secure exam token for SEB.", variant: "destructive" });
+      const { error: tokenInsertError } = await supabase.from('SebEntryTokens').insert(tokenRecord);
+
+      if (tokenInsertError) {
+        console.error("[JoinExamPage] Error inserting SEB entry token:", tokenInsertError);
+        toast({ title: "Launch Error", description: "Could not create secure entry token. " + tokenInsertError.message, variant: "destructive" });
         setIsLoading(false);
         return;
       }
 
-      // Construct the direct SEB Start URL with query parameters
-      const examViewUrl = `${window.location.origin}/seb/exam-view?examId=${exam.exam_id}&token=${encodeURIComponent(encryptedToken)}`;
-      
-      // Remove http(s):// prefix and prepend sebs://
-      const domainAndPathWithQuery = examViewUrl.replace(/^https?:\/\//, '');
-      const sebLaunchUrl = `sebs://${domainAndPathWithQuery}`;
+      const configUrlWithHash = `${window.location.origin}${SEB_CONFIG_FILE_RELATIVE_PATH}#entryToken=${sebEntryToken}`;
+      const domainAndPathWithHash = configUrlWithHash.replace(/^https?:\/\//, '');
+      const sebLaunchUrl = `sebs://${domainAndPathWithHash}`;
 
-      console.log("[JoinExamPage] Attempting to launch SEB with direct URL:", sebLaunchUrl);
+      console.log("[JoinExamPage] Attempting to launch SEB with URL:", sebLaunchUrl);
       toast({
         title: "Launching Exam in SEB",
-        description: "Safe Exam Browser should start. If not, ensure it's installed and configured to handle sebs:// links.",
+        description: "Safe Exam Browser should start. If not, ensure it's installed and handles sebs:// links.",
         duration: 10000,
       });
       
-      // Attempt to launch SEB
       window.location.href = sebLaunchUrl;
-
-      // Reset loading state after a delay, as direct navigation might make this less critical.
       setTimeout(() => setIsLoading(false), 5000);
 
     } catch (e: any) {
+      console.error("[JoinExamPage] Exception during handleSubmit:", e);
       toast({ title: "Error", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setIsLoading(false);
     }
-  }, [examCode, supabase, toast, studentUser, authLoading, router]);
+  }, [examCode, supabase, toast, studentUser, authLoading]);
 
   return (
     <div className="space-y-6">
@@ -142,8 +140,8 @@ export default function JoinExamPage() {
               <ExternalLink className="h-5 w-5 text-primary dark:text-blue-400" />
               <AlertTitle className="font-semibold text-primary dark:text-blue-300">SEB Required</AlertTitle>
               <AlertDescription className="text-primary/90 dark:text-blue-400/90 text-sm">
-                This exam will open in Safe Exam Browser. Ensure SEB is installed and properly configured on your system to handle `sebs://` links.
-                You will be redirected automatically. If SEB does not launch, please check your browser settings or SEB installation.
+                This exam will open in Safe Exam Browser (SEB). Ensure SEB is installed and configured.
+                The system will attempt to launch SEB automatically.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -151,7 +149,7 @@ export default function JoinExamPage() {
             <Button type="submit" className="w-full btn-gradient py-3 text-base rounded-md" disabled={isLoading || authLoading}>
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Verifying & Launching SEB...
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Preparing SEB Launch...
                 </>
               ) : (
                 'Proceed to SEB Launch'
