@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image'; // Added import
+import Image from 'next/image'; // Ensured Image is imported
 import { usePathname } from 'next/navigation';
 import {
   Sidebar,
@@ -16,14 +16,15 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button'; // Ensure Button is imported
+import { Button } from '@/components/ui/button';
 import { LogOut, Settings, Loader2, UserCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomUser } from '@/types/supabase';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from '@/lib/utils'; // Import cn utility
 
-// Updated ZenTestLogo component
 const ZenTestLogo = () => (
+  // Assuming logo.png is in the public folder
   <Image src="/logo.png" alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" />
 );
 
@@ -101,7 +102,7 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
   return (
     <Sidebar
         collapsible="icon"
-        className={cn("sidebar-glass", className)} // Added sidebar-glass for styling
+        className={cn("sidebar-glass", className)}
     >
       <SidebarHeader className="p-3 border-b border-sidebar-border/60 h-16 flex items-center">
         <div className="flex items-center justify-between w-full group-data-[collapsible=icon]:justify-center">
@@ -120,7 +121,6 @@ export function SidebarElements({ navItems, userRoleDashboard, user, signOut, au
 
         <div className="mt-auto p-2 border-t border-sidebar-border/60">
              <SidebarMenu className="px-2">
-                {/* "My Profile" link now only from here */}
                 <SidebarMenuItem>
                 <SidebarMenuButton
                     asChild

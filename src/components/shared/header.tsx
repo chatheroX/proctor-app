@@ -2,16 +2,17 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image'; // Added import
+import Image from 'next/image'; // Ensured Image is imported
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Loader2, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const STUDENT_DASHBOARD_ROUTE = '/student/dashboard/overview';
 const TEACHER_DASHBOARD_ROUTE = '/teacher/dashboard/overview';
+const DEFAULT_DASHBOARD_ROUTE = STUDENT_DASHBOARD_ROUTE; // Fallback for now
 
-// Updated ZenTestLogo component
 const ZenTestLogo = () => (
+  // Assuming logo.png is in the public folder
   <Image src="/logo.png" alt="ZenTest Logo" width={100} height={28} className="h-7 w-auto" priority />
 );
 
@@ -20,7 +21,7 @@ export function AppHeader() {
   const isAuthenticated = !!user;
 
   const getDashboardRoute = () => {
-    if (!user || !user.role) return STUDENT_DASHBOARD_ROUTE; // Default if role is somehow null
+    if (!user || !user.role) return DEFAULT_DASHBOARD_ROUTE;
     return user.role === 'teacher' ? TEACHER_DASHBOARD_ROUTE : STUDENT_DASHBOARD_ROUTE;
   };
 
