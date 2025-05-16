@@ -123,7 +123,7 @@ export default function InitiateExamPage() {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); 
 
-      const isSuccess = Math.random() > 0.05; 
+      const isSuccess = true; // Force checks to pass for easier debugging
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
       setOverallProgress(((i + 1) / initialChecks.length) * 100);
       if (!isSuccess) {
@@ -137,12 +137,30 @@ export default function InitiateExamPage() {
     toast({ title: "System Checks Passed!", description: "You can now proceed to the exam.", variant: "default" });
     // Automatically attempt to launch exam after checks pass
     launchExamInNewTab();
-  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast]);
+  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast, launchExamInNewTab]);
 
 
   const launchExamInNewTab = useCallback(async () => {
+    console.log("[InitiatePage] launchExamInNewTab called. Conditions:", {
+      allChecksPassed,
+      examDetailsExists: !!examDetails,
+      studentUserIdExists: !!studentUser?.user_id,
+      examIdFromDetails: examDetails?.exam_id,
+      studentUserIdFromAuth: studentUser?.user_id,
+      examCodeFromDetails: examDetails?.exam_code,
+    });
+
     if (!allChecksPassed || !examDetails || !studentUser?.user_id) {
-      toast({ title: "Cannot Launch", description: "System checks not passed or exam/user data missing.", variant: "destructive" });
+      const reasons = [];
+      if (!allChecksPassed) reasons.push("system checks not passed");
+      if (!examDetails) reasons.push("exam details are missing");
+      if (!studentUser?.user_id) reasons.push("user authentication is missing");
+      
+      const description = reasons.length > 0 
+        ? `Cannot launch because: ${reasons.join(', ')}.`
+        : "System checks not passed or exam/user data missing.";
+      
+      toast({ title: "Cannot Launch", description, variant: "destructive" });
       return;
     }
     
@@ -372,3 +390,4 @@ export default function InitiateExamPage() {
   );
 }
 
+    
