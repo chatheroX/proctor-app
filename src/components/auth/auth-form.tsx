@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ type AuthAction = 'login' | 'register';
 const AUTH_ROUTE = '/auth';
 
 export function AuthForm() {
-  const pathname = usePathname(); // Must be at the top
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -32,36 +32,35 @@ export function AuthForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<CustomUser['role'] | ''>(''); // Role for registration
+  const [role, setRole] = useState<CustomUser['role'] | ''>('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  const [isSubmitting, setIsSubmitting] = useState(false); // For form submission loading state
-  const [formError, setFormError] = useState<string | null>(null); // For form-level errors
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const resetFormFields = React.useCallback(() => {
     setEmail(''); setPassword(''); setConfirmPassword(''); setFullName('');
     setRole(''); setShowPassword(false); setShowConfirmPassword(false); setFormError(null);
   }, []);
 
-  // Effect to sync tab state with URL parameters
   useEffect(() => {
     const actionFromParams = (searchParams.get('action') as AuthAction) || 'login';
     const roleFromParams = searchParams.get('role') as CustomUser['role'] || '';
     
     if (actionFromParams !== action) {
-      resetFormFields(); // Reset fields when switching between login/register
+      resetFormFields();
       setAction(actionFromParams);
     }
     if (actionFromParams === 'register' && roleFromParams && roleFromParams !== role) {
-        setRole(roleFromParams); // Pre-fill role if provided in URL for registration
+        setRole(roleFromParams);
     }
   }, [searchParams, action, role, resetFormFields]);
   
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setFormError(null); // Clear previous form errors
+    setFormError(null);
     
     const trimmedEmail = email.trim();
     const trimmedFullName = fullName.trim();
@@ -93,21 +92,22 @@ export function AuthForm() {
         setIsSubmitting(false); return;
       }
 
-      console.log('[AuthForm] Attempting to register with email:', trimmedEmail, 'Name:', trimmedFullName, 'Role:', selectedRole);
+      console.log('[AuthForm] Calling signUp from AuthContext...');
       result = await signUp(trimmedEmail, password, trimmedFullName, selectedRole);
 
       if (result.success && result.user) {
         toast({ title: "Registration Successful!", description: "Redirecting to dashboard..." });
-        // AuthContext's routing useEffect will handle the redirect
+        // AuthContext now handles navigation
       } else {
         setFormError(result.error || "An unknown error occurred during registration.");
         toast({ title: "Registration Error", description: result.error || "An unknown error occurred.", variant: "destructive" });
       }
     } else { // Login action
+      console.log('[AuthForm] Calling signIn from AuthContext...');
       result = await signIn(trimmedEmail, password);
       if (result.success && result.user) {
         toast({ title: "Login Successful!", description: "Redirecting to dashboard..." });
-        // AuthContext's routing useEffect will handle the redirect
+        // AuthContext now handles navigation
       } else {
         setFormError(result.error || "Invalid credentials or server error.");
         toast({ title: "Login Error", description: result.error || "Invalid credentials or server error.", variant: "destructive" });
@@ -116,9 +116,8 @@ export function AuthForm() {
     setIsSubmitting(false);
   };
   
-  // Loading spinner for the entire auth page if context is still determining initial user state
-  if (authContextLoading && pathname === AUTH_ROUTE && user === null) { // Check for user === null
-    console.log('[AuthForm] AuthContext initial loading. Showing AuthForm page loader.');
+  if (authContextLoading && pathname === AUTH_ROUTE && user === null) {
+    console.log('[AuthForm] AuthContext initial loading state on /auth. Showing AuthForm page loader.');
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
         <Card className="p-6 glass-card text-center">
@@ -129,9 +128,9 @@ export function AuthForm() {
     );
   }
 
-  // "Finalizing session" message if user is authenticated but still on /auth page
+  // If user is authenticated (user object exists) AND auth context is done loading AND we are still on /auth page
   if (!authContextLoading && user && pathname === AUTH_ROUTE) {
-    console.log(`[AuthForm] User is authenticated (${user.email}), AuthContext loaded, but still on /auth. AuthContext should redirect.`);
+    console.log(`[AuthForm] User is authenticated (${user.email}), AuthContext loaded, but still on /auth. AuthContext should be redirecting. Displaying "Finalizing..." message.`);
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] py-12 bg-gradient-to-br from-slate-100 via-gray-200 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-gray-900">
         <Card className="p-8 glass-card text-center shadow-xl">
@@ -147,19 +146,17 @@ export function AuthForm() {
 
   const handleTabChange = (value: string) => {
     setAction(value as AuthAction);
-    resetFormFields(); // Reset fields when tab changes
+    resetFormFields();
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('action', value);
     
-    // Preserve role in URL if switching to register tab and role was pre-set
     const currentRoleParam = searchParams.get('role');
     if (value === 'register' && currentRoleParam) {
       newUrl.searchParams.set('role', currentRoleParam);
-      setRole(currentRoleParam as CustomUser['role']); // Ensure local state also updates
+      setRole(currentRoleParam as CustomUser['role']);
     } else if (value === 'login') {
-      newUrl.searchParams.delete('role'); // Remove role from URL for login tab
+      newUrl.searchParams.delete('role');
     }
-    // Replace URL without reloading the page
     router.replace(newUrl.toString(), { scroll: false });
   };
 
@@ -185,7 +182,7 @@ export function AuthForm() {
           </CardHeader>
           
           <form onSubmit={handleAuth}>
-            { (formError || contextAuthError) && ( // Display formError or contextAuthError
+            { (formError || contextAuthError) && (
               <div className="p-4 pt-0 sm:px-6 sm:pt-0">
                 <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-md text-sm flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0"/>
