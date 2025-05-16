@@ -84,7 +84,7 @@ export default function InitiateExamPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [examId, supabase, toast]); // Added toast as it's used, though it's stable
+  }, [examId, supabase]); // Removed toast from here as it's not directly used
 
   useEffect(() => {
     if (examId && !authLoading && supabase) {
@@ -96,11 +96,9 @@ export default function InitiateExamPage() {
 
   const launchExamInNewTab = useCallback(async () => {
     console.log("[InitiatePage] launchExamInNewTab called. Conditions:", {
-      allChecksPassed,
+      allChecksPassed, // Will be true if this is called via the new useEffect
       examDetailsExists: !!examDetails,
       studentUserIdExists: !!studentUser?.user_id,
-      examIdFromDetails: examDetails?.exam_id,
-      studentUserIdFromAuth: studentUser?.user_id,
       examCodeFromDetails: examDetails?.exam_code,
     });
 
@@ -152,7 +150,7 @@ export default function InitiateExamPage() {
       console.log("[InitiatePage] Exam launched successfully in new tab.");
       toast({ title: "Exam Launched!", description: "The exam has opened in a new tab." });
     }
-  }, [allChecksPassed, examDetails, studentUser?.user_id, toast]); // Added toast as a dependency
+  }, [allChecksPassed, examDetails, studentUser, toast]); // studentUser instead of studentUser?.user_id for stability
 
   const startSystemChecks = useCallback(async () => {
     if (!studentUser?.user_id) {
@@ -175,7 +173,7 @@ export default function InitiateExamPage() {
 
     setPerformingChecks(true);
     setError(null);
-    setAllChecksPassed(false);
+    setAllChecksPassed(false); // Reset before starting checks
     setChecks(initialChecks.map(c => ({ ...c, status: 'pending', details: undefined })));
     setOverallProgress(0);
 
@@ -183,22 +181,30 @@ export default function InitiateExamPage() {
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'checking' } : c));
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 500)); 
 
-      // const isSuccess = Math.random() > 0.1; // Simulate occasional failure
       const isSuccess = true; // Force checks to pass for easier debugging
       setChecks(prev => prev.map((c, idx) => idx === i ? { ...c, status: isSuccess ? 'success' : 'failed', details: isSuccess ? 'Compatible' : 'Incompatible - Please resolve.' } : c));
       setOverallProgress(((i + 1) / initialChecks.length) * 100);
       if (!isSuccess) {
         setError(`System check failed: ${initialChecks[i].name}. Cannot proceed with the exam.`);
         setPerformingChecks(false);
+        // Do not set allChecksPassed to false here, it's already false
         return;
       }
     }
+    // All checks passed successfully
     setAllChecksPassed(true);
     setPerformingChecks(false);
     toast({ title: "System Checks Passed!", description: "You can now proceed to the exam.", variant: "default" });
-    // Automatically attempt to launch exam after checks pass
-    launchExamInNewTab();
-  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast, launchExamInNewTab]);
+    // Removed direct call to launchExamInNewTab()
+  }, [studentUser?.user_id, examDetails, effectiveStatus, questionsCount, toast]);
+
+  // New useEffect to launch exam when allChecksPassed becomes true
+  useEffect(() => {
+    if (allChecksPassed && !performingChecks && !error && examDetails && studentUser?.user_id) {
+      console.log("[InitiatePage] useEffect triggered: allChecksPassed is true. Attempting to launch exam.");
+      launchExamInNewTab();
+    }
+  }, [allChecksPassed, performingChecks, error, examDetails, studentUser, launchExamInNewTab]);
 
 
   const getStatusIcon = (status: CheckStatus['status']) => {
@@ -393,5 +399,3 @@ export default function InitiateExamPage() {
     </div>
   );
 }
-
-    
